@@ -2,7 +2,7 @@
   "miniprogramRoot": "./dist",
   "projectname": "client",
   "description": "一个任务清单小程序，支持自我管理与协作任务",
-  "appid": "touristappid",
+  "appid": "wx356fcb5af0ee6f64",
   "setting": {
     "urlCheck": true,
     "es6": false,

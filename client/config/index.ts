@@ -1,4 +1,5 @@
 import { defineConfig, type UserConfigExport } from '@tarojs/cli'
+import path from 'path'
 
 import devConfig from './dev'
 import prodConfig from './prod'
@@ -20,7 +21,12 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
     plugins: [
       "@tarojs/plugin-generator"
     ],
+    alias: {
+      '@': path.resolve(__dirname, '..', 'src'),
+    },
     defineConstants: {
+      // 后端 API 地址（可用环境变量 TASKMATE_API_BASE_URL 覆盖）
+      API_BASE_URL: JSON.stringify(process.env.TASKMATE_API_BASE_URL || 'http://localhost:3000')
     },
     copy: {
       patterns: [

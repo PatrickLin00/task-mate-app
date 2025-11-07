@@ -1,30 +1,44 @@
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
-const bodyParser = require('body-parser')
 const mongoose = require('mongoose')
 
 const taskRoutes = require('./routes/taskRoutes')
 
 const app = express()
 
-// 连接数据库
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.error('❌ MongoDB connection error:', err))
+// Connect database
+// TODO: Configure retry/timeout/logging as needed (pending ops requirements)
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log('MongoDB connected'))
+  .catch((err) => console.error('MongoDB connection error:', err))
 
-// 中间件
+// Middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN
+  // In dev allow any origin; tighten in production
+  // TODO: Restrict CORS origins in production (pending frontend domain)
+  origin: process.env.CORS_ORIGIN || true,
 }))
-app.use(bodyParser.json())
+app.use(express.json())
 
-// 路由
+// Routes
 app.use('/api/tasks', taskRoutes)
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not Found' })
+})
+
+// Global error handler
+// TODO: Add structured error types and logging/reporting integration
+app.use((err, req, res, next) => {
+  console.error(err)
+  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' })
+})
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`)
 })
+

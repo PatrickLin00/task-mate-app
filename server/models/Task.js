@@ -1,5 +1,7 @@
 const mongoose = require('mongoose')
 
+// TODO: 明确必填项/长度限制；考虑建立索引（待数据规范）
+// TODO: createdBy/acceptedBy 与 User 的引用关系设计（待定）
 const taskSchema = new mongoose.Schema({
   title: String,
   description: String,
