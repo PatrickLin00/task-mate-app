@@ -23,3 +23,15 @@ exports.getAllTasks = async (req, res) => {
     res.status(500).json({ error: '获取任务失败' })
   }
 }
+
+exports.getTaskById = async (req, res) => {
+  try {
+    const { id } = req.params
+    const task = await Task.findById(id)
+    if (!task) return res.status(404).json({ error: '任务不存在' })
+    res.json(task)
+  } catch (error) {
+    console.error('getTaskById error:', error)
+    res.status(500).json({ error: '获取任务失败' })
+  }
+}

@@ -1,5 +1,5 @@
 import { View, Text, Input, Textarea, Button } from '@tarojs/components'
-import { useLoad } from '@tarojs/taro'
+import { useLoad, navigateTo } from '@tarojs/taro'
 import { useEffect, useState } from 'react'
 import { getTasks, createTask, type Task } from '@/services/api'
 import './index.scss'
@@ -53,7 +53,7 @@ export default function Index () {
           <Text>暂无任务</Text>
         ) : (
           tasks.map((t) => (
-            <View key={t._id} className='item'>
+            <View key={t._id} className='item' onClick={() => t._id && navigateTo({ url: `/pages/task/detail?taskId=${t._id}` })}>
               <Text className='title'>{t.title}</Text>
               {!!t.description && <Text className='desc'>{t.description}</Text>}
               <Text className='meta'>{t.status || 'pending'}</Text>

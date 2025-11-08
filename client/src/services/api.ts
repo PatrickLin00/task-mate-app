@@ -2,6 +2,7 @@
 // TODO: 鉴权（携带 token / cookie）与错误码规范（待后端确定）
 
 import Taro from '@tarojs/taro'
+import { getToken } from '@/services/auth'
 
 declare const API_BASE_URL: string // 由 Taro defineConstants 注入
 
@@ -26,6 +27,7 @@ export async function getTasks() {
   const res = await Taro.request<Task[]>({
     url: `${BASE_URL}/api/tasks`,
     method: 'GET',
+    header: authHeader(),
   })
   return res.data
 }
@@ -36,8 +38,21 @@ export async function createTask(payload: Pick<Task, 'title' | 'description'>) {
     url: `${BASE_URL}/api/tasks/create`,
     method: 'POST',
     data: payload,
-    header: { 'Content-Type': 'application/json' },
+    header: { 'Content-Type': 'application/json', ...authHeader() },
   })
   return res.data
 }
 
+export async function getTask(id: string) {
+  const res = await Taro.request<Task>({
+    url: `${BASE_URL}/api/tasks/${id}`,
+    method: 'GET',
+    header: authHeader(),
+  })
+  return res.data
+}
+
+function authHeader() {
+  const token = getToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
