@@ -25,8 +25,12 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
       '@': path.resolve(__dirname, '..', 'src'),
     },
     defineConstants: {
-      // 后端 API 地址（可用环境变量 TASKMATE_API_BASE_URL 覆盖）
-      API_BASE_URL: JSON.stringify(process.env.TASKMATE_API_BASE_URL || 'http://localhost:3000')
+      // 后端 API 地址（可用环境变量 TASKMATE_API_BASE_URL 或 TARO_APP_API_BASE_URL 覆盖）
+      API_BASE_URL: JSON.stringify(
+        process.env.TASKMATE_API_BASE_URL ||
+        process.env.TARO_APP_API_BASE_URL ||
+        'http://localhost:3000'
+      )
     },
     copy: {
       patterns: [
