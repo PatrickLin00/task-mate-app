@@ -11,6 +11,7 @@
   },
   "scripts": {
     "prepare": "husky",
+    "format": "prettier --write .",
     "new": "taro new",
     "build:weapp": "taro build --type weapp",
     "build:swan": "taro build --type swan",

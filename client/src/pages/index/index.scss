@@ -1,63 +1,12 @@
-.home { position: relative; padding: 16px; min-height: 100vh; box-sizing: border-box; }
+﻿.home { position: relative; padding: 16px; min-height: 100vh; box-sizing: border-box; }
 .bg { position: absolute; inset: 0; background: linear-gradient(180deg,#fde7ff,#eef2ff); }
 .tabs { position: relative; z-index:1; display:flex; gap:8px; margin-bottom: 12px; }
-.tab { flex:1; text-align:center; padding:14px 0; border-radius:16px; background: linear-gradient(180deg,#f5f3ff,#ffffff); color:#7c3aed; border:1px solid #ede9fe; box-shadow: 0 4px 14px rgba(124,58,237,0.10); font-weight:800; font-size:18px; }
+.tab { flex:1; text-align:center; padding:16px 0; border-radius:16px; background: linear-gradient(180deg,#f5f3ff,#ffffff); color:#7c3aed; border:1px solid #ede9fe; box-shadow: 0 4px 14px rgba(124,58,237,0.10); font-weight:800; font-size:22px; }
 .tab.active { outline: 2px solid #eee; }
 .panes { position: relative; z-index: 1; height: calc(100vh - 120px); }
 
-/* 角色卡片 */
-.hero { position:relative; z-index:1; display:flex; gap:14px; align-items:center; background: linear-gradient(135deg,#fdf2f8,#f5f3ff); border:1px solid #efe7ff; border-radius:20px; padding:14px; box-shadow: 0 8px 24px rgba(124,58,237,0.08); }
-.avatar-wrap { position:relative; }
-.avatar { width:72px; height:72px; border-radius: 50%; display:flex; align-items:center; justify-content:center; font-size:34px; background:linear-gradient(135deg,#fed7aa,#fbcfe8); box-shadow: 0 6px 16px rgba(0,0,0,0.06); }
-.badge { position:absolute; right:-4px; top:-4px; background:#f59e0b; color:#fff; border-radius:999px; padding:2px 4px; font-size:12px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
-.hero-main { flex:1; }
-.hero-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
-.hero-name { font-weight:900; color:#3b0764; font-size:22px; }
-.hero-stars { color:#f59e0b; font-size:18px; letter-spacing:1px; }
-.stat { display:flex; align-items:center; gap:14px; margin:12px 0; }
-.label { color:#374151; font-size:18px; min-width:52px; }
-.track { flex:1; height:12px; background:#111; border-radius:999px; overflow:hidden; }
-.fill { height:100%; background:#111827; border-radius:999px; }
-.val { color:#374151; font-size:18px; min-width:36px; text-align:right; }
-.fill.blue { background:#3b82f6; }
-.fill.red { background:#ef4444; }
-.fill.yellow { background:#f59e0b; }
-.val { color:#374151; font-size:12px; min-width:24px; text-align:right; }
+@import './home.scss';
 
-/* 星程简录 */
-.section { position:relative; z-index:1; margin-top: 14px; }
-.section-bar { display:flex; align-items:center; gap:8px; margin:8px 0; }
-.dot { color:#7c3aed; }
-.section-title { color:#6d28d9; font-weight:700; }
-.more { margin-left:auto; color:#6b7280; }
-.tabs-strip { display:flex; gap:8px; margin:8px 0 12px; }
-.seg { height:6px; flex:1; border-radius:999px; background:#e5e7eb; }
-.seg.active { background:#60a5fa; }
-.seg.green { background:#34d399; }
-.seg.teal { background:#22d3ee; }
-.mini-cards { white-space: nowrap; }
-.mini-card { display:inline-block; width:260px; margin-right:12px; border-radius:14px; border:1px solid #eee; background:#fff; box-shadow: 0 8px 18px rgba(0,0,0,0.06); box-sizing: border-box; }
-.mini-body { padding:12px; }
-.row { display:flex; align-items:center; gap:8px; }
-.emoji { font-size:18px; }
-.mini-title { font-weight:900; color:#111827; font-size:20px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 160px; }
-.chip { margin-left:auto; background:#7c3aed; color:#fff; border-radius:999px; padding:6px 14px; font-size:16px; }
-.mini-desc { color:#6b7280; font-size:16px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-top:6px; line-height:1.6; }
-.mini-foot { display:flex; align-items:center; justify-content:space-between; margin-top:8px; }
-.due { color:#9ca3af; font-size:16px; }
-
-/* 星旅挑战 */
-.feed-head { display:flex; align-items:center; gap:8px; }
-.spark { color:#7c3aed; }
-.count { margin-left:auto; color:#6d28d9; font-size:12px; background:#ede9fe; border-radius:999px; padding:0 8px; }
-.feed-scroll { overflow:hidden; }
-.feed-list { display:flex; flex-direction:column; gap:10px; margin-top:8px; padding-bottom:8px; }
-.feed-card { position:relative; display:flex; gap:10px; border:1px solid #eee; border-radius:16px; background:linear-gradient(135deg,#ffffff,#faf5ff); padding:12px; box-shadow: 0 8px 18px rgba(124,58,237,0.06); }
-.feed-left { width:36px; height:36px; border-radius:999px; background:#f3e8ff; display:flex; align-items:center; justify-content:center; }
-.feed-title { font-weight:900; color:#111827; font-size:20px; }
-.feed-desc { color:#6b7280; font-size:16px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin:6px 0; line-height:1.6; }
-.feed-bottom { display:flex; align-items:center; justify-content:space-between; }
-.feed-meta { color:#9ca3af; font-size:16px; }
-.cta { background:#7c3aed; color:#fff; font-size:18px; padding:12px 18px; border-radius:999px; box-shadow: 0 4px 10px rgba(124,58,237,0.25); margin-left:auto; }
-.chip.small { position:absolute; right:12px; top:10px; background:#ede9fe; color:#6d28d9; border-radius:999px; padding:0 8px; font-size:12px; }
-.collapse { text-align:center; color:#7c3aed; margin-top:10px; font-size:18px; }
+@import './tasks.scss';
+@import './achievements.scss';
+@import './profile.scss';
