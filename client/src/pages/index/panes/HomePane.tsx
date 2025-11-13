@@ -1,7 +1,43 @@
-﻿import { View, Text, ScrollView, Button } from "@tarojs/components"
-import Taro, { useLoad } from "@tarojs/taro"
-import { useEffect, useMemo, useState } from "react"
-import { type Attr, role, todayTasks, feedTasks, chipText } from "../shared/mocks"
+﻿import { View, Text, ScrollView, Button } from '@tarojs/components'
+import Taro, { useLoad } from '@tarojs/taro'
+import { useEffect, useMemo, useState } from 'react'
+import { type Attr, role, todayTasks, feedTasks, chipText } from '../shared/mocks'
+
+const attrList: Attr[] = ['\u667a\u6167', '\u529b\u91cf', '\u654f\u6377']
+const attrTone: Record<Attr, 'blue' | 'red' | 'yellow'> = {
+  '\u667a\u6167': 'blue',
+  '\u529b\u91cf': 'red',
+  '\u654f\u6377': 'yellow',
+}
+const attrMeta: Record<Attr, { icon: string }> = {
+  '\u667a\u6167': { icon: '\ud83e\udde0' },
+  '\u529b\u91cf': { icon: '\ud83d\udcaa' },
+  '\u654f\u6377': { icon: '\ud83d\udc3a' },
+}
+
+const UI = {
+  stars: '\u2605\u2605\u2605\u2605\u2605',
+  avatar: '\ud83d\udc31',
+  timelineIcon: '\ud83c\udfbf',
+  challengeIcon: '\ud83e\udd10',
+  calendarIcon: '\ud83d\udd70',
+}
+
+const STRINGS = {
+  heroBadge: 'Lv.5',
+  heroPill: '\u661f\u65c5\u8005',
+  todayTitle: '\u661f\u7a0b\u7b80\u5f55',
+  todayMeta: '\u4eca\u5929',
+  todayUnit: '\u9879',
+  viewDetail: '\u67e5\u770b\u8be6\u60c5',
+  feedTitle: '\u661f\u65c5\u6311\u6218',
+  difficultyLabel: '\u96be\u5ea6',
+  feedUnit: '\u4e2a\u4efb\u52a1',
+  typeLabel: '\u7c7b\u578b',
+  button: '\u63a5\u53d6\u4efb\u52a1',
+  showMore: '\u663e\u793a\u66f4\u591a',
+  countUnit: '\u4e2a',
+}
 
 export default function HomePane() {
   const [availHeight, setAvailHeight] = useState(180)
@@ -18,99 +54,140 @@ export default function HomePane() {
       q.select('.feed-card').boundingClientRect()
       q.exec((res) => {
         const [hero, today, head] = res as any[]
-        const winH = Taro.getSystemInfoSync().windowHeight
+        const { windowHeight: winH, safeArea } = Taro.getSystemInfoSync()
+        const safeGap = safeArea ? Math.max(winH - safeArea.bottom, 0) : 0
         const used = (hero?.height || 0) + (today?.height || 0) + (head?.height || 0) + 56
-        const available = Math.max(260, winH - used - 12)
+        const available = Math.max(260, winH - used - safeGap - 12)
         setAvailHeight(available)
       })
     })
   }, [])
 
+  const extraCount = Math.max(visibleTasks.length - 4, 0)
+
   return (
     <>
-      {/* 角色信息卡片 */}
-      <View id='hero' className='hero'>
-        <View className='avatar-wrap'>
-          <View className='avatar'>🐱</View>
-          <View className='badge'>⭐</View>
-        </View>
-        <View className='hero-main'>
-          <View className='hero-head'>
-            <Text className='hero-name'>{role.name}</Text>
-            <Text className='hero-stars'>{'★★★★★'.slice(0, role.stars)}</Text>
-          </View>
-          {(['智慧', '力量', '敏捷'] as Attr[]).map((k) => (
-            <View key={k} className='stat'>
-              <Text className='label'>{k}</Text>
-              <View className='track'>
-                <View
-                  className={`fill ${k === '智慧' ? 'blue' : k === '力量' ? 'red' : 'yellow'}`}
-                  style={{ width: `${(role as any)[k]}%` }}
-                />
+      {/* Hero summary */}
+      <View id='hero' className='hero card'>
+        <View className='hero-panel'>
+          <View className='hero-avatar'>
+            <View className='avatar-wrap'>
+              <View className='avatar'>
+                <Text className='avatar-emoji' aria-hidden>
+                  {UI.avatar}
+                </Text>
               </View>
-              <Text className='val'>{(role as any)[k]}</Text>
+              <View className='badge'>{STRINGS.heroBadge}</View>
+            </View>
+            <View className='hero-info'>
+              <Text className='hero-name'>{role.name}</Text>
+              <Text className='hero-stars'>{UI.stars.slice(0, role.stars)}</Text>
+            </View>
+          </View>
+          <View className='hero-pill'>
+            <Text>{STRINGS.heroPill}</Text>
+          </View>
+        </View>
+        <View className='hero-stats'>
+          {attrList.map((attr) => (
+            <View key={attr} className='stat'>
+              <View className='stat-info'>
+                <View className='stat-label'>
+                  <View className={`stat-icon ${attrTone[attr]}`}>
+                    <Text aria-hidden>{attrMeta[attr].icon}</Text>
+                  </View>
+                  <Text className='label'>{attr}</Text>
+                </View>
+                <Text className='val'>{role[attr]}</Text>
+              </View>
+              <View className='track'>
+                <View className={`fill ${attrTone[attr]}`} style={{ width: `${role[attr]}%` }} />
+              </View>
             </View>
           ))}
         </View>
       </View>
 
-      {/* 星程简录 */}
-      <View id='today' className='section'>
+      {/* Today highlights */}
+      <View id='today' className='section card'>
         <View className='section-bar'>
-          <Text className='dot'>🎯</Text>
-          <Text className='section-title'>星程简录</Text>
-          <Text className='more'>⋯</Text>
+          <View className='section-head'>
+            <Text className='section-icon'>{UI.timelineIcon}</Text>
+            <Text className='section-title'>{STRINGS.todayTitle}</Text>
+          </View>
+          <Text className='section-meta'>
+            {STRINGS.todayMeta} · {todayTasks.length} {STRINGS.todayUnit}
+          </Text>
         </View>
-        <View className='tabs-strip'>
-          <View className='seg active' />
-          <View className='seg green' />
-          <View className='seg teal' />
-        </View>
-        <ScrollView className='mini-cards' scrollX enableFlex>
+        <ScrollView className='mini-cards' scrollX enableFlex scrollWithAnimation>
           {todayTasks.map((t) => (
-            <View key={t.id} className='mini-card'>
-              <View className='mini-body'>
-                <View className='row'>
+            <View key={t.id} className={`mini-card tone-${attrTone[t.type]}`}>
+              <View className='mini-header'>
+                <View className='mini-icon'>
                   <Text className='emoji'>{t.icon}</Text>
-                  <Text className='mini-title'>{t.title}</Text>
-                  <Text className='chip'>{chipText(t)}</Text>
                 </View>
-                <Text className='mini-desc'>{t.detail}</Text>
-                <View className='mini-foot'>
-                  <Text className='due'>{t.due}</Text>
-                </View>
+                <View className={`mini-chip tone-${attrTone[t.type]}`}>{chipText(t)}</View>
+              </View>
+              <Text className='mini-title'>{t.title}</Text>
+              <Text className='mini-desc'>{t.detail}</Text>
+              <View className='mini-foot'>
+                <Text className='due'>
+                  {UI.calendarIcon} {t.due}
+                </Text>
+                <Text className='link'>{STRINGS.viewDetail}</Text>
               </View>
             </View>
           ))}
         </ScrollView>
       </View>
 
-      {/* 星旅挑战 */}
-      <View className='section'>
+      {/* Challenge feed */}
+      <View className='section card'>
         <View id='feed-head' className='feed-head'>
-          <Text className='spark'>✨</Text>
-          <Text className='section-title'>星旅挑战</Text>
-          <Text className='count'>{feedTasks.length} 个任务</Text>
+          <View className='section-head'>
+            <Text className='section-icon'>{UI.challengeIcon}</Text>
+            <Text className='section-title'>{STRINGS.feedTitle}</Text>
+          </View>
+          <Text className='section-meta'>
+            {feedTasks.length} {STRINGS.feedUnit}
+          </Text>
         </View>
-        <ScrollView scrollY scrollWithAnimation style={{ height: `${availHeight}px` }} className='feed-scroll'>
+        <ScrollView scrollY scrollWithAnimation className='feed-scroll' style={{ height: `${availHeight}px` }}>
           <View className='feed-list'>
             {visibleTasks.map((t) => (
-              <View className='feed-card' key={t.id}>
+              <View className={`feed-card tone-${attrTone[t.type]}`} key={t.id}>
                 <View className='feed-left'>
                   <Text className='emoji'>{t.icon}</Text>
                 </View>
                 <View className='feed-body'>
                   <Text className='feed-title'>{t.title}</Text>
                   <Text className='feed-desc'>{t.detail}</Text>
-              <View className='feed-bottom'>
-                <Text className='feed-meta'>难度：{t.type === '力量' ? '中等' : t.type === '敏捷' ? '简单' : '简单'}</Text>
-              </View>
-              </View>
-                <Text className='chip attr'>{chipText(t)}</Text>
-                <Button className='cta top-right'>接取任务</Button>
+                  <View className='feed-meta'>
+                    <Text>
+                      {STRINGS.typeLabel} · {t.type}
+                    </Text>
+                    {t.difficulty && (
+                      <Text>
+                        {STRINGS.difficultyLabel} · {t.difficulty}
+                      </Text>
+                    )}
+                    <Text className='feed-due'>{t.due}</Text>
+                  </View>
+                </View>
+                <View className='feed-side'>
+                  <View className={`feed-chip tone-${attrTone[t.type]}`}>{chipText(t)}</View>
+                  <Button className='cta'>{STRINGS.button}</Button>
+                </View>
               </View>
             ))}
           </View>
+          {extraCount > 0 && (
+            <View className='feed-more'>
+              <Text>
+                {STRINGS.showMore} ({extraCount} {STRINGS.countUnit})
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </View>
     </>

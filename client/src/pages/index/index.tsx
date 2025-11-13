@@ -1,4 +1,4 @@
-﻿import { View, Text, Swiper, SwiperItem } from '@tarojs/components'
+import { View, Text, Swiper, SwiperItem } from '@tarojs/components'
 import { useState } from 'react'
 import './index.scss'
 
@@ -9,6 +9,12 @@ import ProfilePane from './panes/ProfilePane'
 
 type Tab = 'home' | 'tasks' | 'achievements' | 'profile'
 const tabOrder: Tab[] = ['home', 'tasks', 'achievements', 'profile']
+const tabMeta: Record<Tab, { label: string; icon: string }> = {
+  home: { label: '\u9996\u9875', icon: '\ud83c\udfe0' },
+  tasks: { label: '\u4efb\u52a1', icon: '\ud83d\udcdd' },
+  achievements: { label: '\u6210\u5c31', icon: '\ud83c\udfc6' },
+  profile: { label: '\u6211\u7684', icon: '\ud83d\udc64' },
+}
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>('home')
@@ -17,20 +23,13 @@ export default function Index() {
     <View className='home'>
       <View className='bg' />
 
-      {/* 顶部四个标签 */}
       <View className='tabs'>
-        <View className={`tab ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
-          <Text>🏠 首页</Text>
-        </View>
-        <View className={`tab ${activeTab === 'tasks' ? 'active' : ''}`} onClick={() => setActiveTab('tasks')}>
-          <Text>📋 任务</Text>
-        </View>
-        <View className={`tab ${activeTab === 'achievements' ? 'active' : ''}`} onClick={() => setActiveTab('achievements')}>
-          <Text>🏆 成就</Text>
-        </View>
-        <View className={`tab ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
-          <Text>👤 我的</Text>
-        </View>
+        {tabOrder.map((tab) => (
+          <View key={tab} className={`tab ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
+            <Text className='tab-icon'>{tabMeta[tab].icon}</Text>
+            <Text className='tab-text'>{tabMeta[tab].label}</Text>
+          </View>
+        ))}
       </View>
 
       <Swiper
@@ -56,4 +55,3 @@ export default function Index() {
     </View>
   )
 }
-
