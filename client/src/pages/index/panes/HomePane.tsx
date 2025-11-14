@@ -1,7 +1,15 @@
 import { View, Text, ScrollView, Button } from '@tarojs/components'
 import { useLoad } from '@tarojs/taro'
 import { useMemo } from 'react'
-import { type Attr, role, todayTasks, feedTasks, chipText } from '../shared/mocks'
+import {
+  type Attr,
+  role,
+  todayTasks,
+  feedTasks,
+  chipText,
+  quietLines,
+  challengeQuietLines,
+} from '../shared/mocks'
 
 const attrList: Attr[] = ['\u667a\u6167', '\u529b\u91cf', '\u654f\u6377']
 const attrTone: Record<Attr, 'blue' | 'red' | 'yellow'> = {
@@ -38,6 +46,11 @@ const STRINGS = {
 
 export default function HomePane() {
   const visibleTasks = useMemo(() => feedTasks, [])
+  const quietLine = useMemo(() => quietLines[Math.floor(Math.random() * quietLines.length)], [])
+  const challengeLine = useMemo(
+    () => challengeQuietLines[Math.floor(Math.random() * challengeQuietLines.length)],
+    []
+  )
 
   useLoad(() => {})
 
@@ -93,27 +106,33 @@ export default function HomePane() {
             {STRINGS.todayMeta} · {todayTasks.length} {STRINGS.todayUnit}
           </Text>
         </View>
-        <ScrollView className='mini-cards' scrollX enableFlex scrollWithAnimation>
-          {todayTasks.map((t) => (
-            <View key={t.id} className={`mini-card tone-${attrTone[t.type]}`}>
-              <View className='mini-header'>
-                <View className='mini-title-row'>
-                  <View className='mini-icon'>
-                    <Text className='emoji'>{t.icon}</Text>
+        {todayTasks.length > 0 ? (
+          <ScrollView className='mini-cards' scrollX enableFlex scrollWithAnimation>
+            {todayTasks.map((t) => (
+              <View key={t.id} className={`mini-card tone-${attrTone[t.type]}`}>
+                <View className='mini-header'>
+                  <View className='mini-title-row'>
+                    <View className='mini-icon'>
+                      <Text className='emoji'>{t.icon}</Text>
+                    </View>
+                    <Text className='mini-title'>{t.title}</Text>
                   </View>
-                  <Text className='mini-title'>{t.title}</Text>
+                  <View className={`mini-chip tone-${attrTone[t.type]}`}>{chipText(t)}</View>
                 </View>
-                <View className={`mini-chip tone-${attrTone[t.type]}`}>{chipText(t)}</View>
+                <Text className='mini-desc'>{t.detail}</Text>
+                <View className='mini-foot'>
+                  <Text className='due'>
+                    {UI.calendarIcon} {t.due}
+                  </Text>
+                </View>
               </View>
-              <Text className='mini-desc'>{t.detail}</Text>
-              <View className='mini-foot'>
-                <Text className='due'>
-                  {UI.calendarIcon} {t.due}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
+            ))}
+          </ScrollView>
+        ) : (
+          <View className='mini-empty'>
+            <Text>{quietLine}</Text>
+          </View>
+        )}
       </View>
 
       {/* Challenge feed */}
@@ -128,36 +147,42 @@ export default function HomePane() {
           </Text>
         </View>
         <View className='feed-scroll-shell'>
-          <ScrollView scrollY scrollWithAnimation className='feed-scroll'>
-            <View className='feed-list'>
-              {visibleTasks.map((t) => (
-                <View className={`feed-card tone-${attrTone[t.type]}`} key={t.id}>
-                  <View className='feed-left'>
-                    <Text className='emoji'>{t.icon}</Text>
-                  </View>
-                  <View className='feed-body'>
-                    <Text className='feed-title'>{t.title}</Text>
-                    <Text className='feed-desc'>{t.detail}</Text>
-                    <View className='feed-meta'>
-                      <Text>
-                        {STRINGS.typeLabel} · {t.type}
-                      </Text>
-                      {t.difficulty && (
+          {visibleTasks.length > 0 ? (
+            <ScrollView scrollY scrollWithAnimation className='feed-scroll'>
+              <View className='feed-list'>
+                {visibleTasks.map((t) => (
+                  <View className={`feed-card tone-${attrTone[t.type]}`} key={t.id}>
+                    <View className='feed-left'>
+                      <Text className='emoji'>{t.icon}</Text>
+                    </View>
+                    <View className='feed-body'>
+                      <Text className='feed-title'>{t.title}</Text>
+                      <Text className='feed-desc'>{t.detail}</Text>
+                      <View className='feed-meta'>
                         <Text>
-                          {STRINGS.difficultyLabel} · {t.difficulty}
+                          {STRINGS.typeLabel} · {t.type}
                         </Text>
-                      )}
-                      <Text className='feed-due'>{t.due}</Text>
+                        {t.difficulty && (
+                          <Text>
+                            {STRINGS.difficultyLabel} · {t.difficulty}
+                          </Text>
+                        )}
+                        <Text className='feed-due'>{t.due}</Text>
+                      </View>
+                    </View>
+                    <View className='feed-side'>
+                      <View className={`feed-chip tone-${attrTone[t.type]}`}>{chipText(t)}</View>
+                      <Button className='cta'>{STRINGS.button}</Button>
                     </View>
                   </View>
-                  <View className='feed-side'>
-                    <View className={`feed-chip tone-${attrTone[t.type]}`}>{chipText(t)}</View>
-                    <Button className='cta'>{STRINGS.button}</Button>
-                  </View>
-                </View>
-              ))}
+                ))}
+              </View>
+            </ScrollView>
+          ) : (
+            <View className='feed-empty'>
+              <Text>{challengeLine}</Text>
             </View>
-          </ScrollView>
+          )}
         </View>
       </View>
     </View>
