@@ -1,6 +1,6 @@
-import { View, Text, ScrollView, Button } from '@tarojs/components'
+import { View, Text, ScrollView, Button, Image } from '@tarojs/components'
 import { useLoad } from '@tarojs/taro'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   type Attr,
   role,
@@ -9,6 +9,7 @@ import {
   chipText,
   quietLines,
   challengeQuietLines,
+  catIdleFrames,
 } from '../shared/mocks'
 
 const attrList: Attr[] = ['\u667a\u6167', '\u529b\u91cf', '\u654f\u6377']
@@ -25,11 +26,12 @@ const attrMeta: Record<Attr, { icon: string }> = {
 
 const UI = {
   stars: '\u2605\u2605\u2605\u2605\u2605',
-  avatar: '\ud83d\udc31',
   timelineIcon: '\ud83c\udfbf',
   challengeIcon: '\ud83e\udd10',
   calendarIcon: '\ud83d\udd70',
 }
+
+const FRAME_DURATION = 140
 
 const STRINGS = {
   heroBadge: 'Lv.5',
@@ -51,6 +53,15 @@ export default function HomePane() {
     () => challengeQuietLines[Math.floor(Math.random() * challengeQuietLines.length)],
     []
   )
+  const [frameIndex, setFrameIndex] = useState(0)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setFrameIndex((idx) => (idx + 1) % catIdleFrames.length)
+    }, FRAME_DURATION)
+
+    return () => clearInterval(timer)
+  }, [])
 
   useLoad(() => {})
 
@@ -62,9 +73,12 @@ export default function HomePane() {
           <View className='hero-avatar'>
             <View className='avatar-wrap'>
               <View className='avatar'>
-                <Text className='avatar-emoji' aria-hidden>
-                  {UI.avatar}
-                </Text>
+                <Image
+                  className='avatar-frame'
+                  src={catIdleFrames[frameIndex]}
+                  mode='aspectFill'
+                  alt='hero-cat'
+                />
               </View>
               <View className='badge'>{STRINGS.heroBadge}</View>
             </View>

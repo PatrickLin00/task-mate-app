@@ -14,6 +14,17 @@ export type RoadTask = {
 }
 
 export const role = { name: '我的小猫', stars: 5, 智慧: 75, 力量: 60, 敏捷: 85 }
+export const catIdleFrames = [
+  '/assets/avatars/cat_idle_01.png',
+  '/assets/avatars/cat_idle_02.png',
+  '/assets/avatars/cat_idle_03.png',
+  '/assets/avatars/cat_idle_04.png',
+  '/assets/avatars/cat_idle_05.png',
+  '/assets/avatars/cat_idle_06.png',
+  '/assets/avatars/cat_idle_07.png',
+  '/assets/avatars/cat_idle_08.png',
+  '/assets/avatars/cat_idle_09.png',
+] as const
 
 export const todayTasks: RoadTask[] = [
   { id: 't1', title: '纯真之心阅读', detail: '踏上《小王子》的魔法旅程！第三章等你来探索！加强意志力！扩展技能树！释放自我！成就明天！让生活更有趣！让身体更健康！让心灵更自由！让世界更美好！', due: '今天', type: '智慧', icon: '📚', points: 10 },

@@ -34,13 +34,20 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
     },
     copy: {
       patterns: [
+        {
+          from: 'src/assets',
+          to: 'dist/assets',
+        },
       ],
-      options: {
-      }
+      options: {},
     },
     framework: 'react',
     compiler: 'vite',
     mini: {
+      imageUrlLoaderOption: {
+        // 禁用 image loader 自动转 base64，避免大图被内联
+        limit: 0,
+      },
       postcss: {
         pxtransform: {
           enable: true,
