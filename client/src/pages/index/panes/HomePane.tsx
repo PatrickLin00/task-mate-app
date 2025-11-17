@@ -31,7 +31,7 @@ const UI = {
   calendarIcon: '\ud83d\udd70',
 }
 
-const FRAME_DURATION = 140
+const FRAME_DURATION = 240
 
 const STRINGS = {
   heroBadge: 'Lv.5',
