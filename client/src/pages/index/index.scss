@@ -1,4 +1,9 @@
-﻿.home {
+@use './home' as *;
+@use './tasks' as *;
+@use './achievements' as *;
+@use './profile' as *;
+
+.home {
 
   position: relative;
 
@@ -137,16 +142,3 @@
   height: 100%;
 
 }
-
-
-
-@import './home.scss';
-
-
-
-@import './tasks.scss';
-
-@import './achievements.scss';
-
-@import './profile.scss';
-
