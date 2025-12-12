@@ -16,11 +16,16 @@ export type RoadTask = TaskBase & {
   type: Attr
   due: string
   difficulty?: Difficulty
+  progress?: { current: number; total: number }
+  remain?: string
 }
 
 export type MissionTask = TaskBase & {
   progress: { current: number; total: number }
   remain: string
+  dueLabel: string
+  dueDays: number
+  difficulty?: Difficulty
 }
 
 export type CollabStatus = '进行中' | '待接应' | '已完成'
@@ -48,49 +53,137 @@ export const catIdleFrames = [
   '/assets/avatars/series_orange/cat_f2_idle_09.png',
 ] as const
 
-// 星辰简录：三天内要完成的简化视图
-export const todayTasks: RoadTask[] = [
+// 统一的“已接取进行中”任务列表，使命在身与星程简录共用
+export const missionTasks: MissionTask[] = [
   {
-    id: 't1',
+    id: 'm1',
+    title: '子夜息神诀',
+    detail: '连修 5 日子夜息神：23:30 前就寝，睡前 30 分钟做放松序列并记下体感',
+    attr: '智慧',
+    points: 20,
+    icon: '🌙',
+    progress: { current: 2, total: 5 },
+    remain: '今日 23:30',
+    dueLabel: '今日 23:30',
+    dueDays: 0,
+  },
+  {
+    id: 'm2',
+    title: '镇岳力场',
+    detail: '三日内完成 3 次力场淬炼：深蹲 / 俯卧撑 / 哑铃推举各 3 组',
+    attr: '力量',
+    points: 26,
+    icon: '🏋️',
+    progress: { current: 1, total: 3 },
+    remain: '本周内',
+    dueLabel: '本周内',
+    dueDays: 3,
+  },
+  {
+    id: 'm3',
+    title: '轻骑巡城',
+    detail: '以骑行或步行巡城通勤 3 次，每次里程不低于 2 公里，感受风中身法',
+    attr: '敏捷',
+    points: 18,
+    icon: '🚲',
+    progress: { current: 0, total: 3 },
+    remain: '2 日内',
+    dueLabel: '明日',
+    dueDays: 1,
+  },
+  {
+    id: 'm4',
     title: '晨行轻功·第一式',
     detail: '黎明时分于公园快走 30 分钟，当作轻功热身，收尾做 3 组拉伸巩固筋骨',
-    due: '今日',
     attr: '力量',
-    type: '力量',
-    icon: '🏃',
     points: 12,
+    icon: '🏃',
+    progress: { current: 1, total: 3 },
+    remain: '今日 23:30',
+    dueLabel: '今日',
+    dueDays: 0,
   },
   {
-    id: 't2',
-    title: '灶台炼丹·午时局',
-    detail: '午时开炉炼一份低油轻食，记下食材与份量，视作今日能量丹方',
-    due: '今日',
-    attr: '智慧',
-    type: '智慧',
-    icon: '🥗',
-    points: 10,
-  },
-  {
-    id: 't3',
+    id: 'm5',
     title: '雷影步·序章',
     detail: '跳绳 800 下，分 4 组，每组 200 下稳住呼吸节奏，练就雷影步的轻盈',
-    due: '今日',
     attr: '敏捷',
-    type: '敏捷',
-    icon: '🦶',
     points: 14,
+    icon: '🦶',
+    progress: { current: 1, total: 4 },
+    remain: '今日 18:00',
+    dueLabel: '今日',
+    dueDays: 0,
   },
   {
-    id: 't4',
+    id: 'm6',
+    title: '灶台炼丹·午时局',
+    detail: '午时开炉炼一份低油轻食，记下食材与份量，视作今日能量丹方',
+    attr: '智慧',
+    points: 10,
+    icon: '🥗',
+    progress: { current: 0, total: 1 },
+    remain: '今日 13:00',
+    dueLabel: '今日',
+    dueDays: 0,
+  },
+  {
+    id: 'm7',
     title: '居所净化·夜巡',
     detail: '夜巡客厅，物品归位、垃圾分类清空，打理出一方清净道场',
-    due: '明日',
     attr: '智慧',
-    type: '智慧',
-    icon: '🧹',
     points: 8,
+    icon: '🧹',
+    progress: { current: 0, total: 1 },
+    remain: '明日 22:00',
+    dueLabel: '明日',
+    dueDays: 1,
+  },
+  {
+    id: 'm8',
+    title: '药谷采买令',
+    detail: '采购本周食材与补给：蔬菜 5 份、蛋白 3 份、杂粮 2 份，记录花费',
+    attr: '智慧',
+    points: 12,
+    icon: '🧺',
+    progress: { current: 0, total: 1 },
+    remain: '后天 18:00',
+    dueLabel: '后天',
+    dueDays: 2,
+  },
+  {
+    id: 'm9',
+    title: '定力静坐',
+    detail: '每日晚间静坐 12 分钟，记录心率与感受，连修三日',
+    attr: '智慧',
+    points: 16,
+    icon: '🧘',
+    progress: { current: 1, total: 3 },
+    remain: '3 日内',
+    dueLabel: '后天',
+    dueDays: 2,
+    difficulty: '简单',
   },
 ]
+
+// 星程简录：三天内任务；若超过 5 条则只展示“今日”截止的
+const withinThreeDays = missionTasks.filter((t) => t.dueDays <= 3)
+const todayOnly = missionTasks.filter((t) => t.dueDays <= 0)
+const pickTodayTasks = withinThreeDays.length > 5 ? todayOnly : withinThreeDays
+
+export const todayTasks: RoadTask[] = pickTodayTasks.map((t) => ({
+  id: t.id,
+  title: t.title,
+  detail: t.detail,
+  due: t.dueLabel,
+  attr: t.attr,
+  type: t.attr,
+  icon: t.icon,
+  points: t.points,
+  difficulty: t.difficulty,
+  progress: t.progress,
+  remain: t.remain,
+}))
 
 // 星旅挑战：推荐可接取的强化任务
 export const feedTasks: RoadTask[] = [
@@ -154,40 +247,6 @@ export const feedTasks: RoadTask[] = [
 export function chipText(t: RoadTask) {
   return `${t.attr}+${t.points}`
 }
-
-// 使命在身：已接取并进行中的任务
-export const missionTasks: MissionTask[] = [
-  {
-    id: 'm1',
-    title: '子夜息神诀',
-    detail: '连修 5 日子夜息神：23:30 前就寝，睡前 30 分钟做放松序列并记下体感',
-    attr: '智慧',
-    points: 20,
-    icon: '🌙',
-    progress: { current: 2, total: 5 },
-    remain: '今日 23:30',
-  },
-  {
-    id: 'm2',
-    title: '镇岳力场',
-    detail: '三日内完成 3 次力场淬炼：深蹲 / 俯卧撑 / 哑铃推举各 3 组',
-    attr: '力量',
-    points: 26,
-    icon: '🏋️',
-    progress: { current: 1, total: 3 },
-    remain: '本周内',
-  },
-  {
-    id: 'm3',
-    title: '轻骑巡城',
-    detail: '以骑行或步行巡城通勤 3 次，每次里程不低于 2 公里，感受风中身法',
-    attr: '敏捷',
-    points: 18,
-    icon: '🚲',
-    progress: { current: 0, total: 3 },
-    remain: '2 日内',
-  },
-]
 
 // 奇遇轨迹：自己发布的协作/代办任务
 export const collabTasks: CollabTask[] = [

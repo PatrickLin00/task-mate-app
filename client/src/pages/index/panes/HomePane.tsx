@@ -3,6 +3,9 @@ import { useLoad } from '@tarojs/taro'
 import { useEffect, useMemo, useState } from 'react'
 import {
   type Attr,
+  type RoadTask,
+  attrIcon,
+  attrTone as attrToneMap,
   role,
   todayTasks,
   feedTasks,
@@ -13,7 +16,7 @@ import {
 } from '../shared/mocks'
 
 const attrList: Attr[] = ['\u667a\u6167', '\u529b\u91cf', '\u654f\u6377']
-const attrTone: Record<Attr, 'blue' | 'red' | 'yellow'> = {
+const attrToneHome: Record<Attr, 'blue' | 'red' | 'yellow'> = {
   '\u667a\u6167': 'blue',
   '\u529b\u91cf': 'red',
   '\u654f\u6377': 'yellow',
@@ -54,6 +57,7 @@ export default function HomePane() {
     []
   )
   const [frameIndex, setFrameIndex] = useState(0)
+  const [modalTask, setModalTask] = useState<RoadTask | null>(null)
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -64,6 +68,12 @@ export default function HomePane() {
   }, [])
 
   useLoad(() => {})
+
+  const handleMiniCardPress = (t: RoadTask) => {
+    setModalTask(t)
+  }
+
+  const handleCloseModal = () => setModalTask(null)
 
   return (
     <View className='home-pane'>
@@ -95,13 +105,13 @@ export default function HomePane() {
           {attrList.map((attr) => (
             <View key={attr} className='stat'>
               <View className='stat-label'>
-                <View className={`stat-icon ${attrTone[attr]}`}>
+              <View className={`stat-icon ${attrToneHome[attr]}`}>
                   <Text aria-hidden>{attrMeta[attr].icon}</Text>
                 </View>
                 <Text className='label'>{attr}</Text>
               </View>
               <View className='track'>
-                <View className={`fill ${attrTone[attr]}`} style={{ width: `${role[attr]}%` }} />
+                <View className={`fill ${attrToneHome[attr]}`} style={{ width: `${role[attr]}%` }} />
               </View>
               <Text className='val'>{role[attr]}</Text>
             </View>
@@ -123,7 +133,11 @@ export default function HomePane() {
         {todayTasks.length > 0 ? (
           <ScrollView className='mini-cards' scrollX enableFlex scrollWithAnimation>
             {todayTasks.map((t) => (
-              <View key={t.id} className={`mini-card tone-${attrTone[t.type]}`}>
+              <View
+                key={t.id}
+                className={`mini-card tone-${attrToneHome[t.type]}`}
+                onClick={() => handleMiniCardPress(t)}
+              >
                 <View className='mini-header'>
                   <View className='mini-title-row'>
                     <View className='mini-icon'>
@@ -131,7 +145,7 @@ export default function HomePane() {
                     </View>
                     <Text className='mini-title'>{t.title}</Text>
                   </View>
-                  <View className={`mini-chip tone-${attrTone[t.type]}`}>{chipText(t)}</View>
+                  <View className={`mini-chip tone-${attrToneHome[t.type]}`}>{chipText(t)}</View>
                 </View>
                 <Text className='mini-desc'>{t.detail}</Text>
                 <View className='mini-foot'>
@@ -165,7 +179,7 @@ export default function HomePane() {
             <ScrollView scrollY scrollWithAnimation className='feed-scroll'>
               <View className='feed-list'>
                 {visibleTasks.map((t) => (
-                  <View className={`feed-card tone-${attrTone[t.type]}`} key={t.id}>
+                  <View className={`feed-card tone-${attrToneHome[t.type]}`} key={t.id}>
                     <View className='feed-left'>
                       <Text className='emoji'>{t.icon}</Text>
                     </View>
@@ -184,11 +198,11 @@ export default function HomePane() {
                         <Text className='feed-due'>{t.due}</Text>
                       </View>
                     </View>
-                    <View className='feed-side'>
-                      <View className={`feed-chip tone-${attrTone[t.type]}`}>{chipText(t)}</View>
-                      <Button className='cta'>{STRINGS.button}</Button>
-                    </View>
-                  </View>
+            <View className='feed-side'>
+              <View className={`feed-chip tone-${attrToneHome[t.type]}`}>{chipText(t)}</View>
+              <Button className='cta'>{STRINGS.button}</Button>
+            </View>
+          </View>
                 ))}
               </View>
             </ScrollView>
@@ -199,6 +213,91 @@ export default function HomePane() {
           )}
         </View>
       </View>
+
+      {modalTask && (
+        <View className='mini-dialog-overlay' onClick={handleCloseModal}>
+          <View
+            className='mini-dialog-wrap'
+            onClick={(e) => {
+              e.stopPropagation()
+            }}
+          >
+            <View className={`mini-dialog card task-card tone-${attrToneMap[modalTask.attr]}`}>
+              <View className='dialog-head'>
+                <View className='mini-icon'>
+                  <Text className='emoji'>{modalTask.icon}</Text>
+                </View>
+                <View className='dialog-title-wrap'>
+                  <Text className='dialog-title'>{modalTask.title}</Text>
+                  <View className={`mini-chip tone-${attrToneHome[modalTask.type]}`}>
+                    {chipText(modalTask)}
+                  </View>
+                </View>
+              </View>
+
+              <View className='dialog-attr'>
+                <View className={`attr-tag tone-${attrToneMap[modalTask.attr]}`}>
+                  <Text className='tag-icon'>{attrIcon[modalTask.attr]}</Text>
+                  <Text className='tag-text'>
+                    {modalTask.attr}+{modalTask.points}
+                  </Text>
+                </View>
+              </View>
+
+              <Text className='dialog-desc'>{modalTask.detail}</Text>
+
+              <View className='dialog-meta'>
+                {modalTask.remain && <Text>剩余 · {modalTask.remain}</Text>}
+                <Text>截止 · {modalTask.due}</Text>
+              </View>
+
+              {modalTask.progress && (
+                <View className='progress'>
+                  <View className='progress-head'>
+                    <Text className='progress-label'>
+                      进度 {modalTask.progress.current}/{modalTask.progress.total}
+                    </Text>
+                    <Text className='progress-percent'>
+                      {Math.min(
+                        100,
+                        Math.round((modalTask.progress.current / modalTask.progress.total) * 100)
+                      )}
+                      %
+                    </Text>
+                  </View>
+                  <View className='progress-track'>
+                    <View
+                      className='progress-fill'
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.round((modalTask.progress.current / modalTask.progress.total) * 100)
+                        )}%`,
+                      }}
+                    />
+                  </View>
+                </View>
+              )}
+
+              <View className='action-row'>
+                <View className='task-action'>
+                  <Text className='action-icon'>🔁</Text>
+                  <Text>更新进度</Text>
+                </View>
+                <View className='task-action'>
+                  <Text className='action-icon'>📤</Text>
+                  <Text>提交检视</Text>
+                </View>
+                <View className='task-action ghost'>
+                  <Text className='action-icon'>📥</Text>
+                  <Text>收纳任务</Text>
+                </View>
+              </View>
+            </View>
+            <Text className='dialog-hint'>点击空白处收起</Text>
+          </View>
+        </View>
+      )}
     </View>
   )
 }
