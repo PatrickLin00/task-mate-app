@@ -1,17 +1,40 @@
 const mongoose = require('mongoose')
 
-// TODO: 明确必填项/长度限制；考虑建立索引（待数据规范）
-// TODO: createdBy/acceptedBy 与 User 的引用关系设计（待定）
-const taskSchema = new mongoose.Schema({
-  title: String,
-  description: String,
-  checklist: [String],
-  type: { type: String, enum: ['self', 'collab', 'public'], default: 'self' },
-  createdBy: String,   // 创建者 openid
-  acceptedBy: String,  // 接取者 openid
-  status: { type: String, enum: ['pending', 'in_progress', 'done'], default: 'pending' },
-  createdAt: { type: Date, default: Date.now },
-  dueDate: Date
-})
+const progressSchema = new mongoose.Schema(
+  {
+    current: { type: Number, default: 0, min: 0 },
+    total: { type: Number, default: 1, min: 1 },
+  },
+  { _id: false }
+)
+
+const subtaskSchema = new mongoose.Schema(
+ {
+    title: { type: String, required: true, trim: true },
+    current: { type: Number, default: 0, min: 0 },
+    total: { type: Number, required: true, min: 1 },
+  },
+  { _id: true }
+)
+
+const taskSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, trim: true },
+    description: { type: String, default: '', trim: true },
+    mode: { type: String, enum: ['counter', 'checklist'], required: true },
+    progress: progressSchema, // for counter mode
+    subtasks: [subtaskSchema], // for checklist mode
+    status: { type: String, enum: ['ongoing', 'completed', 'abandoned'], default: 'ongoing' },
+    attributeReward: {
+      type: {
+        type: String,
+        enum: ['strength', 'wisdom', 'agility'],
+        required: true,
+      },
+      value: { type: Number, required: true, min: 0 },
+    },
+  },
+  { timestamps: true }
+)
 
 module.exports = mongoose.model('Task', taskSchema)

@@ -1,43 +1,84 @@
-﻿// 绠€鏄?API 瀹㈡埛绔?// TODO: 閴存潈锛堟惡甯?token / cookie锛変笌閿欒鐮佽鑼冿紙寰呭悗绔‘瀹氾級
-
 import Taro from '@tarojs/taro'
 import { getToken } from '@/services/auth'
 
-declare const API_BASE_URL: string // 鐢?Taro defineConstants 娉ㄥ叆
+declare const API_BASE_URL: string // 由 Taro defineConstants 注入
 
-const BASE_URL: string = typeof API_BASE_URL !== 'undefined' && API_BASE_URL
-  ? API_BASE_URL
-  : 'http://localhost:3000'
+const BASE_URL: string =
+  typeof API_BASE_URL !== 'undefined' && API_BASE_URL ? API_BASE_URL : 'http://localhost:3000'
 
+export type Subtask = { _id?: string; title: string; current: number; total: number }
 export type Task = {
   _id?: string
   title: string
   description?: string
-  checklist?: string[]
-  type?: 'self' | 'collab' | 'public'
-  createdBy?: string
-  acceptedBy?: string
-  status?: 'pending' | 'in_progress' | 'done'
+  mode: 'counter' | 'checklist'
+  progress?: { current: number; total: number }
+  subtasks?: Subtask[]
+  status: 'ongoing' | 'completed' | 'abandoned'
+  attributeReward: { type: 'strength' | 'wisdom' | 'agility'; value: number }
+  computedProgress?: { current: number; total: number }
   createdAt?: string
-  dueDate?: string
+  updatedAt?: string
 }
 
-export async function getTasks() {
+const authHeader = () => {
+  const token = getToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+export async function fetchTasks(status?: Task['status']) {
   const res = await Taro.request<Task[]>({
     url: `${BASE_URL}/api/tasks`,
     method: 'GET',
+    data: status ? { status } : undefined,
     header: authHeader(),
   })
   return res.data
 }
 
-export async function createTask(payload: Pick<Task, 'title' | 'description'>) {
-  // TODO: 涓庡悗绔‘瀹氬畬鏁村垱寤烘暟鎹粨鏋勶紙checklist銆乼ype銆乨ueDate 绛夛級
+export async function createTask(payload: {
+  title: string
+  description?: string
+  subtasks: { title: string; total: number; current?: number }[]
+  attributeReward: { type: 'strength' | 'wisdom' | 'agility'; value: number }
+}) {
   const res = await Taro.request<Task>({
-    url: `${BASE_URL}/api/tasks/create`,
+    url: `${BASE_URL}/api/tasks`,
     method: 'POST',
-    data: payload,
+    data: {
+      ...payload,
+      mode: 'checklist',
+      subtasks: payload.subtasks.map((s) => ({ current: 0, ...s })),
+    },
     header: { 'Content-Type': 'application/json', ...authHeader() },
+  })
+  return res.data
+}
+
+export async function patchProgress(id: string, progress: { current?: number; subtaskIndex?: number }) {
+  const res = await Taro.request<Task>({
+    url: `${BASE_URL}/api/tasks/${id}/progress`,
+    method: 'PATCH',
+    data: progress,
+    header: { 'Content-Type': 'application/json', ...authHeader() },
+  })
+  return res.data
+}
+
+export async function completeTask(id: string) {
+  const res = await Taro.request<Task>({
+    url: `${BASE_URL}/api/tasks/${id}/complete`,
+    method: 'PATCH',
+    header: authHeader(),
+  })
+  return res.data
+}
+
+export async function abandonTask(id: string) {
+  const res = await Taro.request<Task>({
+    url: `${BASE_URL}/api/tasks/${id}/abandon`,
+    method: 'PATCH',
+    header: authHeader(),
   })
   return res.data
 }
@@ -51,8 +92,17 @@ export async function getTask(id: string) {
   return res.data
 }
 
-function authHeader() {
-  const token = getToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
+export async function generateTaskSuggestion(prompt: string) {
+  const res = await Taro.request<{
+    title: string
+    description?: string
+    subtasks: { title: string; total: number }[]
+    attributeReward?: { type: 'wisdom' | 'strength' | 'agility'; value: number }
+  }>({
+    url: `${BASE_URL}/api/ai/generate-task`,
+    method: 'POST',
+    data: { prompt },
+    header: { 'Content-Type': 'application/json', ...authHeader() },
+  })
+  return res.data
 }
-

@@ -3,13 +3,18 @@ const router = express.Router()
 const taskController = require('../controllers/taskController')
 
 // 创建任务
-router.post('/create', taskController.createTask)
+router.post('/', taskController.createTask)
 
-// 获取所有任务
+// 获取任务列表（可按状态过滤）
 router.get('/', taskController.getAllTasks)
 
-// 获取单个任务详情
-router.get('/:id', taskController.getTaskById)
+// 更新进度
+router.patch('/:id/progress', taskController.updateProgress)
+
+// 完成任务
+router.patch('/:id/complete', taskController.completeTask)
+
+// 放弃任务
+router.patch('/:id/abandon', taskController.abandonTask)
 
 module.exports = router
-

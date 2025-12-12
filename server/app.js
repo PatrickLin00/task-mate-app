@@ -5,6 +5,7 @@ const mongoose = require('mongoose')
 
 const taskRoutes = require('./routes/taskRoutes')
 const authRoutes = require('./routes/authRoutes')
+const aiRoutes = require('./routes/aiRoutes')
 
 const app = express()
 
@@ -26,6 +27,7 @@ app.use(express.json())
 // Routes
 app.use('/api/tasks', taskRoutes)
 app.use('/api/auth', authRoutes)
+app.use('/api/ai', aiRoutes)
 
 // 404 handler
 app.use((req, res) => {
