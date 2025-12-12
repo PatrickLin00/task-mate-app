@@ -43,7 +43,7 @@ export default function Index() {
           <HomePane />
         </SwiperItem>
         <SwiperItem>
-          <TasksPane />
+          <TasksPane onSwipeToHome={() => setActiveTab('home')} onSwipeToAchievements={() => setActiveTab('achievements')} />
         </SwiperItem>
         <SwiperItem>
           <AchievementsPane />

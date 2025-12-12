@@ -47,6 +47,148 @@ export function chipText(t: RoadTask) {
   return `${t.type}+${t.points}`
 }
 
+export type MissionTask = {
+  id: string
+  title: string
+  detail: string
+  attr: Attr
+  points: number
+  icon: string
+  progress: { current: number; total: number }
+  remain: string
+}
+
+export type CollabStatus = '进行中' | '待接取' | '已完成'
+
+export type CollabTask = {
+  id: string
+  title: string
+  detail: string
+  status: CollabStatus
+  assignee: string
+  attr: Attr
+  points: number
+  icon: string
+}
+
+export type ArchivedTask = {
+  id: string
+  title: string
+  detail: string
+  finishedAgo: string
+  attr: Attr
+  points: number
+  icon: string
+}
+
+export const attrTone: Record<Attr, 'blue' | 'red' | 'green'> = {
+  智慧: 'blue',
+  力量: 'red',
+  敏捷: 'green',
+}
+
+export const attrIcon: Record<Attr, string> = {
+  智慧: '🧠',
+  力量: '💪',
+  敏捷: '⚡',
+}
+
+export const missionTasks: MissionTask[] = [
+  {
+    id: 'm1',
+    title: '晨间修行',
+    detail: '在清晨时分完成冥想与体能训练，提升身心合一之境',
+    attr: '力量',
+    points: 15,
+    icon: '💪',
+    progress: { current: 2, total: 3 },
+    remain: '今日 23:59',
+  },
+  {
+    id: 'm2',
+    title: '经典研读',
+    detail: '阅读《道德经》第一至五章，参悟天地玄妙',
+    attr: '智慧',
+    points: 20,
+    icon: '📘',
+    progress: { current: 1, total: 5 },
+    remain: '明日 18:00',
+  },
+  {
+    id: 'm3',
+    title: '灵敏训练',
+    detail: '练习闪避与反应速度，于竹林间穿梭自如不触叶',
+    attr: '敏捷',
+    points: 18,
+    icon: '⚡',
+    progress: { current: 0, total: 1 },
+    remain: '2日后',
+  },
+]
+
+export const collabTasks: CollabTask[] = [
+  {
+    id: 'c1',
+    title: '寻找失落的星图碎片',
+    detail: '前往北斗阁，寻回遗失的星图碎片三枚',
+    status: '进行中',
+    assignee: '云游仙',
+    attr: '敏捷',
+    points: 25,
+    icon: '🧭',
+  },
+  {
+    id: 'c2',
+    title: '炼制养神丹',
+    detail: '采集七株灵草，炼制养神丹三颗',
+    status: '待接取',
+    assignee: '待定',
+    attr: '智慧',
+    points: 30,
+    icon: '🧪',
+  },
+  {
+    id: 'c3',
+    title: '山林巡查',
+    detail: '巡查后山灵兽活动情况，绘制新的灵兽分布图',
+    status: '已完成',
+    assignee: '林间行者',
+    attr: '力量',
+    points: 22,
+    icon: '🏞️',
+  },
+]
+
+export const archivedTasks: ArchivedTask[] = [
+  {
+    id: 'a1',
+    title: '初心誓言',
+    detail: '完成入门仪式，立下修行之志',
+    finishedAgo: '3天前',
+    attr: '智慧',
+    points: 10,
+    icon: '🧠',
+  },
+  {
+    id: 'a2',
+    title: '基础剑术',
+    detail: '掌握基础剑法十式，达到初窥门径之境',
+    finishedAgo: '5天前',
+    attr: '力量',
+    points: 15,
+    icon: '💪',
+  },
+  {
+    id: 'a3',
+    title: '轻功入门',
+    detail: '学习基础轻功，能够飞檐走壁',
+    finishedAgo: '7天前',
+    attr: '敏捷',
+    points: 12,
+    icon: '⚡',
+  },
+]
+
 export const quietLines = [
   '命星不语，天命待启。万象归静，是为渡世之憩。',
   '星河止步，道息灵眠。静候天命转轮，再启新章。',
