@@ -22,23 +22,23 @@ type TasksPaneProps = {
 }
 
 const tabs: { key: TabKey; label: string; hint: string }[] = [
-  { key: 'mission', label: '浣垮懡鍦ㄨ韩', hint: '杩涜涓? },
-  { key: 'collab', label: '濂囬亣杞ㄨ抗', hint: '鍗忎綔' },
-  { key: 'archive', label: '宸茬粨鏄熸効', hint: '褰掓。' },
+  { key: 'mission', label: '使命在身', hint: '进行中' },
+  { key: 'collab', label: '奇遇轨迹', hint: '自己发布' },
+  { key: 'archive', label: '已结星愿', hint: '已完成' },
 ]
 
-const statusTone: Record<CollabStatus | '宸插綊妗?, 'blue' | 'gray' | 'green'> = {
-  杩涜涓? 'blue',
-  寰呮帴鍙? 'gray',
-  宸插畬鎴? 'green',
-  宸插綊妗? 'green',
+const statusTone: Record<CollabStatus | '已归档', 'blue' | 'gray' | 'green'> = {
+  进行中: 'blue',
+  待接应: 'gray',
+  已完成: 'green',
+  已归档: 'green',
 }
 
-const statusIcon: Record<CollabStatus | '宸插綊妗?, string> = {
-  杩涜涓? '鈥?,
-  寰呮帴鍙? '鈴?,
-  宸插畬鎴? '鉁?,
-  宸插綊妗? '馃摝',
+const statusIcon: Record<CollabStatus | '已归档', string> = {
+  进行中: '⏳',
+  待接应: '🔔',
+  已完成: '✅',
+  已归档: '📦',
 }
 
 function AttributeTag({ attr, points }: { attr: Attr; points: number }) {
@@ -59,7 +59,7 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
     <View className='progress'>
       <View className='progress-head'>
         <Text className='progress-label'>
-          杩涘害 {current}/{total}
+          进度 {current}/{total}
         </Text>
         <Text className='progress-percent'>{percent}%</Text>
       </View>
@@ -70,7 +70,7 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
   )
 }
 
-function StatusBadge({ status }: { status: CollabStatus | '宸插綊妗? }) {
+function StatusBadge({ status }: { status: CollabStatus | '已归档' }) {
   const tone = statusTone[status]
   return (
     <View className={`status-badge tone-${tone}`}>
@@ -103,12 +103,12 @@ function MissionCard({ task }: { task: MissionTask }) {
       <Text className='task-desc'>{task.detail}</Text>
       <ProgressBar current={task.progress.current} total={task.progress.total} />
       <View className='card-meta'>
-        <Text className='meta-item'>馃晳 鍓╀綑鏃堕棿锛歿task.remain}</Text>
+        <Text className='meta-item'>⏱ 剩余时间：{task.remain}</Text>
       </View>
       <View className='action-row'>
-        <ActionButton icon='鈫? label='鏇存柊杩涘害' />
-        <ActionButton icon='鉁? label='鎻愪氦楠屾敹' />
-        <ActionButton icon='鉁? label='鏀惧純浠诲姟' ghost />
+        <ActionButton icon='🔁' label='更新进度' />
+        <ActionButton icon='📤' label='提交检视' />
+        <ActionButton icon='📥' label='收纳任务' ghost />
       </View>
     </View>
   )
@@ -130,11 +130,11 @@ function CollabCard({ task }: { task: CollabTask }) {
       </View>
       <Text className='task-desc'>{task.detail}</Text>
       <View className='card-meta'>
-        <Text className='meta-item'>馃 鎺ュ彇浜猴細{task.assignee}</Text>
+        <Text className='meta-item'>🙌 执行人：{task.assignee}</Text>
       </View>
       <View className='action-row'>
-        <ActionButton icon='鉁忥笍' label='缂栬緫浠诲姟' />
-        <ActionButton icon='馃敆' label='鍒嗕韩閾炬帴' />
+        <ActionButton icon='✏️' label='编辑任务' />
+        <ActionButton icon='🔗' label='分享链接' />
       </View>
     </View>
   )
@@ -149,11 +149,11 @@ function ArchivedCard({ task }: { task: ArchivedTask }) {
           <Text className='task-icon'>{task.icon}</Text>
           <Text className='task-title'>{task.title}</Text>
         </View>
-        <StatusBadge status='宸插綊妗? />
+        <StatusBadge status='已归档' />
       </View>
       <Text className='task-desc'>{task.detail}</Text>
       <View className='card-meta'>
-        <Text className='meta-item'>鉁?瀹屾垚浜庯細{task.finishedAgo}</Text>
+        <Text className='meta-item'>✅ 完成于：{task.finishedAgo}</Text>
       </View>
       <View className='archive-foot'>
         <AttributeTag attr={task.attr} points={task.points} />
@@ -166,10 +166,12 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
   const [activeTab, setActiveTab] = useState<TabKey>('mission')
   const current = tabs.findIndex((t) => t.key === activeTab)
   const touchStartX = useRef<number | null>(null)
+  const touchStartTab = useRef<TabKey>('mission')
 
   const handleTouchStart = (e: any) => {
     if (e?.touches?.[0]) {
       touchStartX.current = e.touches[0].clientX
+      touchStartTab.current = activeTab
     }
   }
 
@@ -179,14 +181,14 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
     touchStartX.current = null
     const threshold = 50
 
-    // Mission tab: right swipe to go back to Home
-    if (activeTab === 'mission' && deltaX > threshold) {
+    // 使命在身：右滑回到首页（仅当起始就在使命页，避免中间滑页误触）
+    if (touchStartTab.current === 'mission' && deltaX > threshold) {
       onSwipeToHome?.()
       return
     }
 
-    // Archive tab: right swipe to jump to Achievements
-    if (activeTab === 'archive' && deltaX > threshold) {
+    // 已结星愿：左滑去成就页（起始在档案页时生效，方向与 tab/Swiper 一致）
+    if (touchStartTab.current === 'archive' && deltaX < -threshold) {
       onSwipeToAchievements?.()
     }
   }
@@ -245,7 +247,7 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
         </Swiper>
       </View>
 
-      <Button className='fab'>鍙戣捣濂囬亣</Button>
+      <Button className='fab'>发起奇遇</Button>
     </View>
   )
 }
