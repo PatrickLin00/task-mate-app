@@ -740,6 +740,10 @@ $surface: #ffffff;
   background: linear-gradient(120deg, #a78bfa, #6366f1);
 }
 
+.dialog-step-slider {
+  margin: 2px 0 8px;
+}
+
 .dialog-close {
   margin-top: 6px;
   background: linear-gradient(140deg, #7c3aed, #6366f1);
@@ -760,4 +764,16 @@ $surface: #ffffff;
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.4);
   font-weight: 800;
   letter-spacing: 0.2px;
+}
+
+.task-action {
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.task-action:active,
+.cta:active,
+.fab:active,
+.pressing {
+  transform: translateY(2px);
+  box-shadow: 0 10px 16px rgba(99, 102, 241, 0.18);
 }

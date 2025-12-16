@@ -19,9 +19,10 @@ type TaskBase = {
 }
 
 export type RoadTask = TaskBase & {
-  // Home 卡片兼容字段：type 与 attr 一致
+  // Home card compatibility: type equals attr
   type: Attr
   due: string
+  dueAt?: string
   difficulty?: Difficulty
   progress?: { current: number; total: number }
   subtasks?: Subtask[]
@@ -33,6 +34,7 @@ export type MissionTask = TaskBase & {
   subtasks: Subtask[]
   remain: string
   dueLabel: string
+  dueAt: string
   dueDays: number
   difficulty?: Difficulty
 }
@@ -71,8 +73,57 @@ export function summarizeSubtasksProgress(subtasks: Subtask[]) {
   return { current, total }
 }
 
-// 统一的“已接取进行中”任务列表，使命在身与星程简录共用
-const missionTaskSeeds: Omit<MissionTask, 'progress'>[] = [
+const DAY = 24 * 60 * 60 * 1000
+const MINUTE = 60 * 1000
+
+const pad2 = (num: number) => (num < 10 ? `0${num}` : `${num}`)
+
+const toDate = (val: string | Date) => (val instanceof Date ? val : new Date(val))
+
+const buildDueAt = (daysFromToday: number, hour: number, minute: number) => {
+  const base = new Date()
+  base.setHours(0, 0, 0, 0)
+  base.setDate(base.getDate() + daysFromToday)
+  base.setHours(hour, minute, 0, 0)
+  return base.toISOString()
+}
+
+const calcDueDays = (dueAt: string | Date) => {
+  const due = toDate(dueAt)
+  const today = new Date()
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate())
+  return Math.floor((dueStart.getTime() - start.getTime()) / DAY)
+}
+
+export function formatDueLabel(dueAt: string | Date) {
+  const due = toDate(dueAt)
+  const today = new Date()
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate())
+  const diffDays = Math.round((dueStart.getTime() - start.getTime()) / DAY)
+  const dateLabel =
+    diffDays === 0 ? '今日' : diffDays === 1 ? '明日' : `${due.getMonth() + 1}月${due.getDate()}日`
+  return `${dateLabel} ${pad2(due.getHours())}:${pad2(due.getMinutes())}`
+}
+
+export function humanizeRemain(dueAt: string | Date) {
+  const due = toDate(dueAt)
+  const diff = due.getTime() - Date.now()
+  if (Number.isNaN(due.getTime())) return ''
+  if (diff <= 0) return '超时'
+  if (diff < MINUTE) return '不足一分钟'
+  const minutes = diff / MINUTE
+  if (minutes < 30) return `${Math.ceil(minutes)} 分钟`
+  const hours = minutes / 60
+  if (hours < 1) return '不足一小时'
+  if (hours < 24) return `不足${Math.ceil(hours)}小时`
+  const days = Math.ceil(hours / 24)
+  return `${days}天`
+}
+
+// Unified mission seeds shared across pages
+const missionTaskSeeds: (Omit<MissionTask, 'progress' | 'remain' | 'dueLabel' | 'dueDays'>)[] = [
   {
     id: 'm1',
     title: '子夜息神诀',
@@ -80,11 +131,9 @@ const missionTaskSeeds: Omit<MissionTask, 'progress'>[] = [
     attr: '智慧',
     points: 20,
     icon: '🌙',
-    remain: '今日 23:30',
-    dueLabel: '今日 23:30',
-    dueDays: 0,
+    dueAt: buildDueAt(0, 23, 30),
     subtasks: [
-      { id: 'm1-s1', title: '第一夜：23:30 前就寝', current: 1, total: 1 },
+      { id: 'm1-s1', title: '第一夜：23:30 前就寝', current: 1, total: 2 },
       { id: 'm1-s2', title: '第二夜：放松序列与体感记录', current: 1, total: 1 },
       { id: 'm1-s3', title: '第三夜：继续息神练习', current: 0, total: 1 },
       { id: 'm1-s4', title: '第四夜：体验可持续调息', current: 0, total: 1 },
@@ -94,45 +143,39 @@ const missionTaskSeeds: Omit<MissionTask, 'progress'>[] = [
   {
     id: 'm2',
     title: '镇岳力场',
-    detail: '三日内完成 3 次力场淬炼：深蹲 / 俯卧撑 / 哑铃推举各 3 组',
+    detail: '三日内完成3 次力场淬炼：深蹲 / 卧推 / 硬拉推举各 3 组，记录重量',
     attr: '力量',
     points: 26,
     icon: '🏋️',
-    remain: '本周内',
-    dueLabel: '本周内',
-    dueDays: 3,
+    dueAt: buildDueAt(3, 21, 0),
     subtasks: [
       { id: 'm2-s1', title: '第一次：深蹲 3 组', current: 1, total: 1 },
-      { id: 'm2-s2', title: '第二次：俯卧撑 3 组', current: 0, total: 1 },
-      { id: 'm2-s3', title: '第三次：壶铃推举完成', current: 0, total: 1 },
+      { id: 'm2-s2', title: '第二次：卧推 3 组', current: 0, total: 1 },
+      { id: 'm2-s3', title: '第三次：硬拉推举完成', current: 0, total: 1 },
     ],
   },
   {
     id: 'm3',
-    title: '轻骑巡城',
-    detail: '以骑行或步行巡城通勤 3 次，每次里程不低于 2 公里，感受风中身法',
+    title: '轻灵巡城',
+    detail: '以跑行或步行巡城通勤 3 次，每次里程不低于 2 公里，感受风中身法',
     attr: '敏捷',
     points: 18,
     icon: '🚲',
-    remain: '2 日内',
-    dueLabel: '明日',
-    dueDays: 1,
+    dueAt: buildDueAt(1, 18, 30),
     subtasks: [
       { id: 'm3-s1', title: '巡城训练 1：步行 2 公里', current: 0, total: 1 },
       { id: 'm3-s2', title: '巡城训练 2：跑步 2.5 公里', current: 0, total: 1 },
-      { id: 'm3-s3', title: '巡城训练 3：轻骑压轴', current: 0, total: 1 },
+      { id: 'm3-s3', title: '巡城训练 3：轻灵压轴', current: 0, total: 1 },
     ],
   },
   {
     id: 'm4',
     title: '晨行轻功·第一式',
-    detail: '黎明时分于公园快走 30 分钟，当作轻功热身，收尾做 3 组拉伸巩固筋骨',
+    detail: '黎明时分于公园快跑 30 分钟，当作轻功热身，收尾做 3 组拉伸巩固筋骨',
     attr: '力量',
     points: 12,
     icon: '🏃',
-    remain: '今日 23:30',
-    dueLabel: '今日',
-    dueDays: 0,
+    dueAt: buildDueAt(0, 23, 0),
     subtasks: [
       { id: 'm4-s1', title: '晨跑热身 15 分钟', current: 1, total: 1 },
       { id: 'm4-s2', title: '收尾核心练习 3 组', current: 0, total: 1 },
@@ -146,9 +189,7 @@ const missionTaskSeeds: Omit<MissionTask, 'progress'>[] = [
     attr: '敏捷',
     points: 14,
     icon: '🦶',
-    remain: '今日 18:00',
-    dueLabel: '今日',
-    dueDays: 0,
+    dueAt: buildDueAt(0, 18, 0),
     subtasks: [
       { id: 'm5-s1', title: '热身跳绳开始 2 组', current: 1, total: 2 },
       { id: 'm5-s2', title: '主角跳绳稳节奏 2 组', current: 0, total: 2 },
@@ -160,10 +201,8 @@ const missionTaskSeeds: Omit<MissionTask, 'progress'>[] = [
     detail: '午时开炉炼一份低油轻食，记下食材与份量，视作今日能量丹方',
     attr: '智慧',
     points: 10,
-    icon: '🥗',
-    remain: '今日 13:00',
-    dueLabel: '今日',
-    dueDays: 0,
+    icon: '🍗',
+    dueAt: buildDueAt(0, 13, 0),
     subtasks: [{ id: 'm6-s1', title: '点火炼制开始', current: 0, total: 1 }],
   },
   {
@@ -173,9 +212,7 @@ const missionTaskSeeds: Omit<MissionTask, 'progress'>[] = [
     attr: '智慧',
     points: 8,
     icon: '🧹',
-    remain: '明日 22:00',
-    dueLabel: '明日',
-    dueDays: 1,
+    dueAt: buildDueAt(1, 22, 0),
     subtasks: [{ id: 'm7-s1', title: '客厅大扫除', current: 0, total: 1 }],
   },
   {
@@ -185,9 +222,7 @@ const missionTaskSeeds: Omit<MissionTask, 'progress'>[] = [
     attr: '智慧',
     points: 12,
     icon: '🧺',
-    remain: '后天 18:00',
-    dueLabel: '后天',
-    dueDays: 2,
+    dueAt: buildDueAt(2, 18, 0),
     subtasks: [{ id: 'm8-s1', title: '备好购货清单', current: 0, total: 1 }],
   },
   {
@@ -197,9 +232,7 @@ const missionTaskSeeds: Omit<MissionTask, 'progress'>[] = [
     attr: '智慧',
     points: 16,
     icon: '🧘',
-    remain: '3 日内',
-    dueLabel: '后天',
-    dueDays: 2,
+    dueAt: buildDueAt(2, 21, 30),
     difficulty: '简单',
     subtasks: [
       { id: 'm9-s1', title: '第一次静坐 12 分钟', current: 1, total: 1 },
@@ -212,9 +245,11 @@ const missionTaskSeeds: Omit<MissionTask, 'progress'>[] = [
 export const missionTasks: MissionTask[] = missionTaskSeeds.map((task) => ({
   ...task,
   progress: summarizeSubtasksProgress(task.subtasks),
+  remain: humanizeRemain(task.dueAt),
+  dueLabel: formatDueLabel(task.dueAt),
+  dueDays: calcDueDays(task.dueAt),
 }))
-
-// 星程简录：三天内任务；若超过 5 条则只展示“今日”截止的
+// Today picks: tasks within three days; if more than 5, keep only today
 const withinThreeDays = missionTasks.filter((t) => t.dueDays <= 3)
 const todayOnly = missionTasks.filter((t) => t.dueDays <= 0)
 const pickTodayTasks = withinThreeDays.length > 5 ? todayOnly : withinThreeDays
@@ -231,19 +266,20 @@ export const todayTasks: RoadTask[] = pickTodayTasks.map((t) => ({
   difficulty: t.difficulty,
   progress: t.progress,
   subtasks: t.subtasks,
-  remain: t.remain,
+  dueAt: t.dueAt,
+  remain: humanizeRemain(t.dueAt),
 }))
 
-// 星旅挑战：推荐可接取的强化任务
-export const feedTasks: RoadTask[] = [
+// Challenge feed: recommended new tasks
+const feedTaskSeeds: (Omit<RoadTask, 'due' | 'progress' | 'subtasks' | 'remain'>)[] = [
   {
     id: 'r1',
     title: '风行诀·心率篇',
     detail: '以 6’30 配速奔行 4 公里，跑毕拉伸 10 分钟，调息如练风行诀',
-    due: '今日',
+    dueAt: buildDueAt(0, 21, 30),
     attr: '力量',
     type: '力量',
-    icon: '⏱️',
+    icon: '⌱️',
     points: 20,
     difficulty: '中等',
   },
@@ -251,7 +287,7 @@ export const feedTasks: RoadTask[] = [
     id: 'r2',
     title: '静心观想·番茄阵',
     detail: '布下番茄阵：3 轮 × 45 分钟深度专注，阵后写要点复盘心得',
-    due: '今日',
+    dueAt: buildDueAt(0, 22, 15),
     attr: '智慧',
     type: '智慧',
     icon: '📚',
@@ -262,7 +298,7 @@ export const feedTasks: RoadTask[] = [
     id: 'r3',
     title: '铁马桩·核心篇',
     detail: '平板支撑 4 组 × 60 秒，间歇 40 秒调息，锻出铁马桩般的稳固核心',
-    due: '今日',
+    dueAt: buildDueAt(0, 20, 45),
     attr: '力量',
     type: '力量',
     icon: '🧘',
@@ -273,7 +309,7 @@ export const feedTasks: RoadTask[] = [
     id: 'r4',
     title: '夜半藏书阁',
     detail: '夜半入阁，阅读非虚构 30 页，落笔 80 字摘记，累积悟道心得',
-    due: '明日',
+    dueAt: buildDueAt(1, 23, 0),
     attr: '智慧',
     type: '智慧',
     icon: '📖',
@@ -284,7 +320,7 @@ export const feedTasks: RoadTask[] = [
     id: 'r5',
     title: '登云梯·试炼',
     detail: '快步登楼 10 层（上下各 5 层），稳控膝盖，以此当作登云梯试炼',
-    due: '明日',
+    dueAt: buildDueAt(1, 19, 0),
     attr: '敏捷',
     type: '敏捷',
     icon: '🌀',
@@ -293,11 +329,16 @@ export const feedTasks: RoadTask[] = [
   },
 ]
 
+export const feedTasks: RoadTask[] = feedTaskSeeds.map((task) => ({
+  ...task,
+  due: formatDueLabel(task.dueAt),
+  remain: humanizeRemain(task.dueAt),
+}))
 export function chipText(t: RoadTask) {
   return `${t.attr}+${t.points}`
 }
 
-// 奇遇轨迹：自己发布的协作/代办任务
+// Collab track: self-published collab/delegated tasks
 export const collabTasks: CollabTask[] = [
   {
     id: 'c1',
@@ -331,7 +372,7 @@ export const collabTasks: CollabTask[] = [
   },
 ]
 
-// 已结星愿：已完成的任务
+// Archived wishes: completed tasks
 export const archivedTasks: ArchivedTask[] = [
   {
     id: 'a1',

@@ -10,10 +10,10 @@ import ProfilePane from './panes/ProfilePane'
 type Tab = 'home' | 'tasks' | 'achievements' | 'profile'
 const tabOrder: Tab[] = ['home', 'tasks', 'achievements', 'profile']
 const tabMeta: Record<Tab, { label: string; icon: string }> = {
-  home: { label: '\u9996\u9875', icon: '\ud83c\udfe0' },
-  tasks: { label: '\u4efb\u52a1', icon: '\ud83d\udcdd' },
-  achievements: { label: '\u6210\u5c31', icon: '\ud83c\udfc6' },
-  profile: { label: '\u6211\u7684', icon: '\ud83d\udc64' },
+  home: { label: '首页', icon: '🏠' },
+  tasks: { label: '任务', icon: '📝' },
+  achievements: { label: '成就', icon: '🏆' },
+  profile: { label: '我的', icon: '👤' },
 }
 
 export default function Index() {
@@ -40,10 +40,14 @@ export default function Index() {
         duration={220}
       >
         <SwiperItem>
-          <HomePane />
+          <HomePane isActive={activeTab === 'home'} />
         </SwiperItem>
         <SwiperItem>
-          <TasksPane onSwipeToHome={() => setActiveTab('home')} onSwipeToAchievements={() => setActiveTab('achievements')} />
+          <TasksPane
+            isActive={activeTab === 'tasks'}
+            onSwipeToHome={() => setActiveTab('home')}
+            onSwipeToAchievements={() => setActiveTab('achievements')}
+          />
         </SwiperItem>
         <SwiperItem>
           <AchievementsPane />

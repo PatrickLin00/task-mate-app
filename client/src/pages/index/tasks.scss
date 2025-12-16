@@ -407,6 +407,25 @@
   background: linear-gradient(120deg, #a78bfa, #6366f1);
 }
 
+.task-card .subtask-slider {
+  margin: 2px 0 8px;
+}
+
+.task-card.editing {
+  box-shadow: 0 22px 36px rgba(99, 102, 241, 0.28);
+  border-width: 2px;
+  position: relative;
+  z-index: 12;
+}
+
+.edit-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.3);
+  backdrop-filter: blur(6px);
+  z-index: 8;
+}
+
 .action-row {
   margin-top: 14px;
   display: flex;
@@ -429,6 +448,7 @@
   font-size: 17px;
   border: none;
   box-shadow: 0 18px 28px rgba(99, 102, 241, 0.3);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
 
 .task-action .action-icon {
@@ -440,6 +460,12 @@
   border: 1px dashed rgba(148, 163, 184, 0.8);
   color: #4b5563;
   box-shadow: none;
+}
+
+.task-action:active,
+.pressing {
+  transform: translateY(2px);
+  box-shadow: 0 10px 16px rgba(99, 102, 241, 0.18);
 }
 
 .archive-foot {
@@ -766,6 +792,36 @@
   border: 1px solid rgba(248, 113, 113, 0.45);
   font-weight: 700;
   margin-left: 0;
+}
+
+.due-row {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.due-pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.picker-pill {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(124, 58, 237, 0.08);
+  border: 1px solid rgba(124, 58, 237, 0.18);
+  font-weight: 800;
+  color: #4b5563;
+  min-width: 64px;
+  text-align: center;
+}
+
+.modal-hint.inline {
+  display: block;
+  line-height: 1.4;
+  color: #6b7280;
 }
 
 .reward-row {

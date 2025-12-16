@@ -1,6 +1,6 @@
-import { View, Text, Swiper, SwiperItem, ScrollView, Button, Input, Textarea } from '@tarojs/components'
+import { View, Text, Swiper, SwiperItem, ScrollView, Button, Input, Textarea, Slider, Picker } from '@tarojs/components'
 import Taro from '@tarojs/taro'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import '../tasks.scss'
 import {
   missionTasks as missionSeed,
@@ -9,7 +9,10 @@ import {
   attrTone,
   attrIcon,
   summarizeSubtasksProgress,
+  humanizeRemain,
+  formatDueLabel,
   type Attr,
+  type Subtask,
   type CollabStatus,
   type MissionTask,
   type CollabTask,
@@ -20,6 +23,7 @@ import { createTask, type Task } from '@/services/api'
 type TabKey = 'mission' | 'collab' | 'archive'
 
 type TasksPaneProps = {
+  isActive?: boolean
   onSwipeToHome?: () => void
   onSwipeToAchievements?: () => void
 }
@@ -45,6 +49,9 @@ const statusIcon: Record<CollabStatus | '已归档', string> = {
 }
 
 type SubtaskInput = { title: string; total: number }
+
+const DAY = 24 * 60 * 60 * 1000
+const pad2 = (num: number) => (num < 10 ? `0${num}` : `${num}`)
 
 const calcPercent = (current: number, total: number) =>
   Math.min(100, Math.round((current / Math.max(1, total || 1)) * 100))
@@ -102,6 +109,8 @@ function ActionButton({
   return (
     <View
       className={`task-action ${ghost ? 'ghost' : ''}`}
+      hoverClass='pressing'
+      data-role='action'
       onClick={(e) => {
         e.stopPropagation()
         onClick?.()
@@ -116,17 +125,39 @@ function ActionButton({
 function MissionCard({
   task,
   expanded,
-  onToggle,
+  editing,
+  subtasks,
+  progress,
+  onChangeSubtask,
+  onEdit,
+  onSubmit,
+  onCancel,
+  onToggleExpand,
+  onReview,
+  onCollect,
 }: {
   task: MissionTask
   expanded: boolean
-  onToggle?: (taskId: string) => void
+  editing: boolean
+  subtasks: Subtask[]
+  progress: { current: number; total: number }
+  onChangeSubtask?: (subId: string, value: number) => void
+  onEdit?: () => void
+  onSubmit?: () => void
+  onCancel?: () => void
+  onToggleExpand?: (taskId: string) => void
+  onReview?: () => void
+  onCollect?: () => void
 }) {
   const tone = attrTone[task.attr]
-  const hasSubtasks = task.subtasks?.length > 0
+  const hasSubtasks = subtasks?.length > 0
+  const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain
+  const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel
 
-  const handleCardClick = () => {
-    if (hasSubtasks) onToggle?.(task.id)
+  const handleCardClick = (e: any) => {
+    if (!hasSubtasks || editing) return
+    if (e?.target?.dataset?.role === 'action') return
+    onToggleExpand?.(task.id)
   }
 
   return (
@@ -135,7 +166,8 @@ function MissionCard({
         'task-card tone-' +
         tone +
         (hasSubtasks ? ' has-subtasks' : '') +
-        (expanded ? ' expanded' : '')
+        (expanded ? ' expanded' : '') +
+        (editing ? ' editing' : '')
       }
       onClick={handleCardClick}
     >
@@ -147,18 +179,21 @@ function MissionCard({
         <AttributeTag attr={task.attr} points={task.points} />
       </View>
       <Text className='task-desc'>{task.detail}</Text>
-      <ProgressBar current={task.progress.current} total={task.progress.total} />
+      <ProgressBar current={progress.current} total={progress.total} />
       <View className='card-meta'>
-        <Text className='meta-item'>⏱ 剩余时间：{task.remain}</Text>
+        <Text className='meta-item'>⏱ 剩余时间：{remainLabel}</Text>
+        <Text className='meta-item'>🗓 截止：{dueLabel}</Text>
       </View>
       {hasSubtasks && (
         <>
           <View className={'subtask-toggle ' + (expanded ? 'expanded' : '')}>
             <Text className='toggle-arrow'>⌄</Text>
-            <Text className='toggle-text'>{expanded ? '收起子任务' : '展开子任务'}</Text>
+            <Text className='toggle-text'>
+              {expanded ? (editing ? '编辑子任务' : '收起子任务') : '展开子任务'}
+            </Text>
           </View>
           <View className={'subtask-group ' + (expanded ? 'open' : '')}>
-            {task.subtasks.map((s) => {
+            {subtasks.map((s) => {
               const percent = calcPercent(s.current, s.total)
               return (
                 <View className='subtask-item' key={s.id}>
@@ -168,9 +203,22 @@ function MissionCard({
                       {s.current}/{s.total}
                     </Text>
                   </View>
-                  <View className='subtask-track'>
-                    <View className='subtask-fill' style={{ width: percent + '%' }} />
-                  </View>
+                  {editing ? (
+                    <Slider
+                      className='subtask-slider'
+                      min={0}
+                      max={s.total}
+                      step={1}
+                      value={s.current}
+                      activeColor='#7c3aed'
+                      backgroundColor='#e5e7eb'
+                      onChange={(e) => onChangeSubtask?.(s.id, Number(e.detail.value))}
+                    />
+                  ) : (
+                    <View className='subtask-track'>
+                      <View className='subtask-fill' style={{ width: percent + '%' }} />
+                    </View>
+                  )}
                 </View>
               )
             })}
@@ -179,9 +227,19 @@ function MissionCard({
       )}
 
       <View className='action-row'>
-        <ActionButton icon='🔁' label='更新进度' />
-        <ActionButton icon='📝' label='提交检视' />
-        <ActionButton icon='📥' label='收纳任务' ghost />
+        {editing ? (
+          <>
+            <ActionButton icon='✅' label='提交变更' onClick={onSubmit} />
+            <ActionButton icon='📝' label='提交检视' onClick={onReview} />
+            <ActionButton icon='✖️' label='取消变更' ghost onClick={onCancel} />
+          </>
+        ) : (
+          <>
+            <ActionButton icon='🔁' label='更新进度' onClick={onEdit} />
+            <ActionButton icon='📝' label='提交检视' onClick={onReview} />
+            <ActionButton icon='📥' label='收纳任务' ghost onClick={onCollect} />
+          </>
+        )}
       </View>
     </View>
   )
@@ -235,10 +293,13 @@ function ArchivedCard({ task }: { task: ArchivedTask }) {
   )
 }
 
-export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: TasksPaneProps) {
+export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAchievements }: TasksPaneProps) {
+  const today = useMemo(() => new Date(), [])
   const [activeTab, setActiveTab] = useState<TabKey>('mission')
   const [missionTasks, setMissionTasks] = useState<MissionTask[]>(missionSeed)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [draftSubtasks, setDraftSubtasks] = useState<Record<string, Subtask[]>>({})
   const [collabTasks] = useState<CollabTask[]>(collabSeed)
   const [archivedTasks] = useState<ArchivedTask[]>(archivedSeed)
   const [showCreate, setShowCreate] = useState(false)
@@ -249,10 +310,31 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
   const [descInput, setDescInput] = useState('')
   const [attrReward, setAttrReward] = useState<'wisdom' | 'strength' | 'agility' | ''>('')
   const [attrValue, setAttrValue] = useState('')
+  const [dueYear, setDueYear] = useState(today.getFullYear())
+  const [dueMonth, setDueMonth] = useState(today.getMonth() + 1)
+  const [dueDay, setDueDay] = useState(today.getDate())
+  const [dueHour, setDueHour] = useState(23)
+  const [dueMinute, setDueMinute] = useState(59)
   const [subtasks, setSubtasks] = useState<SubtaskInput[]>([
     { title: '', total: 1 },
     { title: '', total: 1 },
   ])
+  const baseYear = today.getFullYear()
+  const yearOptions = useMemo(() => [baseYear, baseYear + 1], [baseYear])
+  const monthOptions = useMemo(() => Array.from({ length: 12 }, (_, i) => i + 1), [])
+  const dayOptions = useMemo(
+    () => Array.from({ length: new Date(dueYear, dueMonth, 0).getDate() }, (_, i) => i + 1),
+    [dueYear, dueMonth]
+  )
+  const hourOptions = useMemo(() => Array.from({ length: 24 }, (_, i) => i), [])
+  const minuteOptions = useMemo(() => Array.from({ length: 60 }, (_, i) => i), [])
+  const dueDisplay = `${dueYear}年${pad2(dueMonth)}月${pad2(dueDay)}日 ${pad2(dueHour)}:${pad2(dueMinute)}`
+
+  useEffect(() => {
+    const maxDay = new Date(dueYear, dueMonth, 0).getDate()
+    if (dueDay > maxDay) setDueDay(maxDay)
+  }, [dueDay, dueMonth, dueYear])
+
   const current = tabs.findIndex((t) => t.key === activeTab)
   const touchStartX = useRef<number | null>(null)
   const touchStartTab = useRef<TabKey>('mission')
@@ -272,7 +354,11 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
 
     // 使命在身：右滑回到首页（仅当起始就在使命页，避免中间滑页误触）
     if (touchStartTab.current === 'mission' && deltaX > threshold) {
-      onSwipeToHome?.()
+      if (editingTaskId) {
+        handleCancelEditing()
+      } else {
+        onSwipeToHome?.()
+      }
       return
     }
 
@@ -282,25 +368,107 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
     }
   }
 
+  const selectedDueAt = () =>
+    new Date(dueYear, dueMonth - 1, dueDay, dueHour, dueMinute, 0, 0).toISOString()
+
+  const computeDueMeta = (iso: string) => {
+    const due = new Date(iso)
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate())
+    const dueDays = Math.floor((dueStart.getTime() - todayStart.getTime()) / DAY)
+    return {
+      dueAt: iso,
+      remain: humanizeRemain(iso),
+      dueLabel: formatDueLabel(iso),
+      dueDays,
+    }
+  }
+
+  useEffect(() => {
+    if (!isActive) {
+      setExpandedTaskId(null)
+      setEditingTaskId(null)
+      setDraftSubtasks({})
+      setShowCreate(false)
+    }
+  }, [isActive])
+
   const handleToggleCard = (taskId: string, hasSubtasks: boolean) => {
-    if (!hasSubtasks) return
+    if (!hasSubtasks || editingTaskId) return
     setExpandedTaskId((prev) => (prev === taskId ? null : taskId))
   }
 
-  const rewardOptions = useMemo(
-    () => [
-      { label: '智慧', value: 'wisdom' as const, tone: 'blue', icon: '🧠' },
-      { label: '力量', value: 'strength' as const, tone: 'red', icon: '💪' },
-      { label: '敏捷', value: 'agility' as const, tone: 'green', icon: '⚡' },
-    ],
-    []
-  )
+  const showPlaceholder = (title: string) => {
+    Taro.showToast({ title, icon: 'none' })
+  }
+
+  const startEditing = (task: MissionTask) => {
+    if (!task.subtasks?.length) return
+    setExpandedTaskId(task.id)
+    setEditingTaskId(task.id)
+    setDraftSubtasks((prev) => ({
+      ...prev,
+      [task.id]: task.subtasks.map((s) => ({ ...s })),
+    }))
+  }
+
+  const handleDraftChange = (taskId: string, subId: string, value: number) => {
+    setDraftSubtasks((prev) => {
+      const next = { ...prev }
+      const list = next[taskId]?.map((s) => (s.id === subId ? { ...s, current: value } : s)) || []
+      next[taskId] = list
+      return next
+    })
+  }
+
+  const handleCancelEditing = () => {
+    if (!editingTaskId) return
+    setEditingTaskId(null)
+    setDraftSubtasks((prev) => {
+      const next = { ...prev }
+      delete next[editingTaskId]
+      return next
+    })
+  }
+
+  const handleSubmitEditing = () => {
+    if (!editingTaskId) return
+    const draft = draftSubtasks[editingTaskId]
+    if (!draft) return
+    const progress = summarizeSubtasksProgress(draft)
+    setMissionTasks((prev) =>
+      prev.map((t) =>
+        t.id === editingTaskId ? { ...t, subtasks: draft, progress } : t
+      )
+    )
+    setEditingTaskId(null)
+    setDraftSubtasks((prev) => {
+      const next = { ...prev }
+      delete next[editingTaskId]
+      return next
+    })
+  }
+
+const rewardOptions = useMemo(
+  () => [
+    { label: '智慧', value: 'wisdom' as const, tone: 'blue', icon: '🧠' },
+    { label: '力量', value: 'strength' as const, tone: 'red', icon: '💪' },
+    { label: '敏捷', value: 'agility' as const, tone: 'green', icon: '⚡' },
+  ],
+  []
+)
 
   const resetForm = () => {
     setTitleInput('')
     setDescInput('')
     setAttrReward('')
     setAttrValue('')
+    setDueYear(today.getFullYear())
+    setDueMonth(today.getMonth() + 1)
+    setDueDay(today.getDate())
+    setDueHour(23)
+    setDueMinute(59)
     setSubtasks([
       { title: '', total: 1 },
       { title: '', total: 1 },
@@ -355,6 +523,9 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
           ]
     )
     const progress = task.computedProgress || summarizeSubtasksProgress(subtasks)
+    const dueIso = task.updatedAt || task.createdAt || new Date(Date.now() + DAY).toISOString()
+    const dueMeta = computeDueMeta(dueIso)
+    const difficulty = task.attributeReward.value >= 20 ? '中等' : '简单'
     return {
       id: task._id || Math.random().toString(36).slice(2),
       title: task.title,
@@ -364,9 +535,8 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
       icon: '✨',
       progress: { current: progress.current, total: progress.total || 1 },
       subtasks,
-      remain: '刚刚',
-      dueLabel: '今日',
-      dueDays: 0,
+      ...dueMeta,
+      difficulty,
     }
   }
 
@@ -403,7 +573,7 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
         subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
         attributeReward: { type: attrReward, value: rewardValNum },
       })
-      const mapped = mapApiTaskToMission(created)
+      const mapped = { ...mapApiTaskToMission(created), ...computeDueMeta(selectedDueAt()) }
       setMissionTasks((prev) => [mapped, ...prev])
       Taro.showToast({ title: '奇遇已发起', icon: 'success' })
       setShowCreate(false)
@@ -459,7 +629,13 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
             <View
               key={tab.key}
               className={`task-tab ${activeTab === tab.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => {
+                if (editingTaskId) {
+                  handleCancelEditing()
+                  return
+                }
+                setActiveTab(tab.key)
+              }}
             >
               <Text className='tab-label'>{tab.label}</Text>
               <Text className='tab-hint'>{tab.hint}</Text>
@@ -476,14 +652,30 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
           <SwiperItem>
             <ScrollView scrollY scrollWithAnimation enableFlex className='task-scroll'>
               <View className='task-list'>
-                {missionTasks.map((task) => (
-                  <MissionCard
-                    key={task.id}
-                    task={task}
-                    expanded={expandedTaskId === task.id}
-                    onToggle={(id) => handleToggleCard(id, !!task.subtasks?.length)}
-                  />
-                ))}
+                {missionTasks.map((task) => {
+                  const editing = editingTaskId === task.id
+                  const subsDraft = (editing && draftSubtasks[task.id]) || task.subtasks
+                  const progress = editing
+                    ? summarizeSubtasksProgress(subsDraft || [])
+                    : task.progress
+                  return (
+                    <MissionCard
+                      key={task.id}
+                      task={task}
+                      expanded={expandedTaskId === task.id || editing}
+                      editing={editing}
+                      subtasks={subsDraft || []}
+                      progress={progress}
+                      onChangeSubtask={(subId, val) => handleDraftChange(task.id, subId, val)}
+                      onSubmit={handleSubmitEditing}
+                      onCancel={handleCancelEditing}
+                      onEdit={() => startEditing(task)}
+                      onToggleExpand={(id) => handleToggleCard(id, !!task.subtasks?.length)}
+                      onReview={() => showPlaceholder('提交检视待接入')}
+                      onCollect={() => showPlaceholder('已收纳，稍后接入')}
+                    />
+                  )
+                })}
               </View>
             </ScrollView>
           </SwiperItem>
@@ -510,9 +702,11 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
         </Swiper>
       </View>
 
-      <Button className='fab' onClick={() => setShowCreate(true)}>
+      <Button className='fab' hoverClass='pressing' onClick={() => setShowCreate(true)}>
         发起奇遇
       </Button>
+
+      {editingTaskId && <View className='edit-scrim' onClick={handleCancelEditing} />}
 
       {showCreate && (
         <View className='task-modal-overlay' onClick={() => setShowCreate(false)}>
@@ -605,6 +799,53 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
                       </View>
                     ))}
                   </View>
+                </View>
+                <View className='due-row'>
+                  <Text className='modal-label'>设定日期与时间</Text>
+                  <View className='due-pickers'>
+                    <Picker
+                      mode='selector'
+                      range={yearOptions.map(String)}
+                      value={Math.max(yearOptions.indexOf(dueYear), 0)}
+                      onChange={(e) => setDueYear(yearOptions[Number(e.detail.value)])}
+                    >
+                      <View className='picker-pill'>{dueYear}年</View>
+                    </Picker>
+                    <Picker
+                      mode='selector'
+                      range={monthOptions.map((m) => `${m}月`)}
+                      value={Math.max(monthOptions.indexOf(dueMonth), 0)}
+                      onChange={(e) => setDueMonth(monthOptions[Number(e.detail.value)])}
+                    >
+                      <View className='picker-pill'>{pad2(dueMonth)}月</View>
+                    </Picker>
+                    <Picker
+                      mode='selector'
+                      range={dayOptions.map((d) => `${d}日`)}
+                      value={Math.max(dayOptions.indexOf(dueDay), 0)}
+                      onChange={(e) => setDueDay(dayOptions[Number(e.detail.value)])}
+                    >
+                      <View className='picker-pill'>{pad2(dueDay)}日</View>
+                    </Picker>
+                    <Picker
+                      mode='selector'
+                      range={hourOptions.map((h) => `${pad2(h)}时`)}
+                      value={Math.max(hourOptions.indexOf(dueHour), 0)}
+                      onChange={(e) => setDueHour(hourOptions[Number(e.detail.value)])}
+                    >
+                      <View className='picker-pill'>{pad2(dueHour)}时</View>
+                    </Picker>
+                    <Picker
+                      mode='selector'
+                      range={minuteOptions.map((m) => `${pad2(m)}分`)}
+                      value={Math.max(minuteOptions.indexOf(dueMinute), 0)}
+                      onChange={(e) => setDueMinute(minuteOptions[Number(e.detail.value)])}
+                    >
+                      <View className='picker-pill'>{pad2(dueMinute)}分</View>
+                    </Picker>
+                  </View>
+                  <Text className='modal-hint inline'>默认今天 23:59，可下拉调整</Text>
+                  <Text className='modal-hint inline'>当前选择：{dueDisplay}</Text>
                 </View>
               </View>
 

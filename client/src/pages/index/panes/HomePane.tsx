@@ -1,9 +1,10 @@
-import { View, Text, ScrollView, Button, Image } from '@tarojs/components'
-import { useLoad } from '@tarojs/taro'
+﻿import { View, Text, ScrollView, Button, Image, Slider } from '@tarojs/components'
+import Taro, { useLoad } from '@tarojs/taro'
 import { useEffect, useMemo, useState } from 'react'
 import {
   type Attr,
   type RoadTask,
+  type Subtask,
   attrIcon,
   attrTone as attrToneMap,
   role,
@@ -13,6 +14,9 @@ import {
   quietLines,
   challengeQuietLines,
   catIdleFrames,
+  summarizeSubtasksProgress,
+  humanizeRemain,
+  formatDueLabel,
 } from '../shared/mocks'
 
 const attrList: Attr[] = ['\u667a\u6167', '\u529b\u91cf', '\u654f\u6377']
@@ -52,7 +56,11 @@ const STRINGS = {
 const calcPercent = (current: number, total: number) =>
   Math.min(100, Math.round((current / Math.max(1, total || 1)) * 100))
 
-export default function HomePane() {
+type HomePaneProps = {
+  isActive?: boolean
+}
+
+export default function HomePane({ isActive = true }: HomePaneProps) {
   const visibleTasks = useMemo(() => feedTasks, [])
   const quietLine = useMemo(() => quietLines[Math.floor(Math.random() * quietLines.length)], [])
   const challengeLine = useMemo(
@@ -61,6 +69,8 @@ export default function HomePane() {
   )
   const [frameIndex, setFrameIndex] = useState(0)
   const [modalTask, setModalTask] = useState<RoadTask | null>(null)
+  const [dialogEditing, setDialogEditing] = useState(false)
+  const [dialogDraft, setDialogDraft] = useState<Subtask[]>([])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -72,11 +82,56 @@ export default function HomePane() {
 
   useLoad(() => {})
 
+  const handlePlaceholder = (title: string) => {
+    Taro.showToast({ title, icon: 'none' })
+  }
+
   const handleMiniCardPress = (t: RoadTask) => {
     setModalTask(t)
+    setDialogEditing(false)
+    setDialogDraft([])
   }
 
   const handleCloseModal = () => setModalTask(null)
+
+  const handleStartDialogEdit = () => {
+    if (!modalTask?.subtasks?.length) return
+    setDialogEditing(true)
+    setDialogDraft(modalTask.subtasks.map((s) => ({ ...s })))
+  }
+
+  const handleDialogDraftChange = (id: string, val: number) => {
+    setDialogDraft((prev) => prev.map((s) => (s.id === id ? { ...s, current: val } : s)))
+  }
+
+  const handleDialogSubmit = () => {
+    if (!modalTask || dialogDraft.length === 0) return
+    const progress = summarizeSubtasksProgress(dialogDraft)
+    setModalTask({ ...modalTask, subtasks: dialogDraft, progress })
+    setDialogEditing(false)
+  }
+
+  const handleDialogCancel = () => {
+    setDialogEditing(false)
+    setDialogDraft([])
+  }
+
+  const dialogSubtasks = dialogEditing && dialogDraft.length > 0 ? dialogDraft : modalTask?.subtasks
+  const dialogProgress =
+    dialogEditing && dialogSubtasks
+      ? summarizeSubtasksProgress(dialogSubtasks)
+      : modalTask?.progress
+  const dialogRemain = modalTask?.dueAt ? humanizeRemain(modalTask.dueAt) : modalTask?.remain
+  const dialogDueLabel = modalTask?.dueAt ? formatDueLabel(modalTask.dueAt) : modalTask?.due
+
+  // 关闭弹窗：切换到任务页/其他页时自动收起
+  useEffect(() => {
+    if (!isActive && modalTask) {
+      setModalTask(null)
+      setDialogEditing(false)
+      setDialogDraft([])
+    }
+  }, [isActive, modalTask])
 
   return (
     <View className='home-pane'>
@@ -191,11 +246,11 @@ export default function HomePane() {
                       <Text className='feed-desc'>{t.detail}</Text>
                       <View className='feed-meta'>
                         <Text>
-                          {STRINGS.typeLabel} · {t.type}
+                          {STRINGS.typeLabel} 路 {t.type}
                         </Text>
                         {t.difficulty && (
                           <Text>
-                            {STRINGS.difficultyLabel} · {t.difficulty}
+                            {STRINGS.difficultyLabel} 路 {t.difficulty}
                           </Text>
                         )}
                         <Text className='feed-due'>{t.due}</Text>
@@ -203,7 +258,9 @@ export default function HomePane() {
                     </View>
             <View className='feed-side'>
               <View className={`feed-chip tone-${attrToneHome[t.type]}`}>{chipText(t)}</View>
-              <Button className='cta'>{STRINGS.button}</Button>
+              <Button className='cta' hoverClass='pressing'>
+                {STRINGS.button}
+              </Button>
             </View>
           </View>
                 ))}
@@ -250,41 +307,40 @@ export default function HomePane() {
               <Text className='dialog-desc'>{modalTask.detail}</Text>
 
               <View className='dialog-meta'>
-                {modalTask.remain && <Text>剩余 · {modalTask.remain}</Text>}
-                <Text>截止 · {modalTask.due}</Text>
+                {dialogRemain && <Text>⏱ 剩余时间：{dialogRemain}</Text>}
+                {dialogDueLabel && <Text>🗓 截止：{dialogDueLabel}</Text>}
               </View>
 
-              {modalTask.progress && (
+              {dialogProgress && (
                 <View className='progress'>
                   <View className='progress-head'>
                     <Text className='progress-label'>
-                      进度 {modalTask.progress.current}/{modalTask.progress.total}
+                      进度 {dialogProgress.current}/{dialogProgress.total}
                     </Text>
                     <Text className='progress-percent'>
-                      {calcPercent(modalTask.progress.current, modalTask.progress.total)}%
+                      {calcPercent(dialogProgress.current, dialogProgress.total)}%
                     </Text>
                   </View>
                   <View className='progress-track'>
                     <View
                       className='progress-fill'
                       style={{
-                        width: `${calcPercent(
-                          modalTask.progress.current,
-                          modalTask.progress.total
-                        )}%`,
+                        width: `${calcPercent(dialogProgress.current, dialogProgress.total)}%`,
                       }}
                     />
                   </View>
                 </View>
               )}
 
-              {modalTask.subtasks && modalTask.subtasks.length > 0 && (
+              {dialogSubtasks && dialogSubtasks.length > 0 && (
                 <View className='dialog-steps'>
                   <View className='dialog-steps-head'>
                     <Text className='dialog-step-label'>子任务</Text>
-                    <Text className='dialog-step-hint'>子进度自动汇总总进度</Text>
+                    <Text className='dialog-step-hint'>
+                      {dialogEditing ? '拖动编辑，每步即时汇总' : '子进度自动汇总总进度'}
+                    </Text>
                   </View>
-                  {modalTask.subtasks.map((s) => {
+                  {dialogSubtasks.map((s) => {
                     const percent = calcPercent(s.current, s.total)
                     return (
                       <View className='dialog-step' key={s.id}>
@@ -294,9 +350,22 @@ export default function HomePane() {
                             {s.current}/{s.total}
                           </Text>
                         </View>
-                        <View className='dialog-step-track'>
-                          <View className='dialog-step-fill' style={{ width: `${percent}%` }} />
-                        </View>
+                        {dialogEditing ? (
+                          <Slider
+                            className='dialog-step-slider'
+                            min={0}
+                            max={s.total}
+                            step={1}
+                            value={s.current}
+                            activeColor='#7c3aed'
+                            backgroundColor='#e5e7eb'
+                            onChange={(e) => handleDialogDraftChange(s.id, Number(e.detail.value))}
+                          />
+                        ) : (
+                          <View className='dialog-step-track'>
+                            <View className='dialog-step-fill' style={{ width: `${percent}%` }} />
+                          </View>
+                        )}
                       </View>
                     )
                   })}
@@ -304,20 +373,43 @@ export default function HomePane() {
               )}
 
               <View className='action-row'>
-                <View className='task-action'>
-                  <Text className='action-icon'>🔁</Text>
-                  <Text>更新进度</Text>
-                </View>
-                <View className='task-action'>
-                  <Text className='action-icon'>📤</Text>
+                {dialogEditing ? (
+                  <View className='task-action' hoverClass='pressing' onClick={handleDialogSubmit}>
+                    <Text className='action-icon'>✅</Text>
+                    <Text>提交变更</Text>
+                  </View>
+                ) : (
+                  <View className='task-action' hoverClass='pressing' onClick={handleStartDialogEdit}>
+                    <Text className='action-icon'>🔁</Text>
+                    <Text>更新进度</Text>
+                  </View>
+                )}
+                <View
+                  className='task-action'
+                  hoverClass='pressing'
+                  onClick={() => handlePlaceholder('提交检视待接入')}
+                >
+                  <Text className='action-icon'>📝</Text>
                   <Text>提交检视</Text>
                 </View>
-                <View className='task-action ghost'>
-                  <Text className='action-icon'>📥</Text>
-                  <Text>收纳任务</Text>
-                </View>
+                {dialogEditing ? (
+                  <View className='task-action ghost' hoverClass='pressing' onClick={handleDialogCancel}>
+                    <Text className='action-icon'>✖️</Text>
+                    <Text>取消变更</Text>
+                  </View>
+                ) : (
+                  <View
+                    className='task-action ghost'
+                    hoverClass='pressing'
+                    onClick={() => handlePlaceholder('已收纳，稍后接入')}
+                  >
+                    <Text className='action-icon'>📥</Text>
+                    <Text>收纳任务</Text>
+                  </View>
+                )}
               </View>
             </View>
+
             <Text className='dialog-hint'>点击空白处收起</Text>
           </View>
         </View>
