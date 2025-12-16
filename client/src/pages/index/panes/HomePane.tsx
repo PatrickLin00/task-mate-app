@@ -245,14 +245,6 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
                       <Text className='feed-title'>{t.title}</Text>
                       <Text className='feed-desc'>{t.detail}</Text>
                       <View className='feed-meta'>
-                        <Text>
-                          {STRINGS.typeLabel} 路 {t.type}
-                        </Text>
-                        {t.difficulty && (
-                          <Text>
-                            {STRINGS.difficultyLabel} 路 {t.difficulty}
-                          </Text>
-                        )}
                         <Text className='feed-due'>{t.due}</Text>
                       </View>
                     </View>
