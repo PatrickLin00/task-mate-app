@@ -49,6 +49,9 @@ const STRINGS = {
   button: '\u63a5\u53d6\u4efb\u52a1',
 }
 
+const calcPercent = (current: number, total: number) =>
+  Math.min(100, Math.round((current / Math.max(1, total || 1)) * 100))
+
 export default function HomePane() {
   const visibleTasks = useMemo(() => feedTasks, [])
   const quietLine = useMemo(() => quietLines[Math.floor(Math.random() * quietLines.length)], [])
@@ -258,24 +261,45 @@ export default function HomePane() {
                       进度 {modalTask.progress.current}/{modalTask.progress.total}
                     </Text>
                     <Text className='progress-percent'>
-                      {Math.min(
-                        100,
-                        Math.round((modalTask.progress.current / modalTask.progress.total) * 100)
-                      )}
-                      %
+                      {calcPercent(modalTask.progress.current, modalTask.progress.total)}%
                     </Text>
                   </View>
                   <View className='progress-track'>
                     <View
                       className='progress-fill'
                       style={{
-                        width: `${Math.min(
-                          100,
-                          Math.round((modalTask.progress.current / modalTask.progress.total) * 100)
+                        width: `${calcPercent(
+                          modalTask.progress.current,
+                          modalTask.progress.total
                         )}%`,
                       }}
                     />
                   </View>
+                </View>
+              )}
+
+              {modalTask.subtasks && modalTask.subtasks.length > 0 && (
+                <View className='dialog-steps'>
+                  <View className='dialog-steps-head'>
+                    <Text className='dialog-step-label'>子任务</Text>
+                    <Text className='dialog-step-hint'>子进度自动汇总总进度</Text>
+                  </View>
+                  {modalTask.subtasks.map((s) => {
+                    const percent = calcPercent(s.current, s.total)
+                    return (
+                      <View className='dialog-step' key={s.id}>
+                        <View className='dialog-step-row'>
+                          <Text className='dialog-step-title'>{s.title}</Text>
+                          <Text className='dialog-step-count'>
+                            {s.current}/{s.total}
+                          </Text>
+                        </View>
+                        <View className='dialog-step-track'>
+                          <View className='dialog-step-fill' style={{ width: `${percent}%` }} />
+                        </View>
+                      </View>
+                    )
+                  })}
                 </View>
               )}
 

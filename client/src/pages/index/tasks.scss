@@ -310,6 +310,103 @@
   background: linear-gradient(120deg, #22c55e, #14b8a6);
 }
 
+.task-card.has-subtasks {
+  cursor: pointer;
+}
+
+.subtask-toggle {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #6b21a8;
+  font-weight: 800;
+  font-size: 15px;
+  transition: color 0.2s ease;
+}
+
+.subtask-toggle .toggle-arrow {
+  font-size: 16px;
+  transition: transform 0.2s ease;
+}
+
+.subtask-toggle .toggle-text {
+  font-weight: 800;
+  color: #4b5563;
+}
+
+.subtask-toggle.expanded .toggle-arrow {
+  transform: rotate(180deg);
+}
+
+.subtask-group {
+  margin-top: 10px;
+  border-radius: 16px;
+  background: rgba(124, 58, 237, 0.06);
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  padding: 0 12px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-height 0.28s ease,
+    opacity 0.2s ease,
+    padding 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.subtask-group.open {
+  max-height: 520px;
+  opacity: 1;
+  padding: 12px;
+}
+
+.task-card .subtask-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-card .subtask-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.task-card .subtask-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-card .subtask-count {
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.task-card .subtask-track {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  border-radius: 10px;
+  background: #efeafd;
+  overflow: hidden;
+}
+
+.task-card .subtask-fill {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(120deg, #a78bfa, #6366f1);
+}
+
 .action-row {
   margin-top: 14px;
   display: flex;

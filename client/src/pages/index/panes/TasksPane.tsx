@@ -8,6 +8,7 @@ import {
   archivedTasks as archivedSeed,
   attrTone,
   attrIcon,
+  summarizeSubtasksProgress,
   type Attr,
   type CollabStatus,
   type MissionTask,
@@ -45,6 +46,9 @@ const statusIcon: Record<CollabStatus | '已归档', string> = {
 
 type SubtaskInput = { title: string; total: number }
 
+const calcPercent = (current: number, total: number) =>
+  Math.min(100, Math.round((current / Math.max(1, total || 1)) * 100))
+
 function AttributeTag({ attr, points }: { attr: Attr; points: number }) {
   const tone = attrTone[attr]
   return (
@@ -58,7 +62,7 @@ function AttributeTag({ attr, points }: { attr: Attr; points: number }) {
 }
 
 function ProgressBar({ current, total }: { current: number; total: number }) {
-  const percent = Math.min(100, Math.round((current / total) * 100))
+  const percent = calcPercent(current, total)
   return (
     <View className='progress'>
       <View className='progress-head'>
@@ -84,19 +88,57 @@ function StatusBadge({ status }: { status: CollabStatus | '已归档' }) {
   )
 }
 
-function ActionButton({ icon, label, ghost }: { icon: string; label: string; ghost?: boolean }) {
+function ActionButton({
+  icon,
+  label,
+  ghost,
+  onClick,
+}: {
+  icon: string
+  label: string
+  ghost?: boolean
+  onClick?: () => void
+}) {
   return (
-    <View className={`task-action ${ghost ? 'ghost' : ''}`}>
+    <View
+      className={`task-action ${ghost ? 'ghost' : ''}`}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick?.()
+      }}
+    >
       <Text className='action-icon'>{icon}</Text>
       <Text>{label}</Text>
     </View>
   )
 }
 
-function MissionCard({ task }: { task: MissionTask }) {
+function MissionCard({
+  task,
+  expanded,
+  onToggle,
+}: {
+  task: MissionTask
+  expanded: boolean
+  onToggle?: (taskId: string) => void
+}) {
   const tone = attrTone[task.attr]
+  const hasSubtasks = task.subtasks?.length > 0
+
+  const handleCardClick = () => {
+    if (hasSubtasks) onToggle?.(task.id)
+  }
+
   return (
-    <View className={`task-card tone-${tone}`}>
+    <View
+      className={
+        'task-card tone-' +
+        tone +
+        (hasSubtasks ? ' has-subtasks' : '') +
+        (expanded ? ' expanded' : '')
+      }
+      onClick={handleCardClick}
+    >
       <View className='card-head'>
         <View className='title-wrap'>
           <Text className='task-icon'>{task.icon}</Text>
@@ -109,9 +151,36 @@ function MissionCard({ task }: { task: MissionTask }) {
       <View className='card-meta'>
         <Text className='meta-item'>⏱ 剩余时间：{task.remain}</Text>
       </View>
+      {hasSubtasks && (
+        <>
+          <View className={'subtask-toggle ' + (expanded ? 'expanded' : '')}>
+            <Text className='toggle-arrow'>⌄</Text>
+            <Text className='toggle-text'>{expanded ? '收起子任务' : '展开子任务'}</Text>
+          </View>
+          <View className={'subtask-group ' + (expanded ? 'open' : '')}>
+            {task.subtasks.map((s) => {
+              const percent = calcPercent(s.current, s.total)
+              return (
+                <View className='subtask-item' key={s.id}>
+                  <View className='subtask-row'>
+                    <Text className='subtask-title'>{s.title}</Text>
+                    <Text className='subtask-count'>
+                      {s.current}/{s.total}
+                    </Text>
+                  </View>
+                  <View className='subtask-track'>
+                    <View className='subtask-fill' style={{ width: percent + '%' }} />
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+        </>
+      )}
+
       <View className='action-row'>
         <ActionButton icon='🔁' label='更新进度' />
-        <ActionButton icon='📤' label='提交检视' />
+        <ActionButton icon='📝' label='提交检视' />
         <ActionButton icon='📥' label='收纳任务' ghost />
       </View>
     </View>
@@ -169,6 +238,7 @@ function ArchivedCard({ task }: { task: ArchivedTask }) {
 export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: TasksPaneProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('mission')
   const [missionTasks, setMissionTasks] = useState<MissionTask[]>(missionSeed)
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [collabTasks] = useState<CollabTask[]>(collabSeed)
   const [archivedTasks] = useState<ArchivedTask[]>(archivedSeed)
   const [showCreate, setShowCreate] = useState(false)
@@ -210,6 +280,11 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
     if (touchStartTab.current === 'archive' && deltaX < -threshold) {
       onSwipeToAchievements?.()
     }
+  }
+
+  const handleToggleCard = (taskId: string, hasSubtasks: boolean) => {
+    if (!hasSubtasks) return
+    setExpandedTaskId((prev) => (prev === taskId ? null : taskId))
   }
 
   const rewardOptions = useMemo(
@@ -261,8 +336,25 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
 
   const mapApiTaskToMission = (task: Task): MissionTask => {
     const attr = mapRewardToAttr(task.attributeReward.type)
-    const progress =
-      task.computedProgress || task.progress || { current: task.subtasks?.length ? 0 : 0, total: task.subtasks?.reduce((s, t) => s + (t.total || 0), 0) || 1 }
+    const baseId = task._id || 'task'
+    const subtasks = (
+      task.subtasks && task.subtasks.length > 0
+        ? task.subtasks.map((s, idx) => ({
+            id: s._id || baseId + '-sub-' + (idx + 1),
+            title: s.title || '子任务 ' + (idx + 1),
+            current: s.current ?? 0,
+            total: s.total || 1,
+          }))
+        : [
+            {
+              id: baseId + '-sub-1',
+              title: task.title,
+              current: task.progress?.current || 0,
+              total: task.progress?.total || 1,
+            },
+          ]
+    )
+    const progress = task.computedProgress || summarizeSubtasksProgress(subtasks)
     return {
       id: task._id || Math.random().toString(36).slice(2),
       title: task.title,
@@ -271,7 +363,10 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
       points: task.attributeReward.value,
       icon: '✨',
       progress: { current: progress.current, total: progress.total || 1 },
+      subtasks,
       remain: '刚刚',
+      dueLabel: '今日',
+      dueDays: 0,
     }
   }
 
@@ -382,7 +477,12 @@ export default function TasksPane({ onSwipeToHome, onSwipeToAchievements }: Task
             <ScrollView scrollY scrollWithAnimation enableFlex className='task-scroll'>
               <View className='task-list'>
                 {missionTasks.map((task) => (
-                  <MissionCard key={task.id} task={task} />
+                  <MissionCard
+                    key={task.id}
+                    task={task}
+                    expanded={expandedTaskId === task.id}
+                    onToggle={(id) => handleToggleCard(id, !!task.subtasks?.length)}
+                  />
                 ))}
               </View>
             </ScrollView>
