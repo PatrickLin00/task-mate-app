@@ -9,6 +9,7 @@ import {
   attrTone as attrToneMap,
   role,
   todayTasks,
+  dueTodayCount,
   feedTasks,
   chipText,
   quietLines,
@@ -199,7 +200,7 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
             <Text className='section-title'>{STRINGS.todayTitle}</Text>
           </View>
           <Text className='section-meta'>
-            {STRINGS.todayMeta} · {todayTasks.length} {STRINGS.todayUnit}
+            {STRINGS.todayMeta} · {dueTodayCount} {STRINGS.todayUnit}
           </Text>
         </View>
         {todayTasks.length > 0 ? (

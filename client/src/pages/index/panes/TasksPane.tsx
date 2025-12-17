@@ -7,6 +7,7 @@ import {
   collabTasks as collabSeed,
   archivedTasks as archivedSeed,
   defaultCreatedAt,
+  statusLabel,
   attrTone,
   attrIcon,
   summarizeSubtasksProgress,
@@ -14,7 +15,7 @@ import {
   formatDueLabel,
   type Attr,
   type Subtask,
-  type CollabStatus,
+  type TaskStatus,
   type MissionTask,
   type CollabTask,
   type ArchivedTask,
@@ -35,18 +36,22 @@ const tabs: { key: TabKey; label: string; hint: string }[] = [
   { key: 'archive', label: '已结星愿', hint: '已完成' },
 ]
 
-const statusTone: Record<CollabStatus | '已归档', 'blue' | 'gray' | 'green'> = {
-  进行中: 'blue',
-  待接应: 'gray',
-  已完成: 'green',
-  已归档: 'green',
+const statusTone: Record<TaskStatus | 'archived', 'blue' | 'gray' | 'green'> = {
+  pending: 'gray',
+  in_progress: 'blue',
+  review_pending: 'blue',
+  completed: 'green',
+  closed: 'gray',
+  archived: 'green',
 }
 
-const statusIcon: Record<CollabStatus | '已归档', string> = {
-  进行中: '⏳',
-  待接应: '🔔',
-  已完成: '✅',
-  已归档: '📦',
+const statusIcon: Record<TaskStatus | 'archived', string> = {
+  pending: '⏳',
+  in_progress: '🚀',
+  review_pending: '📑',
+  completed: '✅',
+  closed: '📦',
+  archived: '📂',
 }
 
 type SubtaskInput = { title: string; total: number }
@@ -93,12 +98,13 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
   )
 }
 
-function StatusBadge({ status }: { status: CollabStatus | '已归档' }) {
+function StatusBadge({ status }: { status: TaskStatus | 'archived' }) {
   const tone = statusTone[status]
+  const label = status === 'archived' ? '已归档' : statusLabel[status]
   return (
     <View className={`status-badge tone-${tone}`}>
       <Text className='status-icon'>{statusIcon[status]}</Text>
-      <Text className='status-text'>{status}</Text>
+      <Text className='status-text'>{label}</Text>
     </View>
   )
 }
@@ -287,13 +293,27 @@ function MissionCard({
   )
 }
 
-function CollabCard({ task }: { task: CollabTask }) {
+function CollabCard({
+  task,
+  expanded,
+  onToggleExpand,
+}: {
+  task: CollabTask
+  expanded: boolean
+  onToggleExpand?: (taskId: string) => void
+}) {
   const tone = attrTone[task.attr]
+  const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
+  const progress = task.progress || summarizeSubtasksProgress(task.subtasks || [])
+  const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain || ''
+  const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel || ''
+  const startLabel = formatStartDate(task.createdAt)
+
   return (
-    <View className={`task-card tone-${tone}`}>
+    <View className={`task-card tone-${tone} ${hasSubtasks && expanded ? 'expanded' : ''}`}>
       <View className='card-head'>
         <View className='title-stack'>
-          <StatusBadge status={task.status} />
+          <StatusBadge status={task.status as TaskStatus} />
           <View className='title-wrap'>
             <Text className='task-icon'>{task.icon}</Text>
             <Text className='task-title'>{task.title}</Text>
@@ -302,12 +322,55 @@ function CollabCard({ task }: { task: CollabTask }) {
         <AttributeTag attr={task.attr} points={task.points} />
       </View>
       <Text className='task-desc'>{task.detail}</Text>
+      <ProgressBar current={progress.current} total={progress.total} />
       <View className='card-meta'>
-        <Text className='meta-item'>🙌 执行人：{task.assignee}</Text>
+        <Text className='meta-item'>⏱ 剩余时间：{remainLabel}</Text>
+        <Text className='meta-item'>📅 截止：{dueLabel}</Text>
+        <Text className='meta-item'>🗓 起始：{startLabel}</Text>
+        <Text className='meta-item'>🙌 执行人：{task.assignee || '未指派'}</Text>
       </View>
+      {hasSubtasks && (
+        <>
+          <View
+            className={`subtask-toggle ${expanded ? 'expanded' : ''}`}
+            hoverClass='toggle-pressing'
+            onClick={(e) => {
+              e.stopPropagation?.()
+              if (!hasSubtasks) return
+              onToggleExpand?.(task.id)
+            }}
+          >
+            <View className='toggle-arrow'>
+              <Text className={`toggle-icon ${!expanded ? 'is-on' : ''}`}>▶</Text>
+              <Text className={`toggle-icon ${expanded ? 'is-on' : ''}`}>✓</Text>
+            </View>
+            <Text className='toggle-text'>{expanded ? '收起子任务' : '展开子任务'}</Text>
+          </View>
+          <View className={`subtask-group ${expanded ? 'open' : ''}`}>
+            <View className='subtask-group-inner' onTouchMove={(e) => e.stopPropagation()}>
+              {task.subtasks?.map((s) => {
+                const percent = calcPercent(s.current, s.total)
+                return (
+                  <View className='subtask-item' key={s.id}>
+                    <View className='subtask-row'>
+                      <Text className='subtask-title'>{s.title}</Text>
+                      <Text className='subtask-count'>
+                        {s.current}/{s.total}
+                      </Text>
+                    </View>
+                    <View className='subtask-track'>
+                      <View className='subtask-fill' style={{ width: percent + '%' }} />
+                    </View>
+                  </View>
+                )
+              })}
+            </View>
+          </View>
+        </>
+      )}
       <View className='action-row'>
         <ActionButton icon='✏️' label='编辑任务' />
-        <ActionButton icon='🔗' label='分享链接' />
+        <ActionButton icon='🔆' label='分享链接' />
       </View>
     </View>
   )
@@ -343,6 +406,7 @@ export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAch
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [draftSubtasks, setDraftSubtasks] = useState<Record<string, Subtask[]>>({})
   const [collabTasks] = useState<CollabTask[]>(collabSeed)
+  const [expandedCollabId, setExpandedCollabId] = useState<string | null>(null)
   const [archivedTasks] = useState<ArchivedTask[]>(archivedSeed)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -444,6 +508,7 @@ export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAch
       setExpandedTaskId(null)
       setEditingTaskId(null)
       setDraftSubtasks({})
+      setExpandedCollabId(null)
       setShowCreate(false)
     }
   }, [isActive])
@@ -463,6 +528,11 @@ export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAch
     }
 
     setExpandedTaskId((prev) => (prev === taskId ? null : taskId))
+  }
+
+  const handleToggleCollabCard = (taskId: string, hasSubtasks: boolean) => {
+    if (!hasSubtasks) return
+    setExpandedCollabId((prev) => (prev === taskId ? null : taskId))
   }
 
   const showPlaceholder = (title: string) => {
@@ -759,9 +829,17 @@ const rewardOptions = useMemo(
           <SwiperItem>
             <ScrollView scrollY scrollWithAnimation enableFlex className='task-scroll'>
               <View className='task-list'>
-                {collabTasks.map((task) => (
-                  <CollabCard key={task.id} task={task} />
-                ))}
+                {collabTasks.map((task) => {
+                  const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
+                  return (
+                    <CollabCard
+                      key={task.id}
+                      task={task}
+                      expanded={expandedCollabId === task.id}
+                      onToggleExpand={(id) => handleToggleCollabCard(id, hasSubtasks)}
+                    />
+                  )
+                })}
               </View>
             </ScrollView>
           </SwiperItem>
