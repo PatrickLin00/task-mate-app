@@ -207,7 +207,10 @@ function MissionCard({
                 </Text>
               </View>
               <View className={'subtask-group ' + (expanded ? 'open' : '')}>
-                <View className='subtask-group-inner'>
+                <View
+                  className='subtask-group-inner'
+                  onTouchMove={(e) => e.stopPropagation()}
+                >
                   {subtasks.map((s) => {
                     const percent = calcPercent(s.current, s.total)
                     return (
@@ -219,16 +222,26 @@ function MissionCard({
                           </Text>
                         </View>
                         {editing ? (
-                          <Slider
-                            className='subtask-slider'
-                            min={0}
-                            max={s.total}
-                            step={1}
-                            value={s.current}
-                            activeColor='#7c3aed'
-                            backgroundColor='#e5e7eb'
-                            onChange={(e) => onChangeSubtask?.(s.id, Number(e.detail.value))}
-                          />
+                          <View
+                            className='subtask-slider-wrap'
+                            onTouchStart={(e) => e.stopPropagation()}
+                            onTouchMove={(e) => e.stopPropagation()}
+                            onTouchEnd={(e) => e.stopPropagation()}
+                          >
+                            <Slider
+                              className='subtask-slider'
+                              min={0}
+                              max={s.total}
+                              step={1}
+                              value={s.current}
+                              activeColor='#7c3aed'
+                              backgroundColor='#e5e7eb'
+                              onTouchStart={(e) => e.stopPropagation()}
+                              onTouchMove={(e) => e.stopPropagation()}
+                              onTouchEnd={(e) => e.stopPropagation()}
+                              onChange={(e) => onChangeSubtask?.(s.id, Number(e.detail.value))}
+                            />
+                          </View>
                         ) : (
                           <View className='subtask-track'>
                             <View className='subtask-fill' style={{ width: percent + '%' }} />
@@ -360,33 +373,54 @@ export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAch
 
   const current = tabs.findIndex((t) => t.key === activeTab)
   const touchStartX = useRef<number | null>(null)
+  const touchStartY = useRef<number | null>(null)
   const touchStartTab = useRef<TabKey>('mission')
+  const didScrollVert = useRef(false)
+
 
   const handleTouchStart = (e: any) => {
-    if (e?.touches?.[0]) {
-      touchStartX.current = e.touches[0].clientX
-      touchStartTab.current = activeTab
+    const t = e?.touches?.[0]
+    if (!t) return
+    touchStartX.current = t.clientX
+    touchStartY.current = t.clientY
+    touchStartTab.current = activeTab
+    didScrollVert.current = false
+  }
+
+  const handleTouchMove = (e: any) => {
+    const t = e?.touches?.[0]
+    if (touchStartY.current === null || !t) return
+    const dyMove = t.clientY - touchStartY.current
+    if (Math.abs(dyMove) > 30) {
+      didScrollVert.current = true
     }
   }
 
   const handleTouchEnd = (e: any) => {
-    if (touchStartX.current === null || !e?.changedTouches?.[0]) return
-    const deltaX = e.changedTouches[0].clientX - touchStartX.current
-    touchStartX.current = null
-    const threshold = 50
+    const t = e?.changedTouches?.[0]
+    if (touchStartX.current === null || touchStartY.current === null || !t) return
 
-    // 使命在身：右滑回到首页（仅当起始就在使命页，避免中间滑页误触）
-    if (touchStartTab.current === 'mission' && deltaX > threshold) {
-      if (editingTaskId) {
-        handleCancelEditing()
-      } else {
-        onSwipeToHome?.()
-      }
+    const startX = touchStartX.current
+    const dx = t.clientX - startX
+    const dy = t.clientY - touchStartY.current
+
+    touchStartX.current = null
+    touchStartY.current = null
+
+    if (didScrollVert.current) return
+
+    const THRESHOLD_X = 150
+    if (Math.abs(dx) < THRESHOLD_X) return
+
+    // 使命在身：右滑回首页（只允许边缘起手）
+    if (touchStartTab.current === 'mission' && dx > 0) {
+      if (editingTaskId) handleCancelEditing()
+      onSwipeToHome?.()
       return
     }
 
-    // 已结星愿：左滑去成就页（起始在档案页时生效，方向与 tab/Swiper 一致）
-    if (touchStartTab.current === 'archive' && deltaX < -threshold) {
+    // 你原来的“archive 左滑去成就”逻辑可保留（同理也可加边缘门槛）
+    if (touchStartTab.current === 'archive' && dx < 0) {
       onSwipeToAchievements?.()
     }
   }
@@ -418,7 +452,19 @@ export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAch
   }, [isActive])
 
   const handleToggleCard = (taskId: string, hasSubtasks: boolean) => {
-    if (!hasSubtasks || editingTaskId) return
+    if (!hasSubtasks) return
+
+    // 正在编辑：先取消编辑（你想要的“任何收回/切换都自动取消”）
+    if (editingTaskId) {
+      handleCancelEditing()
+      // 如果你希望：点别的卡片 = 展开别的卡片；点同一张卡片 = 收起
+      // 下面这行让“点同卡片”收起更直觉：
+      if (editingTaskId === taskId) {
+        setExpandedTaskId(null)
+        return
+      }
+    }
+
     setExpandedTaskId((prev) => (prev === taskId ? null : taskId))
   }
 
@@ -645,7 +691,7 @@ const rewardOptions = useMemo(
   }
 
   return (
-    <View className='tasks-pane' onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <View className='tasks-pane' onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
       <View className='task-shell card'>
         <View className='task-tabs'>
           {tabs.map((tab) => (
@@ -653,10 +699,7 @@ const rewardOptions = useMemo(
               key={tab.key}
               className={`task-tab ${activeTab === tab.key ? 'active' : ''}`}
               onClick={() => {
-                if (editingTaskId) {
-                  handleCancelEditing()
-                  return
-                }
+                if (editingTaskId) handleCancelEditing()
                 setActiveTab(tab.key)
               }}
             >
@@ -669,11 +712,22 @@ const rewardOptions = useMemo(
         <Swiper
           className='task-swiper'
           current={current}
-          onChange={(e) => setActiveTab(tabs[e.detail.current].key)}
+          onChange={(e) => {
+            if (editingTaskId) handleCancelEditing()
+            setActiveTab(tabs[e.detail.current].key)
+          }}
           duration={220}
         >
           <SwiperItem>
-            <ScrollView scrollY scrollWithAnimation enableFlex className='task-scroll'>
+            <ScrollView
+              scrollY
+              scrollWithAnimation
+              enableFlex
+              className='task-scroll'
+              onScroll={() => {
+                didScrollVert.current = true
+              }}
+            >
               <View className='task-list'>
                 {missionTasks.map((task) => {
                   const editing = editingTaskId === task.id
@@ -728,8 +782,6 @@ const rewardOptions = useMemo(
       <Button className='fab' hoverClass='pressing' onClick={() => setShowCreate(true)}>
         发起奇遇
       </Button>
-
-      {editingTaskId && <View className='edit-scrim' onClick={handleCancelEditing} />}
 
       {showCreate && (
         <View className='task-modal-overlay' onClick={() => setShowCreate(false)}>
