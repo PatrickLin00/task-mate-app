@@ -92,7 +92,11 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
     setDialogDraft([])
   }
 
-  const handleCloseModal = () => setModalTask(null)
+  const handleCloseModal = () => {
+    setModalTask(null)
+    setDialogEditing(false)
+    setDialogDraft([])
+  }
 
   const handleStartDialogEdit = () => {
     if (!modalTask?.subtasks?.length) return
@@ -236,26 +240,35 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
           {visibleTasks.length > 0 ? (
             <ScrollView scrollY scrollWithAnimation className='feed-scroll'>
               <View className='feed-list'>
-                {visibleTasks.map((t) => (
-                  <View className={`feed-card tone-${attrToneHome[t.type]}`} key={t.id}>
-                    <View className='feed-left'>
-                      <Text className='emoji'>{t.icon}</Text>
-                    </View>
-                    <View className='feed-body'>
-                      <Text className='feed-title'>{t.title}</Text>
-                      <Text className='feed-desc'>{t.detail}</Text>
-                      <View className='feed-meta'>
-                        <Text className='feed-due'>{t.due}</Text>
+                {visibleTasks.map((t) => {
+                  return (
+                    <View className={`feed-card tone-${attrToneHome[t.type]}`} key={t.id}>
+                      <View className='feed-left'>
+                        <Text className='emoji'>{t.icon}</Text>
+                      </View>
+                      <View className='feed-body'>
+                        <Text className='feed-title'>{t.title}</Text>
+                        <Text className='feed-desc'>{t.detail}</Text>
+                        <View className='feed-meta'>
+                          <Text className='feed-due'>{t.due}</Text>
+                        </View>
+                      </View>
+                      <View className='feed-side'>
+                        <View className={`feed-chip tone-${attrToneHome[t.type]}`}>{chipText(t)}</View>
+                        <Button
+                          className='cta'
+                          hoverClass='pressing'
+                          hoverStartTime={0}
+                          hoverStayTime={120}
+                          hoverStopPropagation
+                          onClick={() => handlePlaceholder('接取任务待接入')}
+                        >
+                          {STRINGS.button}
+                        </Button>
                       </View>
                     </View>
-            <View className='feed-side'>
-              <View className={`feed-chip tone-${attrToneHome[t.type]}`}>{chipText(t)}</View>
-              <Button className='cta' hoverClass='pressing'>
-                {STRINGS.button}
-              </Button>
-            </View>
-          </View>
-                ))}
+                  )
+                })}
               </View>
             </ScrollView>
           ) : (
@@ -325,7 +338,12 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
               )}
 
               {dialogSubtasks && dialogSubtasks.length > 0 && (
-                <View className='dialog-steps'>
+                <View
+                  className='dialog-steps'
+                  onClick={() => {
+                    if (!dialogEditing) handleStartDialogEdit()
+                  }}
+                >
                   <View className='dialog-steps-head'>
                     <Text className='dialog-step-label'>子任务</Text>
                     <Text className='dialog-step-hint'>
@@ -366,12 +384,26 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
 
               <View className='action-row'>
                 {dialogEditing ? (
-                  <View className='task-action' hoverClass='pressing' onClick={handleDialogSubmit}>
+                  <View
+                    className='task-action'
+                    hoverClass='pressing'
+                    hoverStartTime={0}
+                    hoverStayTime={120}
+                    hoverStopPropagation
+                    onClick={handleDialogSubmit}
+                  >
                     <Text className='action-icon'>✅</Text>
                     <Text>提交变更</Text>
                   </View>
                 ) : (
-                  <View className='task-action' hoverClass='pressing' onClick={handleStartDialogEdit}>
+                  <View
+                    className='task-action'
+                    hoverClass='pressing'
+                    hoverStartTime={0}
+                    hoverStayTime={120}
+                    hoverStopPropagation
+                    onClick={handleStartDialogEdit}
+                  >
                     <Text className='action-icon'>🔁</Text>
                     <Text>更新进度</Text>
                   </View>
@@ -379,13 +411,23 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
                 <View
                   className='task-action'
                   hoverClass='pressing'
+                  hoverStartTime={0}
+                  hoverStayTime={120}
+                  hoverStopPropagation
                   onClick={() => handlePlaceholder('提交检视待接入')}
                 >
                   <Text className='action-icon'>📝</Text>
                   <Text>提交检视</Text>
                 </View>
                 {dialogEditing ? (
-                  <View className='task-action ghost' hoverClass='pressing' onClick={handleDialogCancel}>
+                  <View
+                    className='task-action ghost'
+                    hoverClass='pressing'
+                    hoverStartTime={0}
+                    hoverStayTime={120}
+                    hoverStopPropagation
+                    onClick={handleDialogCancel}
+                  >
                     <Text className='action-icon'>✖️</Text>
                     <Text>取消变更</Text>
                   </View>
@@ -393,6 +435,9 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
                   <View
                     className='task-action ghost'
                     hoverClass='pressing'
+                    hoverStartTime={0}
+                    hoverStayTime={120}
+                    hoverStopPropagation
                     onClick={() => handlePlaceholder('已收纳，稍后接入')}
                   >
                     <Text className='action-icon'>📥</Text>

@@ -110,6 +110,7 @@
   inset: 0;
   border-radius: inherit;
   background: linear-gradient(160deg, rgba(129, 140, 248, 0.35), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
 .task-card.tone-blue {
@@ -310,9 +311,11 @@
   background: linear-gradient(120deg, #22c55e, #14b8a6);
 }
 
-.task-card.has-subtasks {
-  cursor: pointer;
+.task-card .action-row {
+  cursor: default;
 }
+
+.toggle-pressing { opacity: 0.92; }
 
 .subtask-toggle {
   margin-top: 10px;
@@ -324,6 +327,7 @@
   font-weight: 800;
   font-size: 15px;
   transition: color 0.2s ease;
+  padding: 10px 0;
 }
 
 .subtask-toggle .toggle-arrow {
@@ -343,25 +347,36 @@
 .subtask-group {
   margin-top: 10px;
   border-radius: 16px;
-  background: rgba(124, 58, 237, 0.06);
-  border: 1px solid rgba(124, 58, 237, 0.16);
-  padding: 0 12px;
+
+  /* 收起态：彻底“看不见” */
+  background: transparent;
+  border-color: transparent;
+
+  padding: 0;
   max-height: 0;
   opacity: 0;
   overflow: hidden;
   transition:
     max-height 0.28s ease,
     opacity 0.2s ease,
-    padding 0.2s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+    background 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .subtask-group.open {
   max-height: 520px;
   opacity: 1;
+
+  /* 展开态：再显示 */
+  background: rgba(124, 58, 237, 0.06);
+  border-color: rgba(124, 58, 237, 0.16);
+}
+
+.subtask-group-inner {
   padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .task-card .subtask-item {

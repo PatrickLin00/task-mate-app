@@ -109,15 +109,21 @@ function ActionButton({
   return (
     <View
       className={`task-action ${ghost ? 'ghost' : ''}`}
+      data-noexpand
       hoverClass='pressing'
-      data-role='action'
+      hoverStartTime={0}
+      hoverStayTime={120}
+      hoverStopPropagation
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation()
         onClick?.()
       }}
     >
       <Text className='action-icon'>{icon}</Text>
-      <Text>{label}</Text>
+      <Text data-noexpand>{label}</Text>
     </View>
   )
 }
@@ -154,9 +160,8 @@ function MissionCard({
   const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain
   const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel
 
-  const handleCardClick = (e: any) => {
+  const handleCardClick = () => {
     if (!hasSubtasks || editing) return
-    if (e?.target?.dataset?.role === 'action') return
     onToggleExpand?.(task.id)
   }
 
@@ -169,64 +174,82 @@ function MissionCard({
         (expanded ? ' expanded' : '') +
         (editing ? ' editing' : '')
       }
-      onClick={handleCardClick}
     >
-      <View className='card-head'>
-        <View className='title-wrap'>
-          <Text className='task-icon'>{task.icon}</Text>
-          <Text className='task-title'>{task.title}</Text>
-        </View>
-        <AttributeTag attr={task.attr} points={task.points} />
-      </View>
-      <Text className='task-desc'>{task.detail}</Text>
-      <ProgressBar current={progress.current} total={progress.total} />
-      <View className='card-meta'>
-        <Text className='meta-item'>⏱ 剩余时间：{remainLabel}</Text>
-        <Text className='meta-item'>🗓 截止：{dueLabel}</Text>
-      </View>
-      {hasSubtasks && (
-        <>
-          <View className={'subtask-toggle ' + (expanded ? 'expanded' : '')}>
-            <Text className='toggle-arrow'>⌄</Text>
-            <Text className='toggle-text'>
-              {expanded ? (editing ? '编辑子任务' : '收起子任务') : '展开子任务'}
-            </Text>
+      <View className='card-click-area'>
+        <View className='card-main'>
+          <View className='card-head'>
+            <View className='title-wrap'>
+              <Text className='task-icon'>{task.icon}</Text>
+              <Text className='task-title'>{task.title}</Text>
+            </View>
+            <AttributeTag attr={task.attr} points={task.points} />
           </View>
-          <View className={'subtask-group ' + (expanded ? 'open' : '')}>
-            {subtasks.map((s) => {
-              const percent = calcPercent(s.current, s.total)
-              return (
-                <View className='subtask-item' key={s.id}>
-                  <View className='subtask-row'>
-                    <Text className='subtask-title'>{s.title}</Text>
-                    <Text className='subtask-count'>
-                      {s.current}/{s.total}
-                    </Text>
-                  </View>
-                  {editing ? (
-                    <Slider
-                      className='subtask-slider'
-                      min={0}
-                      max={s.total}
-                      step={1}
-                      value={s.current}
-                      activeColor='#7c3aed'
-                      backgroundColor='#e5e7eb'
-                      onChange={(e) => onChangeSubtask?.(s.id, Number(e.detail.value))}
-                    />
-                  ) : (
-                    <View className='subtask-track'>
-                      <View className='subtask-fill' style={{ width: percent + '%' }} />
-                    </View>
-                  )}
+          <Text className='task-desc'>{task.detail}</Text>
+          <ProgressBar current={progress.current} total={progress.total} />
+          <View className='card-meta'>
+            <Text className='meta-item'>⏱ 剩余时间：{remainLabel}</Text>
+            <Text className='meta-item'>🗓 截止：{dueLabel}</Text>
+          </View>
+          {hasSubtasks && (
+            <>
+              <View
+                className={'subtask-toggle ' + (expanded ? 'expanded' : '')}
+                hoverClass='toggle-pressing'
+                onClick={(e) => {
+                  e.stopPropagation?.()
+                  if (!hasSubtasks || editing) return
+                  onToggleExpand?.(task.id)
+                }}
+              >
+                <Text className='toggle-arrow'>⌄</Text>
+                <Text className='toggle-text'>
+                  {expanded ? (editing ? '编辑子任务' : '收起子任务') : '展开子任务'}
+                </Text>
+              </View>
+              <View className={'subtask-group ' + (expanded ? 'open' : '')}>
+                <View className='subtask-group-inner'>
+                  {subtasks.map((s) => {
+                    const percent = calcPercent(s.current, s.total)
+                    return (
+                      <View className='subtask-item' key={s.id}>
+                        <View className='subtask-row'>
+                          <Text className='subtask-title'>{s.title}</Text>
+                          <Text className='subtask-count'>
+                            {s.current}/{s.total}
+                          </Text>
+                        </View>
+                        {editing ? (
+                          <Slider
+                            className='subtask-slider'
+                            min={0}
+                            max={s.total}
+                            step={1}
+                            value={s.current}
+                            activeColor='#7c3aed'
+                            backgroundColor='#e5e7eb'
+                            onChange={(e) => onChangeSubtask?.(s.id, Number(e.detail.value))}
+                          />
+                        ) : (
+                          <View className='subtask-track'>
+                            <View className='subtask-fill' style={{ width: percent + '%' }} />
+                          </View>
+                        )}
+                      </View>
+                    )
+                  })}
                 </View>
-              )
-            })}
-          </View>
-        </>
-      )}
-
-      <View className='action-row'>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+      <View
+        className='action-row'
+        data-noexpand
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+      >
         {editing ? (
           <>
             <ActionButton icon='✅' label='提交变更' onClick={onSubmit} />
