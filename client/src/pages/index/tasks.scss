@@ -311,10 +311,6 @@
   background: linear-gradient(120deg, #22c55e, #14b8a6);
 }
 
-.task-card .action-row {
-  cursor: default;
-}
-
 .toggle-pressing { opacity: 0.92; }
 
 .subtask-toggle {
@@ -331,17 +327,42 @@
 }
 
 .subtask-toggle .toggle-arrow {
-  font-size: 16px;
-  transition: transform 0.2s ease;
+  position: relative;
+  width: 18px;   /* 稍微比字体大一点点 */
+  height: 18px;
+  display: inline-block;
+}
+
+.subtask-toggle .toggle-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.subtask-toggle .toggle-icon.is-on {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* 利用 editing / expanded 状态，制造一个极轻的“呼吸感” */
+.subtask-toggle.expanded .toggle-arrow {
+  opacity: 0.92;
+}
+
+.subtask-toggle.expanded.editing .toggle-arrow {
+  opacity: 1;
+  transform: scale(1.06);
 }
 
 .subtask-toggle .toggle-text {
   font-weight: 800;
   color: #4b5563;
-}
-
-.subtask-toggle.expanded .toggle-arrow {
-  transform: rotate(180deg);
 }
 
 .subtask-group {

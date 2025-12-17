@@ -160,11 +160,6 @@ function MissionCard({
   const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain
   const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel
 
-  const handleCardClick = () => {
-    if (!hasSubtasks || editing) return
-    onToggleExpand?.(task.id)
-  }
-
   return (
     <View
       className={
@@ -201,7 +196,11 @@ function MissionCard({
                   onToggleExpand?.(task.id)
                 }}
               >
-                <Text className='toggle-arrow'>⌄</Text>
+                <View className='toggle-arrow'>
+                  <Text className={'toggle-icon ' + (!expanded ? 'is-on' : '')}>⭐</Text>
+                  <Text className={'toggle-icon ' + (expanded && !editing ? 'is-on' : '')}>✨</Text>
+                  <Text className={'toggle-icon ' + (expanded && editing ? 'is-on' : '')}>🌟</Text>
+                </View>
                 <Text className='toggle-text'>
                   {expanded ? (editing ? '编辑子任务' : '收起子任务') : '展开子任务'}
                 </Text>
@@ -236,9 +235,6 @@ function MissionCard({
                               value={s.current}
                               activeColor='#7c3aed'
                               backgroundColor='#e5e7eb'
-                              onTouchStart={(e) => e.stopPropagation()}
-                              onTouchMove={(e) => e.stopPropagation()}
-                              onTouchEnd={(e) => e.stopPropagation()}
                               onChange={(e) => onChangeSubtask?.(s.id, Number(e.detail.value))}
                             />
                           </View>
@@ -385,15 +381,6 @@ export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAch
     touchStartY.current = t.clientY
     touchStartTab.current = activeTab
     didScrollVert.current = false
-  }
-
-  const handleTouchMove = (e: any) => {
-    const t = e?.touches?.[0]
-    if (touchStartY.current === null || !t) return
-    const dyMove = t.clientY - touchStartY.current
-    if (Math.abs(dyMove) > 30) {
-      didScrollVert.current = true
-    }
   }
 
   const handleTouchEnd = (e: any) => {
@@ -691,7 +678,7 @@ const rewardOptions = useMemo(
   }
 
   return (
-    <View className='tasks-pane' onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+    <View className='tasks-pane' onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <View className='task-shell card'>
         <View className='task-tabs'>
           {tabs.map((tab) => (
