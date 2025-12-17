@@ -340,9 +340,6 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
               {dialogSubtasks && dialogSubtasks.length > 0 && (
                 <View
                   className='dialog-steps'
-                  onClick={() => {
-                    if (!dialogEditing) handleStartDialogEdit()
-                  }}
                 >
                   <View className='dialog-steps-head'>
                     <Text className='dialog-step-label'>子任务</Text>
