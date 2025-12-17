@@ -56,6 +56,15 @@ const STRINGS = {
 const calcPercent = (current: number, total: number) =>
   Math.min(100, Math.round((current / Math.max(1, total || 1)) * 100))
 
+const pad2 = (num: number) => (num < 10 ? `0${num}` : `${num}`)
+
+const formatStartDate = (iso?: string) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`
+}
+
 type HomePaneProps = {
   isActive?: boolean
 }
@@ -127,6 +136,7 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
       : modalTask?.progress
   const dialogRemain = modalTask?.dueAt ? humanizeRemain(modalTask.dueAt) : modalTask?.remain
   const dialogDueLabel = modalTask?.dueAt ? formatDueLabel(modalTask.dueAt) : modalTask?.due
+  const dialogStartLabel = modalTask?.createdAt ? formatStartDate(modalTask.createdAt) : undefined
 
   // 关闭弹窗：切换到任务页/其他页时自动收起
   useEffect(() => {
@@ -313,7 +323,8 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
 
               <View className='dialog-meta'>
                 {dialogRemain && <Text>⏱ 剩余时间：{dialogRemain}</Text>}
-                {dialogDueLabel && <Text>🗓 截止：{dialogDueLabel}</Text>}
+                {dialogDueLabel && <Text>📅 截止：{dialogDueLabel}</Text>}
+                {dialogStartLabel && <Text>🗓 起始：{dialogStartLabel}</Text>}
               </View>
 
               {dialogProgress && (

@@ -6,6 +6,7 @@ import {
   missionTasks as missionSeed,
   collabTasks as collabSeed,
   archivedTasks as archivedSeed,
+  defaultCreatedAt,
   attrTone,
   attrIcon,
   summarizeSubtasksProgress,
@@ -55,6 +56,13 @@ const pad2 = (num: number) => (num < 10 ? `0${num}` : `${num}`)
 
 const calcPercent = (current: number, total: number) =>
   Math.min(100, Math.round((current / Math.max(1, total || 1)) * 100))
+
+const formatStartDate = (iso?: string) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`
+}
 
 function AttributeTag({ attr, points }: { attr: Attr; points: number }) {
   const tone = attrTone[attr]
@@ -159,6 +167,7 @@ function MissionCard({
   const hasSubtasks = subtasks?.length > 0
   const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain
   const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel
+  const startLabel = formatStartDate(task.createdAt)
 
   return (
     <View
@@ -183,7 +192,8 @@ function MissionCard({
           <ProgressBar current={progress.current} total={progress.total} />
           <View className='card-meta'>
             <Text className='meta-item'>⏱ 剩余时间：{remainLabel}</Text>
-            <Text className='meta-item'>🗓 截止：{dueLabel}</Text>
+            <Text className='meta-item'>📅 截止：{dueLabel}</Text>
+            <Text className='meta-item'>🗓 起始：{startLabel}</Text>
           </View>
           {hasSubtasks && (
             <>
@@ -560,6 +570,7 @@ const rewardOptions = useMemo(
 
   const mapApiTaskToMission = (task: Task): MissionTask => {
     const attr = mapRewardToAttr(task.attributeReward.type)
+    const createdAt = task.createdAt || defaultCreatedAt
     const baseId = task._id || 'task'
     const subtasks = (
       task.subtasks && task.subtasks.length > 0
@@ -588,6 +599,7 @@ const rewardOptions = useMemo(
       detail: task.description || '',
       attr,
       points: task.attributeReward.value,
+      createdAt,
       icon: '✨',
       progress: { current: progress.current, total: progress.total || 1 },
       subtasks,

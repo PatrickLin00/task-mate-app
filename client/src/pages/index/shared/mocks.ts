@@ -16,6 +16,7 @@ type TaskBase = {
   attr: Attr
   icon: string
   points: number
+  createdAt: string
 }
 
 export type RoadTask = TaskBase & {
@@ -78,6 +79,8 @@ const MINUTE = 60 * 1000
 
 const pad2 = (num: number) => (num < 10 ? `0${num}` : `${num}`)
 
+export const defaultCreatedAt = '2000-01-01T00:00:00'
+
 const toDate = (val: string | Date) => (val instanceof Date ? val : new Date(val))
 
 const buildDueAt = (daysFromToday: number, hour: number, minute: number) => {
@@ -123,7 +126,8 @@ export function humanizeRemain(dueAt: string | Date) {
 }
 
 // Unified mission seeds shared across pages
-const missionTaskSeeds: (Omit<MissionTask, 'progress' | 'remain' | 'dueLabel' | 'dueDays'>)[] = [
+type MissionSeed = Omit<MissionTask, 'progress' | 'remain' | 'dueLabel' | 'dueDays' | 'createdAt'>
+const missionTaskSeedData: MissionSeed[] = [
   {
     id: 'm1',
     title: '子夜息神诀',
@@ -242,6 +246,12 @@ const missionTaskSeeds: (Omit<MissionTask, 'progress' | 'remain' | 'dueLabel' | 
   },
 ]
 
+const missionTaskSeeds: (Omit<MissionTask, 'progress' | 'remain' | 'dueLabel' | 'dueDays'>)[] =
+  missionTaskSeedData.map((task) => ({
+    ...task,
+    createdAt: defaultCreatedAt,
+  }))
+
 export const missionTasks: MissionTask[] = missionTaskSeeds.map((task) => ({
   ...task,
   progress: summarizeSubtasksProgress(task.subtasks),
@@ -263,6 +273,7 @@ export const todayTasks: RoadTask[] = pickTodayTasks.map((t) => ({
   type: t.attr,
   icon: t.icon,
   points: t.points,
+  createdAt: t.createdAt,
   difficulty: t.difficulty,
   progress: t.progress,
   subtasks: t.subtasks,
@@ -271,7 +282,8 @@ export const todayTasks: RoadTask[] = pickTodayTasks.map((t) => ({
 }))
 
 // Challenge feed: recommended new tasks
-const feedTaskSeeds: (Omit<RoadTask, 'due' | 'progress' | 'subtasks' | 'remain'>)[] = [
+type FeedTaskSeed = Omit<RoadTask, 'due' | 'progress' | 'subtasks' | 'remain' | 'createdAt'>
+const feedTaskSeedData: FeedTaskSeed[] = [
   {
     id: 'r1',
     title: '风行诀·心率篇',
@@ -329,6 +341,12 @@ const feedTaskSeeds: (Omit<RoadTask, 'due' | 'progress' | 'subtasks' | 'remain'>
   },
 ]
 
+const feedTaskSeeds: (Omit<RoadTask, 'due' | 'progress' | 'subtasks' | 'remain'>)[] =
+  feedTaskSeedData.map((task) => ({
+    ...task,
+    createdAt: defaultCreatedAt,
+  }))
+
 export const feedTasks: RoadTask[] = feedTaskSeeds.map((task) => ({
   ...task,
   due: formatDueLabel(task.dueAt),
@@ -339,7 +357,7 @@ export function chipText(t: RoadTask) {
 }
 
 // Collab track: self-published collab/delegated tasks
-export const collabTasks: CollabTask[] = [
+const collabTaskSeedData: Omit<CollabTask, 'createdAt'>[] = [
   {
     id: 'c1',
     title: '灶火清明令',
@@ -372,8 +390,13 @@ export const collabTasks: CollabTask[] = [
   },
 ]
 
+export const collabTasks: CollabTask[] = collabTaskSeedData.map((task) => ({
+  ...task,
+  createdAt: defaultCreatedAt,
+}))
+
 // Archived wishes: completed tasks
-export const archivedTasks: ArchivedTask[] = [
+const archivedTaskSeedData: Omit<ArchivedTask, 'createdAt'>[] = [
   {
     id: 'a1',
     title: '甘露序章',
@@ -402,6 +425,11 @@ export const archivedTasks: ArchivedTask[] = [
     icon: '📵',
   },
 ]
+
+export const archivedTasks: ArchivedTask[] = archivedTaskSeedData.map((task) => ({
+  ...task,
+  createdAt: defaultCreatedAt,
+}))
 
 export const attrTone: Record<Attr, 'blue' | 'red' | 'green'> = {
   智慧: 'blue',
