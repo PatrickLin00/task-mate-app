@@ -1,20 +1,20 @@
 const express = require('express')
 const router = express.Router()
+const auth = require('../middleware/auth')
 const taskController = require('../controllers/taskController')
 
-// 创建任务
-router.post('/', taskController.createTask)
-
-// 获取任务列表（可按状态过滤）
-router.get('/', taskController.getAllTasks)
-
-// 更新进度
-router.patch('/:id/progress', taskController.updateProgress)
-
-// 完成任务
-router.patch('/:id/complete', taskController.completeTask)
-
-// 放弃任务
-router.patch('/:id/abandon', taskController.abandonTask)
+router.post('/', auth, taskController.createTask)
+router.get('/today', auth, taskController.getTodayTasks)
+router.get('/challenge', auth, taskController.getChallengeTasks)
+router.get('/mission', auth, taskController.getMissionTasks)
+router.get('/collab', auth, taskController.getCollabTasks)
+router.get('/archive', auth, taskController.getArchivedTasks)
+router.get('/', auth, taskController.getAllTasks)
+router.get('/:id', auth, taskController.getTask)
+router.patch('/:id/progress', auth, taskController.updateProgress)
+router.patch('/:id/complete', auth, taskController.completeTask)
+router.patch('/:id/abandon', auth, taskController.abandonTask)
+router.patch('/:id/close', auth, taskController.closeTask)
+router.patch('/:id/restart', auth, taskController.restartTask)
 
 module.exports = router

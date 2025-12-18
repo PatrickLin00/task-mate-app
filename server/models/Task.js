@@ -1,15 +1,7 @@
 const mongoose = require('mongoose')
 
-const progressSchema = new mongoose.Schema(
-  {
-    current: { type: Number, default: 0, min: 0 },
-    total: { type: Number, default: 1, min: 1 },
-  },
-  { _id: false }
-)
-
 const subtaskSchema = new mongoose.Schema(
- {
+  {
     title: { type: String, required: true, trim: true },
     current: { type: Number, default: 0, min: 0 },
     total: { type: Number, required: true, min: 1 },
@@ -20,11 +12,26 @@ const subtaskSchema = new mongoose.Schema(
 const taskSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
-    description: { type: String, default: '', trim: true },
-    mode: { type: String, enum: ['counter', 'checklist'], required: true },
-    progress: progressSchema, // for counter mode
-    subtasks: [subtaskSchema], // for checklist mode
-    status: { type: String, enum: ['ongoing', 'completed', 'abandoned'], default: 'ongoing' },
+    icon: { type: String, default: '✨', trim: true },
+    detail: { type: String, default: '', trim: true },
+    dueAt: { type: Date, required: true },
+    startAt: { type: Date, default: Date.now },
+    closedAt: { type: Date, default: null },
+    originalDueAt: { type: Date, default: null },
+    originalStartAt: { type: Date, default: null },
+    originalStatus: {
+      type: String,
+      enum: ['pending', 'in_progress', 'review_pending', 'completed', 'closed'],
+      default: null,
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'in_progress', 'review_pending', 'completed', 'closed'],
+      default: 'pending',
+    },
+    creatorId: { type: String, default: 'sys:system', trim: true },
+    assigneeId: { type: String, default: null, trim: true },
+    subtasks: { type: [subtaskSchema], default: [] },
     attributeReward: {
       type: {
         type: String,
@@ -33,6 +40,7 @@ const taskSchema = new mongoose.Schema(
       },
       value: { type: Number, required: true, min: 0 },
     },
+    seedKey: { type: String, default: null, index: true },
   },
   { timestamps: true }
 )

@@ -1,4 +1,4 @@
-﻿import { View, Text, ScrollView, Button, Image, Slider } from '@tarojs/components'
+import { View, Text, ScrollView, Button, Image, Slider } from '@tarojs/components'
 import Taro, { useLoad } from '@tarojs/taro'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -8,9 +8,7 @@ import {
   attrIcon,
   attrTone as attrToneMap,
   role,
-  todayTasks,
-  dueTodayCount,
-  feedTasks,
+  defaultCreatedAt,
   chipText,
   quietLines,
   challengeQuietLines,
@@ -19,39 +17,40 @@ import {
   humanizeRemain,
   formatDueLabel,
 } from '../shared/mocks'
+import { fetchChallengeTasks, fetchTodayTasks, type Task } from '@/services/api'
 
-const attrList: Attr[] = ['\u667a\u6167', '\u529b\u91cf', '\u654f\u6377']
+const attrList: Attr[] = ['智慧', '力量', '敏捷']
 const attrToneHome: Record<Attr, 'blue' | 'red' | 'yellow'> = {
-  '\u667a\u6167': 'blue',
-  '\u529b\u91cf': 'red',
-  '\u654f\u6377': 'yellow',
+  '智慧': 'blue',
+  '力量': 'red',
+  '敏捷': 'yellow',
 }
 const attrMeta: Record<Attr, { icon: string }> = {
-  '\u667a\u6167': { icon: '\ud83e\udde0' },
-  '\u529b\u91cf': { icon: '\ud83d\udcaa' },
-  '\u654f\u6377': { icon: '\ud83d\udc3a' },
+  '智慧': { icon: '🧠' },
+  '力量': { icon: '💪' },
+  '敏捷': { icon: '🐺' },
 }
 
 const UI = {
-  stars: '\u2605\u2605\u2605\u2605\u2605',
-  timelineIcon: '\ud83c\udfbf',
-  challengeIcon: '\ud83e\udd10',
-  calendarIcon: '\ud83d\udd70',
+  stars: '★★★★★',
+  timelineIcon: '🎿',
+  challengeIcon: '🤐',
+  calendarIcon: '🕰',
 }
 
 const FRAME_DURATION = 240
 
 const STRINGS = {
   heroBadge: 'Lv.5',
-  heroPill: '\u661f\u65c5\u8005',
-  todayTitle: '\u661f\u7a0b\u7b80\u5f55',
-  todayMeta: '\u4eca\u5929',
-  todayUnit: '\u9879',
-  feedTitle: '\u661f\u65c5\u6311\u6218',
-  difficultyLabel: '\u96be\u5ea6',
-  feedUnit: '\u4e2a\u4efb\u52a1',
-  typeLabel: '\u7c7b\u578b',
-  button: '\u63a5\u53d6\u4efb\u52a1',
+  heroPill: '星旅者',
+  todayTitle: '星程简录',
+  todayMeta: '今天',
+  todayUnit: '项',
+  feedTitle: '星旅挑战',
+  difficultyLabel: '难度',
+  feedUnit: '个任务',
+  typeLabel: '类型',
+  button: '接取任务',
 }
 
 const calcPercent = (current: number, total: number) =>
@@ -68,10 +67,14 @@ const formatStartDate = (iso?: string) => {
 
 type HomePaneProps = {
   isActive?: boolean
+  authVersion?: number
 }
 
-export default function HomePane({ isActive = true }: HomePaneProps) {
-  const visibleTasks = useMemo(() => feedTasks, [])
+export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneProps) {
+  const [todayTasks, setTodayTasks] = useState<RoadTask[]>([])
+  const [dueTodayCount, setDueTodayCount] = useState(0)
+  const [feedTasks, setFeedTasks] = useState<RoadTask[]>([])
+  const visibleTasks = useMemo(() => feedTasks, [feedTasks])
   const quietLine = useMemo(() => quietLines[Math.floor(Math.random() * quietLines.length)], [])
   const challengeLine = useMemo(
     () => challengeQuietLines[Math.floor(Math.random() * challengeQuietLines.length)],
@@ -81,6 +84,49 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
   const [modalTask, setModalTask] = useState<RoadTask | null>(null)
   const [dialogEditing, setDialogEditing] = useState(false)
   const [dialogDraft, setDialogDraft] = useState<Subtask[]>([])
+
+  const mapRewardToAttr = (val: 'wisdom' | 'strength' | 'agility') => {
+    if (val === 'wisdom') return '智慧'
+    if (val === 'strength') return '力量'
+    return '敏捷'
+  }
+
+  const mapApiTaskToRoad = (task: Task): RoadTask => {
+    const attr = mapRewardToAttr(task.attributeReward.type)
+    const baseId = task._id || 'task'
+    const subtasks =
+      task.subtasks && task.subtasks.length > 0
+        ? task.subtasks.map((s, idx) => ({
+            id: s._id || baseId + '-sub-' + (idx + 1),
+            title: s.title || '子任务 ' + (idx + 1),
+            current: s.current ?? 0,
+            total: s.total || 1,
+          }))
+        : []
+
+    const progress = task.computedProgress || summarizeSubtasksProgress(subtasks)
+    const dueAt = task.dueAt
+
+    return {
+      id: task._id || Math.random().toString(36).slice(2),
+      title: task.title,
+      detail: task.detail || '',
+      attr,
+      type: attr,
+      icon: task.icon || attrIcon[attr],
+      points: task.attributeReward.value,
+      createdAt: task.createdAt || defaultCreatedAt,
+      status: task.status,
+      creatorId: task.creatorId,
+      assigneeId: task.assigneeId ?? null,
+      dueAt,
+      due: formatDueLabel(dueAt),
+      remain: humanizeRemain(dueAt),
+      progress: { current: progress.current, total: progress.total || 1 },
+      subtasks,
+      difficulty: task.attributeReward.value >= 20 ? '中等' : '简单',
+    }
+  }
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -139,7 +185,7 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
   const dialogDueLabel = modalTask?.dueAt ? formatDueLabel(modalTask.dueAt) : modalTask?.due
   const dialogStartLabel = modalTask?.createdAt ? formatStartDate(modalTask.createdAt) : undefined
 
-  // 关闭弹窗：切换到任务页/其他页时自动收起
+  // Auto close the dialog when the pane becomes inactive.
   useEffect(() => {
     if (!isActive && modalTask) {
       setModalTask(null)
@@ -147,6 +193,27 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
       setDialogDraft([])
     }
   }, [isActive, modalTask])
+
+  useEffect(() => {
+    if (!isActive) return
+
+    let cancelled = false
+    const run = async () => {
+      try {
+        const [todayRes, challenge] = await Promise.all([fetchTodayTasks(), fetchChallengeTasks()])
+        if (cancelled) return
+        setDueTodayCount(todayRes.dueTodayCount || 0)
+        setTodayTasks((todayRes.tasks || []).map((t) => mapApiTaskToRoad(t)))
+        setFeedTasks((challenge || []).map((t) => mapApiTaskToRoad(t)))
+      } catch (err) {
+        console.error('load home tasks error', err)
+      }
+    }
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [authVersion, isActive])
 
   return (
     <View className='home-pane'>
@@ -437,7 +504,7 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
                     hoverStopPropagation
                     onClick={handleDialogCancel}
                   >
-                    <Text className='action-icon'>✖️</Text>
+                    <Text className='action-icon'>✖</Text>
                     <Text>取消变更</Text>
                   </View>
                 ) : (
@@ -447,10 +514,10 @@ export default function HomePane({ isActive = true }: HomePaneProps) {
                     hoverStartTime={0}
                     hoverStayTime={120}
                     hoverStopPropagation
-                    onClick={() => handlePlaceholder('已收纳，稍后接入')}
+                    onClick={() => handlePlaceholder('放弃任务待接入')}
                   >
                     <Text className='action-icon'>📥</Text>
-                    <Text>收纳任务</Text>
+                    <Text>放弃任务</Text>
                   </View>
                 )}
               </View>

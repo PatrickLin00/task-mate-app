@@ -54,8 +54,8 @@
     "@tarojs/taro": "4.1.7",
     "@tarojs/plugin-framework-react": "4.1.7",
     "@tarojs/react": "4.1.7",
-    "react-dom": "^18.0.0",
-    "react": "^18.0.0"
+    "react-dom": "18.2.0",
+    "react": "18.2.0"
   },
   "devDependencies": {
     "@tarojs/plugin-generator": "4.1.7",

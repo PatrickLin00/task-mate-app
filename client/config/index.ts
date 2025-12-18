@@ -1,10 +1,39 @@
 import { defineConfig, type UserConfigExport } from '@tarojs/cli'
+import fs from 'fs'
 import path from 'path'
 
 import devConfig from './dev'
 import prodConfig from './prod'
 
-// https://taro-docs.jd.com/docs/next/config#defineconfig-辅助函数
+const readEnvFile = (filePath: string) => {
+  try {
+    if (!fs.existsSync(filePath)) return {} as Record<string, string>
+    const text = fs.readFileSync(filePath, 'utf8')
+    const out: Record<string, string> = {}
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim()
+      if (!line || line.startsWith('#')) continue
+      const idx = line.indexOf('=')
+      if (idx <= 0) continue
+      const key = line.slice(0, idx).trim()
+      const val = line.slice(idx + 1).trim()
+      if (!key) continue
+      out[key] = val
+    }
+    return out
+  } catch {
+    return {} as Record<string, string>
+  }
+}
+
+const fileEnv = {
+  ...readEnvFile(path.resolve(__dirname, '..', '.env')),
+  ...readEnvFile(path.resolve(__dirname, '..', '..', 'server', '.env')),
+}
+
+const getEnvValue = (key: string) => process.env[key] ?? fileEnv[key]
+
+// https://taro-docs.jd.com/docs/next/config#defineconfig
 export default defineConfig<'vite'>(async (merge, { command, mode }) => {
   const baseConfig: UserConfigExport<'vite'> = {
     projectName: 'client',
@@ -25,12 +54,15 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
       '@': path.resolve(__dirname, '..', 'src'),
     },
     defineConstants: {
-      // 后端 API 地址（可用环境变量 TASKMATE_API_BASE_URL 或 TARO_APP_API_BASE_URL 覆盖）
       API_BASE_URL: JSON.stringify(
-        process.env.TASKMATE_API_BASE_URL ||
-        process.env.TARO_APP_API_BASE_URL ||
+        getEnvValue('TASKMATE_API_BASE_URL') ||
+        getEnvValue('TARO_APP_API_BASE_URL') ||
         'http://localhost:3000'
-      )
+      ),
+      DEV_AUTH_ENABLED: JSON.stringify(
+        String(getEnvValue('DEV_AUTH_ENABLED') || getEnvValue('TASKMATE_DEV_AUTH_ENABLED') || '').toLowerCase() ===
+          'true'
+      ),
     },
     copy: {
       patterns: [
@@ -43,9 +75,9 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
     },
     framework: 'react',
     compiler: 'vite',
-    mini: {
+      mini: {
       imageUrlLoaderOption: {
-        // 禁用 image loader 自动转 base64，避免大图被内联
+        // Disable automatic base64 inlining for large images.
         limit: 0,
       },
       postcss: {
@@ -56,9 +88,9 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
           }
         },
         cssModules: {
-          enable: false, // 默认为 false，如需使用 css modules 功能，则设为 true
+          enable: false,
           config: {
-            namingPattern: 'module', // 转换模式，取值为 global/module
+            namingPattern: 'module',
             generateScopedName: '[name]__[local]___[hash:base64:5]'
           }
         }
@@ -79,9 +111,9 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
           config: {}
         },
         cssModules: {
-          enable: false, // 默认为 false，如需使用 css modules 功能，则设为 true
+          enable: false,
           config: {
-            namingPattern: 'module', // 转换模式，取值为 global/module
+            namingPattern: 'module',
             generateScopedName: '[name]__[local]___[hash:base64:5]'
           }
         }
@@ -91,7 +123,7 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
       appName: 'taroDemo',
       postcss: {
         cssModules: {
-          enable: false, // 默认为 false，如需使用 css modules 功能，则设为 true
+          enable: false,
         }
       }
     }
@@ -99,9 +131,7 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
 
 
   if (process.env.NODE_ENV === 'development') {
-    // 本地开发构建配置（不混淆压缩）
     return merge({}, baseConfig, devConfig)
   }
-  // 生产构建配置（默认开启压缩混淆等）
   return merge({}, baseConfig, prodConfig)
 })

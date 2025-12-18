@@ -1,8 +1,16 @@
-﻿import { useLoad, useShareAppMessage } from "@tarojs/taro"
+import { useLoad, useShareAppMessage } from "@tarojs/taro"
 import { View, Text, Button } from "@tarojs/components"
 import { useState } from "react"
 import { getTask, type Task } from "@/services/api"
 import "./detail.scss"
+
+const TASK_STATUS_LABEL: Record<NonNullable<Task["status"]>, string> = {
+  pending: "待接取",
+  in_progress: "待完成",
+  review_pending: "待检视",
+  completed: "已完成",
+  closed: "已关闭",
+}
 
 export default function TaskDetail() {
   const [task, setTask] = useState<Task | null>(null)
@@ -27,20 +35,24 @@ export default function TaskDetail() {
   if (!task) {
     return (
       <View className="task-detail">
-        <Text>加载中...</Text>
+        <Text>{"加载中..."}</Text>
       </View>
     )
   }
 
+  const statusLabel = TASK_STATUS_LABEL[task.status || "pending"]
+
   return (
     <View className="task-detail">
       <Text className="title">{task.title}</Text>
-      {!!task.description && <Text className="desc">{task.description}</Text>}
-      <Text className="meta">状态：{task.status || "pending"}</Text>
-      {/* 微信端可见的原生分享按钮 */}
+      {!!task.detail && <Text className="desc">{task.detail}</Text>}
+      <Text className="meta">
+        {"状态: "}
+        {statusLabel}
+      </Text>
       <View style={{ marginTop: "16px" }}>
         <Button openType="share" type="primary">
-          分享给好友
+          {"分享给好友"}
         </Button>
       </View>
     </View>

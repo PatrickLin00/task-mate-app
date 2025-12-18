@@ -1,8 +1,38 @@
-import { View, Text } from '@tarojs/components'
+import { View, Text, Button, Input } from '@tarojs/components'
+import Taro from '@tarojs/taro'
+import { useState } from 'react'
 import '../home.scss'
 import { role } from '../shared/mocks'
+import { devLoginWeapp, getDevUserId, getUserId } from '@/services/auth'
 
-export default function ProfilePane() {
+declare const DEV_AUTH_ENABLED: boolean
+
+export default function ProfilePane({ onAuthChanged }: { onAuthChanged?: () => void }) {
+  const [currentUserId, setCurrentUserId] = useState(() => getUserId() || '')
+  const [devUserId, setDevUserId] = useState(() => getDevUserId() || '')
+  const [switching, setSwitching] = useState(false)
+
+  const canUseDev = DEV_AUTH_ENABLED
+
+  const handleDevSwitch = async (nextUserId: string) => {
+    const trimmed = String(nextUserId || '').trim()
+    if (!trimmed) return
+    if (switching) return
+    setSwitching(true)
+    try {
+      await devLoginWeapp(trimmed)
+      setCurrentUserId(getUserId() || trimmed)
+      setDevUserId(trimmed)
+      onAuthChanged?.()
+      Taro.showToast({ title: 'Switched', icon: 'success' })
+    } catch (err: any) {
+      console.error('dev switch failed', err)
+      Taro.showToast({ title: err?.message || 'Failed', icon: 'none' })
+    } finally {
+      setSwitching(false)
+    }
+  }
+
   return (
     <View className='profile-page'>
       <View className='section'>
@@ -20,6 +50,37 @@ export default function ProfilePane() {
           </View>
         </View>
       </View>
+
+      {canUseDev && (
+        <View className='section'>
+          <Text className='section-title'>Dev</Text>
+          <Text className='feed-desc'>Current userId: {currentUserId || '(empty)'}</Text>
+
+          <View className='one-line-row'>
+            <Input
+              className='modal-input'
+              value={devUserId}
+              onInput={(e) => setDevUserId(e.detail.value)}
+              placeholder='dev:alice'
+            />
+            <Button className='ai-btn' loading={switching} onClick={() => void handleDevSwitch(devUserId)}>
+              Switch
+            </Button>
+          </View>
+
+          <View className='one-line-row'>
+            <Button className='ai-btn' disabled={switching} onClick={() => void handleDevSwitch('dev:alice')}>
+              dev:alice
+            </Button>
+            <Button className='ai-btn' disabled={switching} onClick={() => void handleDevSwitch('dev:bob')}>
+              dev:bob
+            </Button>
+            <Button className='ai-btn' disabled={switching} onClick={() => void handleDevSwitch('dev:carol')}>
+              dev:carol
+            </Button>
+          </View>
+        </View>
+      )}
     </View>
   )
 }

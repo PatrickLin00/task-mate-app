@@ -18,6 +18,7 @@ const tabMeta: Record<Tab, { label: string; icon: string }> = {
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>('home')
+  const [authVersion, setAuthVersion] = useState(0)
 
   return (
     <View className='home'>
@@ -40,11 +41,12 @@ export default function Index() {
         duration={220}
       >
         <SwiperItem>
-          <HomePane isActive={activeTab === 'home'} />
+          <HomePane isActive={activeTab === 'home'} authVersion={authVersion} />
         </SwiperItem>
         <SwiperItem>
           <TasksPane
             isActive={activeTab === 'tasks'}
+            authVersion={authVersion}
             onSwipeToHome={() => setActiveTab('home')}
             onSwipeToAchievements={() => setActiveTab('achievements')}
           />
@@ -53,7 +55,7 @@ export default function Index() {
           <AchievementsPane />
         </SwiperItem>
         <SwiperItem>
-          <ProfilePane />
+          <ProfilePane onAuthChanged={() => setAuthVersion(Date.now())} />
         </SwiperItem>
       </Swiper>
     </View>

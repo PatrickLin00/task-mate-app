@@ -19,9 +19,14 @@ type TaskBase = {
   icon: string
   points: number
   createdAt: string
+  startAt?: string
+  closedAt?: string | null
+  originalDueAt?: string | null
+  originalStartAt?: string | null
+  originalStatus?: TaskStatus | null
   status: TaskStatus
-  creator: string
-  assignee?: string | null
+  creatorId: string
+  assigneeId?: string | null
 }
 
 export type RoadTask = TaskBase & {
@@ -58,7 +63,7 @@ export type ArchivedTask = TaskBase & {
   finishedAgo: string
 }
 
-export const role = { name: '我的小猫', stars: 5, 智慧: 75, 力量: 60, 敏捷: 85 }
+export const role = { name: '我的小猫', stars: 5, '智慧': 75, '力量': 60, '敏捷': 85 }
 
 export const catIdleFrames = [
   '/assets/avatars/series_orange/cat_f2_idle_01.png',
@@ -87,8 +92,8 @@ const MINUTE = 60 * 1000
 const pad2 = (num: number) => (num < 10 ? `0${num}` : `${num}`)
 
 export const defaultCreatedAt = '2000-01-01T00:00:00'
-export const defaultCreator = 'system'
-export const defaultAssignee = 'self'
+export const defaultCreatorId = 'sys:system'
+export const defaultAssigneeId = 'dev:self'
 
 const toDate = (val: string | Date) => (val instanceof Date ? val : new Date(val))
 
@@ -136,7 +141,7 @@ export function humanizeRemain(dueAt: string | Date) {
 // Mission seeds
 type MissionSeed = Omit<
   MissionTask,
-  'progress' | 'remain' | 'dueLabel' | 'dueDays' | 'createdAt' | 'status' | 'creator' | 'assignee'
+  'progress' | 'remain' | 'dueLabel' | 'dueDays' | 'createdAt' | 'status' | 'creatorId' | 'assigneeId'
 >
 
 const missionTaskSeedData: MissionSeed[] = [
@@ -160,7 +165,7 @@ const missionTaskSeedData: MissionSeed[] = [
     detail: '三日内完成深蹲/卧推/硬拉各一组，记录重量',
     attr: '力量',
     points: 26,
-    icon: '🏋️',
+    icon: '🏋',
     dueAt: buildDueAt(3, 21, 0),
     subtasks: [
       { id: 'm2-s1', title: '深蹲完成', current: 1, total: 1 },
@@ -252,7 +257,7 @@ const missionTaskSeedData: MissionSeed[] = [
     detail: '明天完成俯卧撑 3 组，每组 15 次',
     attr: '力量',
     points: 18,
-    icon: '🛡️',
+    icon: '🛡',
     dueAt: buildDueAt(1, 18, 0),
     subtasks: [
       { id: 'm7-s1', title: '俯卧撑组数', current: 0, total: 3 },
@@ -264,7 +269,7 @@ const missionTaskSeedData: MissionSeed[] = [
     detail: '两天内完成 800 字小结，修改一稿',
     attr: '智慧',
     points: 16,
-    icon: '✍️',
+    icon: '✍',
     dueAt: buildDueAt(2, 22, 0),
     subtasks: [
       { id: 'm8-s1', title: '初稿 800 字', current: 0, total: 1 },
@@ -303,8 +308,8 @@ const missionTaskSeeds: (Omit<MissionTask, 'progress' | 'remain' | 'dueLabel' | 
     ...task,
     createdAt: defaultCreatedAt,
     status: 'in_progress',
-    creator: defaultCreator,
-    assignee: defaultAssignee,
+    creatorId: defaultCreatorId,
+    assigneeId: defaultAssigneeId,
   }))
 
 export const missionTasks: MissionTask[] = missionTaskSeeds.map((task) => ({
@@ -315,7 +320,7 @@ export const missionTasks: MissionTask[] = missionTaskSeeds.map((task) => ({
   dueDays: calcDueDays(task.dueAt),
 }))
 
-// Today picks (星程简录): tasks due today; if fewer than 5, fill with nearest upcoming
+// Today picks: tasks due today; if fewer than 5, fill with nearest upcoming
 const missionByDue = [...missionTasks].sort(
   (a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()
 )
@@ -335,8 +340,8 @@ export const todayTasks: RoadTask[] = pickTodayTasks.map((t) => ({
   points: t.points,
   createdAt: t.createdAt,
   status: t.status,
-  creator: t.creator,
-  assignee: t.assignee,
+  creatorId: t.creatorId,
+  assigneeId: t.assigneeId,
   difficulty: t.difficulty,
   progress: t.progress,
   subtasks: t.subtasks,
@@ -344,10 +349,10 @@ export const todayTasks: RoadTask[] = pickTodayTasks.map((t) => ({
   remain: humanizeRemain(t.dueAt),
 }))
 
-// Challenge feed (星旅挑战): system tasks pending, start 00:00, due 23:59
+// Challenge feed: system tasks pending, start 00:00, due 23:59
 type FeedTaskSeed = Omit<
   RoadTask,
-  'due' | 'progress' | 'subtasks' | 'remain' | 'createdAt' | 'status' | 'creator' | 'assignee'
+  'due' | 'progress' | 'subtasks' | 'remain' | 'createdAt' | 'status' | 'creatorId' | 'assigneeId'
 >
 
 const feedTaskSeedData: FeedTaskSeed[] = [
@@ -358,7 +363,7 @@ const feedTaskSeedData: FeedTaskSeed[] = [
     dueAt: buildDueAt(0, 23, 59),
     attr: '力量',
     type: '力量',
-    icon: '⏱️',
+    icon: '⏱',
     points: 20,
     difficulty: '中等',
   },
@@ -373,6 +378,72 @@ const feedTaskSeedData: FeedTaskSeed[] = [
     points: 18,
     difficulty: '中等',
   },
+  {
+    id: 'r3',
+    title: '晨光整理',
+    detail: '整理桌面 15 分钟, 清空回收箱',
+    dueAt: buildDueAt(0, 23, 59),
+    attr: '智慧',
+    type: '智慧',
+    icon: '🧹',
+    points: 12,
+    difficulty: '简单',
+  },
+  {
+    id: 'r4',
+    title: '轻跑热身',
+    detail: '慢跑 3 公里, 结束拉伸 8 分钟',
+    dueAt: buildDueAt(0, 23, 59),
+    attr: '力量',
+    type: '力量',
+    icon: '🏃',
+    points: 16,
+    difficulty: '简单',
+  },
+  {
+    id: 'r5',
+    title: '专注阅读',
+    detail: '阅读 30 页, 写下 3 个收获',
+    dueAt: buildDueAt(0, 23, 59),
+    attr: '智慧',
+    type: '智慧',
+    icon: '📚',
+    points: 14,
+    difficulty: '简单',
+  },
+  {
+    id: 'r6',
+    title: '灵敏训练',
+    detail: '跳绳 600 次, 分 3 组完成',
+    dueAt: buildDueAt(0, 23, 59),
+    attr: '敏捷',
+    type: '敏捷',
+    icon: '🐾',
+    points: 20,
+    difficulty: '中等',
+  },
+  {
+    id: 'r7',
+    title: '补水计划',
+    detail: '全天喝水 8 杯, 每杯 250ml',
+    dueAt: buildDueAt(0, 23, 59),
+    attr: '力量',
+    type: '力量',
+    icon: '🚰',
+    points: 10,
+    difficulty: '简单',
+  },
+  {
+    id: 'r8',
+    title: '呼吸训练',
+    detail: '深呼吸 5 分钟, 记录一次感受',
+    dueAt: buildDueAt(0, 23, 59),
+    attr: '敏捷',
+    type: '敏捷',
+    icon: '🧘',
+    points: 15,
+    difficulty: '中等',
+  },
 ]
 
 const feedTaskSeeds: (Omit<RoadTask, 'due' | 'progress' | 'subtasks' | 'remain'>)[] =
@@ -380,8 +451,8 @@ const feedTaskSeeds: (Omit<RoadTask, 'due' | 'progress' | 'subtasks' | 'remain'>
     ...task,
     createdAt: buildDueAt(0, 0, 0),
     status: 'pending',
-    creator: defaultCreator,
-    assignee: null,
+    creatorId: defaultCreatorId,
+    assigneeId: null,
   }))
 
 export const feedTasks: RoadTask[] = feedTaskSeeds.map((task) => ({
@@ -394,7 +465,7 @@ export function chipText(t: RoadTask) {
   return `${t.attr}+${t.points}`
 }
 
-// Collab track (奇遇轨迹): self-published tasks
+// Collab track: self-published tasks
 const collabTaskSeedData: Array<Omit<CollabTask, 'createdAt' | 'progress' | 'remain' | 'dueLabel' | 'dueDays'>> =
   [
     {
@@ -402,8 +473,8 @@ const collabTaskSeedData: Array<Omit<CollabTask, 'createdAt' | 'progress' | 'rem
       title: '灶火清理',
       detail: '整理灶台，丢弃过期调味料并拍照记录前后对比',
       status: 'in_progress',
-      assignee: 'self',
-      creator: 'self',
+      assigneeId: 'dev:self',
+      creatorId: 'dev:self',
       attr: '智慧',
       points: 16,
       icon: '🧂',
@@ -418,8 +489,8 @@ const collabTaskSeedData: Array<Omit<CollabTask, 'createdAt' | 'progress' | 'rem
       title: '踏青探路',
       detail: '查找 5km 郊野步道，准备随行补给清单',
       status: 'pending',
-      assignee: null,
-      creator: 'self',
+      assigneeId: null,
+      creatorId: 'dev:self',
       attr: '敏捷',
       points: 22,
       icon: '🥾',
@@ -434,8 +505,8 @@ const collabTaskSeedData: Array<Omit<CollabTask, 'createdAt' | 'progress' | 'rem
       title: '旧衣再造',
       detail: '筛出旧衣，分类为捐赠/改造/回收并记录',
       status: 'completed',
-      assignee: 'self',
-      creator: 'self',
+      assigneeId: 'dev:self',
+      creatorId: 'dev:self',
       attr: '智慧',
       points: 12,
       icon: '🧥',
@@ -451,8 +522,8 @@ export const collabTasks: CollabTask[] = collabTaskSeedData.map((task) => ({
   ...task,
   createdAt: defaultCreatedAt,
   status: task.status || 'pending',
-  creator: task.creator || defaultCreator,
-  assignee: typeof task.assignee === 'undefined' ? defaultAssignee : task.assignee,
+  creatorId: task.creatorId || defaultCreatorId,
+  assigneeId: typeof task.assigneeId === 'undefined' ? defaultAssigneeId : task.assigneeId,
   progress: task.subtasks ? summarizeSubtasksProgress(task.subtasks) : undefined,
   remain: task.dueAt ? humanizeRemain(task.dueAt) : undefined,
   dueLabel: task.dueAt ? formatDueLabel(task.dueAt) : undefined,
@@ -460,7 +531,7 @@ export const collabTasks: CollabTask[] = collabTaskSeedData.map((task) => ({
 }))
 
 // Archived wishes
-const archivedTaskSeedData: Array<Omit<ArchivedTask, 'createdAt' | 'status' | 'creator' | 'assignee'>> = [
+const archivedTaskSeedData: Array<Omit<ArchivedTask, 'createdAt' | 'status' | 'creatorId' | 'assigneeId'>> = [
   {
     id: 'a1',
     title: '甘露序章',
@@ -477,7 +548,7 @@ const archivedTaskSeedData: Array<Omit<ArchivedTask, 'createdAt' | 'status' | 'c
     finishedAgo: '5 天前',
     attr: '力量',
     points: 14,
-    icon: '🏔️',
+    icon: '🏔',
   },
 ]
 
@@ -485,20 +556,20 @@ export const archivedTasks: ArchivedTask[] = archivedTaskSeedData.map((task) => 
   ...task,
   createdAt: defaultCreatedAt,
   status: 'completed',
-  creator: defaultCreator,
-  assignee: defaultAssignee,
+  creatorId: defaultCreatorId,
+  assigneeId: defaultAssigneeId,
 }))
 
 export const attrTone: Record<Attr, 'blue' | 'red' | 'green'> = {
-  智慧: 'blue',
-  力量: 'red',
-  敏捷: 'green',
+  '智慧': 'blue',
+  '力量': 'red',
+  '敏捷': 'green',
 }
 
 export const attrIcon: Record<Attr, string> = {
-  智慧: '🧠',
-  力量: '💪',
-  敏捷: '⚡',
+  '智慧': '🧠',
+  '力量': '💪',
+  '敏捷': '⚡',
 }
 
 export const statusLabel: Record<TaskStatus, string> = {

@@ -20,7 +20,15 @@ import {
   type CollabTask,
   type ArchivedTask,
 } from '../shared/mocks'
-import { createTask, type Task } from '@/services/api'
+import {
+  closeTask,
+  createTask,
+  fetchArchivedTasks,
+  fetchCollabTasks,
+  fetchMissionTasks,
+  restartTask,
+  type Task,
+} from '@/services/api'
 
 type TabKey = 'mission' | 'collab' | 'archive'
 
@@ -28,6 +36,7 @@ type TasksPaneProps = {
   isActive?: boolean
   onSwipeToHome?: () => void
   onSwipeToAchievements?: () => void
+  authVersion?: number
 }
 
 const tabs: { key: TabKey; label: string; hint: string }[] = [
@@ -53,6 +62,29 @@ const statusIcon: Record<TaskStatus | 'archived', string> = {
   closed: '📦',
   archived: '📂',
 }
+
+const metaIcon = {
+  remain: '⏱',
+  due: '🗓',
+  start: '📅',
+  assignee: '🙌',
+} as const
+
+const metaText = {
+  remain: '剩余时间:',
+  deleteRemain: '删除倒计时:',
+  due: '截止:',
+  deleteDue: '删除于:',
+  start: '起始:',
+  closed: '关闭于:',
+  assignee: '执行人:',
+  creator: '发起人:',
+  unassigned: '未指派',
+  restart: '重启任务',
+  close: '关闭任务',
+  edit: '编辑任务',
+  assign: '指派任务',
+} as const
 
 type SubtaskInput = { title: string; total: number }
 
@@ -113,18 +145,20 @@ function ActionButton({
   icon,
   label,
   ghost,
+  disabled,
   onClick,
 }: {
   icon: string
   label: string
   ghost?: boolean
+  disabled?: boolean
   onClick?: () => void
 }) {
   return (
     <View
-      className={`task-action ${ghost ? 'ghost' : ''}`}
+      className={`task-action ${ghost ? 'ghost' : ''} ${disabled ? 'disabled' : ''}`}
       data-noexpand
-      hoverClass='pressing'
+      hoverClass={disabled ? '' : 'pressing'}
       hoverStartTime={0}
       hoverStayTime={120}
       hoverStopPropagation
@@ -133,6 +167,7 @@ function ActionButton({
       onTouchMove={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation()
+        if (disabled) return
         onClick?.()
       }}
     >
@@ -173,7 +208,9 @@ function MissionCard({
   const hasSubtasks = subtasks?.length > 0
   const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain
   const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel
-  const startLabel = formatStartDate(task.createdAt)
+  const startLabel = formatStartDate(task.startAt || task.createdAt)
+  const assigneeLabel = task.assigneeId || metaText.unassigned
+  const creatorLabel = task.creatorId || ''
 
   return (
     <View
@@ -197,9 +234,28 @@ function MissionCard({
           <Text className='task-desc'>{task.detail}</Text>
           <ProgressBar current={progress.current} total={progress.total} />
           <View className='card-meta'>
-            <Text className='meta-item'>⏱ 剩余时间：{remainLabel}</Text>
-            <Text className='meta-item'>📅 截止：{dueLabel}</Text>
-            <Text className='meta-item'>🗓 起始：{startLabel}</Text>
+            <View className='meta-item'>
+              <Text>{metaIcon.remain}</Text>
+              <Text>{metaText.remain}</Text>
+              <Text>{remainLabel}</Text>
+            </View>
+            <View className='meta-item'>
+              <Text>{metaIcon.due}</Text>
+              <Text>{metaText.due}</Text>
+              <Text>{dueLabel}</Text>
+            </View>
+            <View className='meta-item meta-start'>
+              <Text>{metaIcon.start}</Text>
+              <Text>{metaText.start}</Text>
+              <Text>{startLabel}</Text>
+            </View>
+            <View className='meta-item meta-start'>
+              <Text>{metaIcon.assignee}</Text>
+              <Text>{metaText.assignee}</Text>
+              <Text>{assigneeLabel}</Text>
+              <Text>{metaText.creator}</Text>
+              <Text>{creatorLabel}</Text>
+            </View>
           </View>
           {hasSubtasks && (
             <>
@@ -279,13 +335,13 @@ function MissionCard({
           <>
             <ActionButton icon='✅' label='提交变更' onClick={onSubmit} />
             <ActionButton icon='📝' label='提交检视' onClick={onReview} />
-            <ActionButton icon='✖️' label='取消变更' ghost onClick={onCancel} />
+            <ActionButton icon='✖' label='取消变更' ghost onClick={onCancel} />
           </>
         ) : (
           <>
             <ActionButton icon='🔁' label='更新进度' onClick={onEdit} />
             <ActionButton icon='📝' label='提交检视' onClick={onReview} />
-            <ActionButton icon='📥' label='收纳任务' ghost onClick={onCollect} />
+            <ActionButton icon='📥' label='放弃任务' ghost onClick={onCollect} />
           </>
         )}
       </View>
@@ -297,17 +353,29 @@ function CollabCard({
   task,
   expanded,
   onToggleExpand,
+  onEdit,
+  onAssign,
+  onClose,
+  onRestart,
 }: {
   task: CollabTask
   expanded: boolean
   onToggleExpand?: (taskId: string) => void
+  onEdit?: () => void
+  onAssign?: () => void
+  onClose?: () => void
+  onRestart?: () => void
 }) {
   const tone = attrTone[task.attr]
   const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
+  const isClosed = task.status === 'closed'
   const progress = task.progress || summarizeSubtasksProgress(task.subtasks || [])
   const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain || ''
   const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel || ''
-  const startLabel = formatStartDate(task.createdAt)
+  const startIso = isClosed ? task.closedAt || task.startAt || task.createdAt : task.startAt || task.createdAt
+  const startLabel = formatStartDate(startIso)
+  const assigneeLabel = task.assigneeId || metaText.unassigned
+  const creatorLabel = task.creatorId || ''
 
   return (
     <View className={`task-card tone-${tone} ${hasSubtasks && expanded ? 'expanded' : ''}`}>
@@ -324,10 +392,28 @@ function CollabCard({
       <Text className='task-desc'>{task.detail}</Text>
       <ProgressBar current={progress.current} total={progress.total} />
       <View className='card-meta'>
-        <Text className='meta-item'>⏱ 剩余时间：{remainLabel}</Text>
-        <Text className='meta-item'>📅 截止：{dueLabel}</Text>
-        <Text className='meta-item'>🗓 起始：{startLabel}</Text>
-        <Text className='meta-item'>🙌 执行人：{task.assignee || '未指派'}</Text>
+        <View className='meta-item'>
+          <Text>{metaIcon.remain}</Text>
+          <Text>{isClosed ? metaText.deleteRemain : metaText.remain}</Text>
+          <Text>{remainLabel}</Text>
+        </View>
+        <View className='meta-item'>
+          <Text>{metaIcon.due}</Text>
+          <Text>{isClosed ? metaText.deleteDue : metaText.due}</Text>
+          <Text>{dueLabel}</Text>
+        </View>
+        <View className='meta-item meta-start'>
+          <Text>{metaIcon.start}</Text>
+          <Text>{isClosed ? metaText.closed : metaText.start}</Text>
+          <Text>{startLabel}</Text>
+        </View>
+        <View className='meta-item'>
+          <Text>{metaIcon.assignee}</Text>
+          <Text>{metaText.assignee}</Text>
+          <Text>{assigneeLabel}</Text>
+          <Text>{metaText.creator}</Text>
+          <Text>{creatorLabel}</Text>
+        </View>
       </View>
       {hasSubtasks && (
         <>
@@ -368,9 +454,20 @@ function CollabCard({
           </View>
         </>
       )}
-      <View className='action-row'>
-        <ActionButton icon='✏️' label='编辑任务' />
-        <ActionButton icon='🔆' label='分享链接' />
+      <View
+        className='action-row'
+        data-noexpand
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+      >
+        <ActionButton icon='✏' label={metaText.edit} disabled={isClosed} onClick={onEdit} />
+        <ActionButton icon='🧭' label={metaText.assign} disabled={isClosed} onClick={onAssign} />
+        {isClosed ? (
+          <ActionButton icon='🚀' label={metaText.restart} onClick={onRestart} />
+        ) : (
+          <ActionButton icon='📦' label={metaText.close} ghost onClick={onClose} />
+        )}
       </View>
     </View>
   )
@@ -385,7 +482,7 @@ function ArchivedCard({ task }: { task: ArchivedTask }) {
           <Text className='task-icon'>{task.icon}</Text>
           <Text className='task-title'>{task.title}</Text>
         </View>
-        <StatusBadge status='已归档' />
+        <StatusBadge status='archived' />
       </View>
       <Text className='task-desc'>{task.detail}</Text>
       <View className='card-meta'>
@@ -398,16 +495,22 @@ function ArchivedCard({ task }: { task: ArchivedTask }) {
   )
 }
 
-export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAchievements }: TasksPaneProps) {
+export default function TasksPane({
+  isActive = true,
+  onSwipeToHome,
+  onSwipeToAchievements,
+  authVersion = 0,
+}: TasksPaneProps) {
   const today = useMemo(() => new Date(), [])
   const [activeTab, setActiveTab] = useState<TabKey>('mission')
   const [missionTasks, setMissionTasks] = useState<MissionTask[]>(missionSeed)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [draftSubtasks, setDraftSubtasks] = useState<Record<string, Subtask[]>>({})
-  const [collabTasks] = useState<CollabTask[]>(collabSeed)
+  const [collabTasks, setCollabTasks] = useState<CollabTask[]>(collabSeed)
   const [expandedCollabId, setExpandedCollabId] = useState<string | null>(null)
-  const [archivedTasks] = useState<ArchivedTask[]>(archivedSeed)
+  const [archivedTasks, setArchivedTasks] = useState<ArchivedTask[]>(archivedSeed)
+  const [loadingRemote, setLoadingRemote] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -473,14 +576,14 @@ export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAch
     const THRESHOLD_X = 150
     if (Math.abs(dx) < THRESHOLD_X) return
 
-    // 使命在身：右滑回首页（只允许边缘起手）
+    // Swipe right from mission tab to home.
     if (touchStartTab.current === 'mission' && dx > 0) {
       if (editingTaskId) handleCancelEditing()
       onSwipeToHome?.()
       return
     }
 
-    // 你原来的“archive 左滑去成就”逻辑可保留（同理也可加边缘门槛）
+    // Swipe left from archive tab to achievements.
     if (touchStartTab.current === 'archive' && dx < 0) {
       onSwipeToAchievements?.()
     }
@@ -511,16 +614,44 @@ export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAch
       setExpandedCollabId(null)
       setShowCreate(false)
     }
+  }, [authVersion, isActive])
+
+  useEffect(() => {
+    if (!isActive) return
+
+    let cancelled = false
+    const run = async () => {
+      if (loadingRemote) return
+      setLoadingRemote(true)
+      try {
+        const [mission, collab, archived] = await Promise.all([
+          fetchMissionTasks(),
+          fetchCollabTasks(),
+          fetchArchivedTasks(),
+        ])
+        if (cancelled) return
+        setMissionTasks(mission.map((t) => mapApiTaskToMission(t)))
+        setCollabTasks(collab.map((t) => mapApiTaskToCollab(t)))
+        setArchivedTasks(archived.map((t) => mapApiTaskToArchived(t)))
+      } catch (err: any) {
+        console.error('load tasks error', err)
+      } finally {
+        if (!cancelled) setLoadingRemote(false)
+      }
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
   }, [isActive])
 
   const handleToggleCard = (taskId: string, hasSubtasks: boolean) => {
     if (!hasSubtasks) return
 
-    // 正在编辑：先取消编辑（你想要的“任何收回/切换都自动取消”）
+    // Cancel editing before toggling expansion.
     if (editingTaskId) {
       handleCancelEditing()
-      // 如果你希望：点别的卡片 = 展开别的卡片；点同一张卡片 = 收起
-      // 下面这行让“点同卡片”收起更直觉：
       if (editingTaskId === taskId) {
         setExpandedTaskId(null)
         return
@@ -537,6 +668,33 @@ export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAch
 
   const showPlaceholder = (title: string) => {
     Taro.showToast({ title, icon: 'none' })
+  }
+
+  const updateCollabTaskInState = (taskId: string, updated: Task) => {
+    const mapped = mapApiTaskToCollab(updated)
+    setCollabTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...mapped } : t)))
+  }
+
+  const handleCloseCollabTask = async (taskId: string) => {
+    try {
+      const updated = await closeTask(taskId)
+      updateCollabTaskInState(taskId, updated)
+      Taro.showToast({ title: '已关闭', icon: 'success' })
+    } catch (err: any) {
+      console.error('close task error', err)
+      Taro.showToast({ title: err?.message || '关闭失败', icon: 'none' })
+    }
+  }
+
+  const handleRestartCollabTask = async (taskId: string) => {
+    try {
+      const updated = await restartTask(taskId)
+      updateCollabTaskInState(taskId, updated)
+      Taro.showToast({ title: '已重启', icon: 'success' })
+    } catch (err: any) {
+      console.error('restart task error', err)
+      Taro.showToast({ title: err?.message || '重启失败', icon: 'none' })
+    }
   }
 
   const startEditing = (task: MissionTask) => {
@@ -586,11 +744,11 @@ export default function TasksPane({ isActive = true, onSwipeToHome, onSwipeToAch
     })
   }
 
-const rewardOptions = useMemo(
-  () => [
-    { label: '智慧', value: 'wisdom' as const, tone: 'blue', icon: '🧠' },
-    { label: '力量', value: 'strength' as const, tone: 'red', icon: '💪' },
-    { label: '敏捷', value: 'agility' as const, tone: 'green', icon: '⚡' },
+  const rewardOptions = useMemo(
+    () => [
+      { label: '智慧', value: 'wisdom' as const, tone: 'blue', icon: '🧠' },
+      { label: '力量', value: 'strength' as const, tone: 'red', icon: '💪' },
+      { label: '敏捷', value: 'agility' as const, tone: 'green', icon: '⚡' },
   ],
   []
 )
@@ -638,6 +796,20 @@ const rewardOptions = useMemo(
     return '敏捷'
   }
 
+  const formatAgo = (iso?: string) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return ''
+    const diff = Date.now() - d.getTime()
+    const minute = 60 * 1000
+    const hour = 60 * minute
+    const day = 24 * hour
+    if (diff < minute) return '刚刚'
+    if (diff < hour) return `${Math.floor(diff / minute)}分钟前`
+    if (diff < day) return `${Math.floor(diff / hour)}小时前`
+    return `${Math.floor(diff / day)}天前`
+  }
+
   const mapApiTaskToMission = (task: Task): MissionTask => {
     const attr = mapRewardToAttr(task.attributeReward.type)
     const createdAt = task.createdAt || defaultCreatedAt
@@ -654,27 +826,89 @@ const rewardOptions = useMemo(
             {
               id: baseId + '-sub-1',
               title: task.title,
-              current: task.progress?.current || 0,
-              total: task.progress?.total || 1,
+              current: 0,
+              total: 1,
             },
           ]
     )
     const progress = task.computedProgress || summarizeSubtasksProgress(subtasks)
-    const dueIso = task.updatedAt || task.createdAt || new Date(Date.now() + DAY).toISOString()
+    const dueIso = task.dueAt || task.updatedAt || task.createdAt || new Date(Date.now() + DAY).toISOString()
     const dueMeta = computeDueMeta(dueIso)
     const difficulty = task.attributeReward.value >= 20 ? '中等' : '简单'
     return {
       id: task._id || Math.random().toString(36).slice(2),
       title: task.title,
-      detail: task.description || '',
+      detail: task.detail || '',
       attr,
       points: task.attributeReward.value,
       createdAt,
-      icon: '✨',
+      status: task.status,
+      creatorId: task.creatorId,
+      assigneeId: task.assigneeId ?? null,
+      icon: task.icon || '✨',
       progress: { current: progress.current, total: progress.total || 1 },
       subtasks,
       ...dueMeta,
       difficulty,
+    }
+  }
+
+  const mapApiTaskToCollab = (task: Task): CollabTask => {
+    const attr = mapRewardToAttr(task.attributeReward.type)
+    const createdAt = task.createdAt || defaultCreatedAt
+    const baseId = task._id || 'task'
+    const subtasks =
+      task.subtasks && task.subtasks.length > 0
+        ? task.subtasks.map((s, idx) => ({
+            id: s._id || baseId + '-sub-' + (idx + 1),
+            title: s.title || '子任务 ' + (idx + 1),
+            current: s.current ?? 0,
+            total: s.total || 1,
+          }))
+        : []
+
+    const progress = task.computedProgress || summarizeSubtasksProgress(subtasks)
+    const dueIso = task.dueAt || task.updatedAt || task.createdAt || new Date(Date.now() + DAY).toISOString()
+    const dueMeta = computeDueMeta(dueIso)
+
+    return {
+      id: task._id || Math.random().toString(36).slice(2),
+      title: task.title,
+      detail: task.detail || '',
+      attr,
+      points: task.attributeReward.value,
+      createdAt,
+      startAt: task.startAt || undefined,
+      closedAt: task.closedAt ?? null,
+      originalDueAt: task.originalDueAt ?? null,
+      originalStartAt: task.originalStartAt ?? null,
+      originalStatus: task.originalStatus ?? null,
+      status: task.status,
+      creatorId: task.creatorId,
+      assigneeId: task.assigneeId ?? null,
+      icon: task.icon || '✨',
+      progress: { current: progress.current, total: progress.total || 1 },
+      subtasks,
+      ...dueMeta,
+    }
+  }
+
+  const mapApiTaskToArchived = (task: Task): ArchivedTask => {
+    const attr = mapRewardToAttr(task.attributeReward.type)
+    const createdAt = task.createdAt || defaultCreatedAt
+    const finishedAt = task.updatedAt || task.createdAt
+    return {
+      id: task._id || Math.random().toString(36).slice(2),
+      title: task.title,
+      detail: task.detail || '',
+      attr,
+      points: task.attributeReward.value,
+      createdAt,
+      status: task.status,
+      creatorId: task.creatorId,
+      assigneeId: task.assigneeId ?? null,
+      icon: task.icon || '✨',
+      finishedAgo: formatAgo(finishedAt),
     }
   }
 
@@ -707,12 +941,14 @@ const rewardOptions = useMemo(
     try {
       const created = await createTask({
         title,
-        description: descInput.trim(),
+        detail: descInput.trim(),
+        dueAt: selectedDueAt(),
         subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
         attributeReward: { type: attrReward, value: rewardValNum },
       })
-      const mapped = { ...mapApiTaskToMission(created), ...computeDueMeta(selectedDueAt()) }
-      setMissionTasks((prev) => [mapped, ...prev])
+      const mapped = mapApiTaskToCollab(created)
+      setCollabTasks((prev) => [mapped, ...prev])
+      setActiveTab('collab')
       Taro.showToast({ title: '奇遇已发起', icon: 'success' })
       setShowCreate(false)
       resetForm()
@@ -818,7 +1054,7 @@ const rewardOptions = useMemo(
                       onEdit={() => startEditing(task)}
                       onToggleExpand={(id) => handleToggleCard(id, !!task.subtasks?.length)}
                       onReview={() => showPlaceholder('提交检视待接入')}
-                      onCollect={() => showPlaceholder('已收纳，稍后接入')}
+                      onCollect={() => showPlaceholder('放弃任务待接入')}
                     />
                   )
                 })}
@@ -832,16 +1068,20 @@ const rewardOptions = useMemo(
                 {collabTasks.map((task) => {
                   const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
                   return (
-                    <CollabCard
-                      key={task.id}
-                      task={task}
-                      expanded={expandedCollabId === task.id}
-                      onToggleExpand={(id) => handleToggleCollabCard(id, hasSubtasks)}
-                    />
-                  )
-                })}
-              </View>
-            </ScrollView>
+                     <CollabCard
+                       key={task.id}
+                       task={task}
+                       expanded={expandedCollabId === task.id}
+                       onToggleExpand={(id) => handleToggleCollabCard(id, hasSubtasks)}
+                       onEdit={() => showPlaceholder('编辑任务待接入')}
+                       onAssign={() => showPlaceholder('指派任务待接入')}
+                       onClose={() => void handleCloseCollabTask(task.id)}
+                       onRestart={() => void handleRestartCollabTask(task.id)}
+                     />
+                   )
+                 })}
+               </View>
+             </ScrollView>
           </SwiperItem>
 
           <SwiperItem>

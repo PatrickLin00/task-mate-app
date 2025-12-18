@@ -1,10 +1,25 @@
 const axios = require('axios')
 const jwt = require('jsonwebtoken')
 const User = require('../models/User')
+const { ensureDevScenarioTasks } = require('../utils/seedTasks')
 
 // POST /api/auth/weapp/login
 // body: { code }
 // TODO: rate limit & better error mapping (pending ops/security)
+const normalizeDevUserId = (raw) => {
+  const v = typeof raw === 'string' ? raw.trim() : ''
+  if (!v) return ''
+  if (v.startsWith('dev:')) return v
+  if (v.includes(':')) return ''
+  return `dev:${v}`
+}
+
+const normalizeWxUserId = (openid) => {
+  const v = typeof openid === 'string' ? openid.trim() : ''
+  if (!v) return ''
+  return `wx:${v}`
+}
+
 exports.loginWeapp = async (req, res) => {
   try {
     const { code } = req.body || {}
@@ -13,6 +28,20 @@ exports.loginWeapp = async (req, res) => {
     const appid = process.env.WEAPP_APPID
     const secret = process.env.WEAPP_SECRET
     if (!appid || !secret) {
+      if (process.env.NODE_ENV !== 'production') {
+        const userId = normalizeDevUserId('dev-openid')
+        let user = await User.findOne({ userId })
+        if (!user) user = await User.create({ userId })
+
+        try {
+          await ensureDevScenarioTasks()
+        } catch (err) {
+          console.error('seed test tasks error:', err)
+        }
+
+        const token = jwt.sign({ sub: userId }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '15d' })
+        return res.json({ token, userId })
+      }
       return res.status(500).json({ error: 'WeApp credentials not configured' })
     }
 
@@ -26,11 +55,20 @@ exports.loginWeapp = async (req, res) => {
     const { openid /*, session_key, unionid */ } = data
     if (!openid) return res.status(400).json({ error: 'openid missing' })
 
-    let user = await User.findOne({ openid })
-    if (!user) user = await User.create({ openid })
+    const userId = normalizeWxUserId(openid)
+    let user = await User.findOne({ userId })
+    if (!user) user = await User.create({ userId })
 
-    const token = jwt.sign({ sub: openid }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '15d' })
-    res.json({ token, openid })
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        await ensureDevScenarioTasks()
+      } catch (err) {
+        console.error('seed test tasks error:', err)
+      }
+    }
+
+    const token = jwt.sign({ sub: userId }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '15d' })
+    res.json({ token, userId })
   } catch (err) {
     console.error('loginWeapp error:', err)
     res.status(500).json({ error: 'login failed' })
@@ -41,11 +79,11 @@ exports.loginWeapp = async (req, res) => {
 // body: { nickname, avatar }
 exports.updateProfile = async (req, res) => {
   try {
-    const openid = req.user?.openid
-    if (!openid) return res.status(401).json({ error: 'unauthorized' })
+    const userId = req.user?.id
+    if (!userId) return res.status(401).json({ error: 'unauthorized' })
     const { nickname, avatar } = req.body || {}
     const updated = await User.findOneAndUpdate(
-      { openid },
+      { userId },
       { $set: { nickname, avatar } },
       { new: true }
     )
@@ -56,3 +94,36 @@ exports.updateProfile = async (req, res) => {
   }
 }
 
+exports.devLogin = async (req, res) => {
+  try {
+    if (process.env.NODE_ENV === 'production') return res.status(404).json({ error: 'not found' })
+    if (String(process.env.DEV_AUTH_ENABLED || '').toLowerCase() !== 'true') {
+      return res.status(404).json({ error: 'not found' })
+    }
+
+    const configured = process.env.DEV_LOGIN_SECRET
+    if (configured) {
+      const provided = req.headers['x-dev-login-secret']
+      if (provided !== configured) return res.status(401).json({ error: 'unauthorized' })
+    }
+
+    const body = req.body || {}
+    const userId = normalizeDevUserId(body.userId)
+    if (!userId) return res.status(400).json({ error: 'userId is required' })
+
+    let user = await User.findOne({ userId })
+    if (!user) user = await User.create({ userId })
+
+    try {
+      await ensureDevScenarioTasks()
+    } catch (err) {
+      console.error('seed test tasks error:', err)
+    }
+
+    const token = jwt.sign({ sub: userId }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '15d' })
+    return res.json({ token, userId })
+  } catch (err) {
+    console.error('devLogin error:', err)
+    return res.status(500).json({ error: 'dev login failed' })
+  }
+}

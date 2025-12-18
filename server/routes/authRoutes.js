@@ -5,6 +5,6 @@ const authController = require('../controllers/authController')
 
 router.post('/weapp/login', authController.loginWeapp)
 router.post('/weapp/profile', auth, authController.updateProfile)
+router.post('/dev/login', authController.devLogin)
 
 module.exports = router
-
