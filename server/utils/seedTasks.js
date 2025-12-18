@@ -31,131 +31,160 @@ const buildAt = (base, offsetDays, hour, minute) => {
 
 const testPrefix = (title) => `(测试) ${title}`
 
-const buildDailyChallengeSeeds = (day) => {
-  const dayKey = ymd(day)
-  const dueAt = endOfDay(day)
-  const createdAt = startOfDay(day)
-  const startAt = createdAt
+const systemCreatorIdForUser = (userId) => `sys:${String(userId || '').trim()}`
 
-  return [
-    {
-      seedKey: `challenge_${dayKey}_1`,
-      title: testPrefix('风行速练'),
-      detail: '配速 6-7, 跑步 4km, 结束拉伸 10min',
-      icon: '🏃',
-      creatorId: SYSTEM_USER_ID,
-      assigneeId: null,
-      status: 'pending',
-      createdAt,
-      startAt,
-      dueAt,
-      subtasks: [{ title: '完成训练', current: 0, total: 1 }],
-      attributeReward: { type: 'strength', value: 20 },
-    },
-    {
-      seedKey: `challenge_${dayKey}_2`,
-      title: testPrefix('静心冥想'),
-      detail: '专注冥想 45min, 记录 3 个要点',
-      icon: '🧘',
-      creatorId: SYSTEM_USER_ID,
-      assigneeId: null,
-      status: 'pending',
-      createdAt,
-      startAt,
-      dueAt,
-      subtasks: [{ title: '完成冥想', current: 0, total: 1 }],
-      attributeReward: { type: 'wisdom', value: 18 },
-    },
-    {
-      seedKey: `challenge_${dayKey}_3`,
-      title: testPrefix('晨光整理'),
-      detail: '整理桌面 15min, 清空回收站',
-      icon: '🧹',
-      creatorId: SYSTEM_USER_ID,
-      assigneeId: null,
-      status: 'pending',
-      createdAt,
-      startAt,
-      dueAt,
-      subtasks: [{ title: '完成整理', current: 0, total: 1 }],
-      attributeReward: { type: 'wisdom', value: 12 },
-    },
-    {
-      seedKey: `challenge_${dayKey}_4`,
-      title: testPrefix('轻跑热身'),
-      detail: '慢跑 3km, 结束拉伸 8min',
-      icon: '🏃',
-      creatorId: SYSTEM_USER_ID,
-      assigneeId: null,
-      status: 'pending',
-      createdAt,
-      startAt,
-      dueAt,
-      subtasks: [{ title: '完成热身', current: 0, total: 1 }],
-      attributeReward: { type: 'strength', value: 16 },
-    },
-    {
-      seedKey: `challenge_${dayKey}_5`,
-      title: testPrefix('专注阅读'),
-      detail: '阅读 30 页, 写下 3 个收获',
-      icon: '📚',
-      creatorId: SYSTEM_USER_ID,
-      assigneeId: null,
-      status: 'pending',
-      createdAt,
-      startAt,
-      dueAt,
-      subtasks: [{ title: '完成阅读', current: 0, total: 1 }],
-      attributeReward: { type: 'wisdom', value: 14 },
-    },
-    {
-      seedKey: `challenge_${dayKey}_6`,
-      title: testPrefix('灵敏训练'),
-      detail: '跳绳 600 次, 分 3 组完成',
-      icon: '🐾',
-      creatorId: SYSTEM_USER_ID,
-      assigneeId: null,
-      status: 'pending',
-      createdAt,
-      startAt,
-      dueAt,
-      subtasks: [{ title: '完成训练', current: 0, total: 1 }],
-      attributeReward: { type: 'agility', value: 20 },
-    },
-    {
-      seedKey: `challenge_${dayKey}_7`,
-      title: testPrefix('补水计划'),
-      detail: '全天喝水 8 杯, 每杯 250ml',
-      icon: '🚰',
-      creatorId: SYSTEM_USER_ID,
-      assigneeId: null,
-      status: 'pending',
-      createdAt,
-      startAt,
-      dueAt,
-      subtasks: [{ title: '记录补水', current: 0, total: 8 }],
-      attributeReward: { type: 'strength', value: 10 },
-    },
-    {
-      seedKey: `challenge_${dayKey}_8`,
-      title: testPrefix('呼吸训练'),
-      detail: '深呼吸 5min, 记录一次感受',
-      icon: '🫁',
-      creatorId: SYSTEM_USER_ID,
-      assigneeId: null,
-      status: 'pending',
-      createdAt,
-      startAt,
-      dueAt,
-      subtasks: [{ title: '完成训练', current: 0, total: 1 }],
-      attributeReward: { type: 'agility', value: 15 },
-    },
-  ]
+const challengeTemplates = [
+  {
+    id: 't1',
+    title: '【星旅】风行速练',
+    detail: '跑步 4km, 配速 6-7, 结束拉伸 10min',
+    icon: '🏃',
+    reward: { type: 'strength', value: 12 },
+    subtasks: [{ title: '完成训练', total: 1 }],
+  },
+  {
+    id: 't2',
+    title: '【星旅】静心冥想',
+    detail: '冥想 20min, 写下 3 个观察',
+    icon: '🧘',
+    reward: { type: 'wisdom', value: 10 },
+    subtasks: [{ title: '完成冥想', total: 1 }],
+  },
+  {
+    id: 't3',
+    title: '【星旅】晨光整理',
+    detail: '整理桌面 15min, 清空回收站',
+    icon: '🧹',
+    reward: { type: 'wisdom', value: 8 },
+    subtasks: [{ title: '完成整理', total: 1 }],
+  },
+  {
+    id: 't4',
+    title: '【星旅】轻跑热身',
+    detail: '慢跑 3km, 结束拉伸 8min',
+    icon: '🏃',
+    reward: { type: 'strength', value: 10 },
+    subtasks: [{ title: '完成热身', total: 1 }],
+  },
+  {
+    id: 't5',
+    title: '【星旅】专注阅读',
+    detail: '阅读 30 页, 写下 3 个收获',
+    icon: '📚',
+    reward: { type: 'wisdom', value: 10 },
+    subtasks: [{ title: '完成阅读', total: 1 }],
+  },
+  {
+    id: 't6',
+    title: '【星旅】灵敏训练',
+    detail: '跳绳 600 次, 分 3 组完成',
+    icon: '🐾',
+    reward: { type: 'agility', value: 12 },
+    subtasks: [{ title: '完成训练', total: 1 }],
+  },
+  {
+    id: 't7',
+    title: '【星旅】补水计划',
+    detail: '全天喝水 8 杯, 每杯 250ml',
+    icon: '🚰',
+    reward: { type: 'strength', value: 6 },
+    subtasks: [{ title: '记录补水', total: 8 }],
+  },
+  {
+    id: 't8',
+    title: '【星旅】呼吸训练',
+    detail: '深呼吸 5min, 记录一次感受',
+    icon: '🫁',
+    reward: { type: 'agility', value: 8 },
+    subtasks: [{ title: '完成训练', total: 1 }],
+  },
+  {
+    id: 't9',
+    title: '【星旅】星光散步',
+    detail: '散步 30min, 不带耳机, 留意周围声音',
+    icon: '🚶',
+    reward: { type: 'agility', value: 8 },
+    subtasks: [{ title: '完成散步', total: 1 }],
+  },
+  {
+    id: 't10',
+    title: '【星旅】静默收尾',
+    detail: '整理待办, 选 1 件最重要的事写在明日第一行',
+    icon: '✅',
+    reward: { type: 'wisdom', value: 8 },
+    subtasks: [{ title: '完成收尾', total: 1 }],
+  },
+]
+
+const hashSeed = (value) => {
+  const str = String(value || '')
+  let h = 2166136261
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
 }
 
-async function ensureDailyChallengeTasks() {
-  const day = new Date()
-  const seeds = buildDailyChallengeSeeds(day)
+const xorshift32 = (seed) => {
+  let x = seed >>> 0
+  return () => {
+    x ^= x << 13
+    x ^= x >>> 17
+    x ^= x << 5
+    return x >>> 0
+  }
+}
+
+const pickDailyTemplates = (userId, dayKey, count) => {
+  const seed = hashSeed(`${userId}|${dayKey}|challenge`)
+  const next = xorshift32(seed)
+  const pool = [...challengeTemplates]
+  const picked = []
+  const n = Math.max(0, Math.min(count, pool.length))
+  for (let i = 0; i < n; i++) {
+    const idx = next() % pool.length
+    picked.push(pool.splice(idx, 1)[0])
+  }
+  return picked
+}
+
+async function ensureUserChallengeTasks(userId, count = 5) {
+  const now = new Date()
+  const start = startOfDay(now)
+  const end = endOfDay(now)
+  const dayKey = ymd(now)
+  const creatorId = systemCreatorIdForUser(userId)
+
+  await Task.deleteMany({
+    creatorId,
+    $or: [{ dueAt: { $lt: start } }, { dueAt: { $gt: end } }],
+  })
+
+  const existingCount = await Task.countDocuments({
+    creatorId,
+    assigneeId: null,
+    status: 'pending',
+    dueAt: { $gte: start, $lte: end },
+  })
+  if (existingCount > 0) return { inserted: 0 }
+
+  const templates = pickDailyTemplates(userId, dayKey, count)
+  const seeds = templates.map((t) => ({
+    seedKey: `challenge_${dayKey}_${t.id}_${hashSeed(userId)}`,
+    title: t.title,
+    detail: t.detail,
+    icon: t.icon,
+    creatorId,
+    assigneeId: null,
+    status: 'pending',
+    createdAt: start,
+    startAt: start,
+    dueAt: end,
+    subtasks: t.subtasks.map((s) => ({ title: s.title, current: 0, total: s.total })),
+    attributeReward: { type: t.reward.type, value: t.reward.value },
+  }))
+
   const ops = seeds.map((seed) => ({
     updateOne: {
       filter: { seedKey: seed.seedKey },
@@ -252,6 +281,6 @@ async function ensureDevScenarioTasks() {
 }
 
 module.exports = {
-  ensureDailyChallengeTasks,
   ensureDevScenarioTasks,
+  ensureUserChallengeTasks,
 }

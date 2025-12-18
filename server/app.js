@@ -7,7 +7,7 @@ const mongoose = require('mongoose')
 const taskRoutes = require('./routes/taskRoutes')
 const authRoutes = require('./routes/authRoutes')
 const aiRoutes = require('./routes/aiRoutes')
-const { ensureDailyChallengeTasks, ensureDevScenarioTasks } = require('./utils/seedTasks')
+const { ensureDevScenarioTasks } = require('./utils/seedTasks')
 const { migrateUserIds } = require('./utils/migrateLegacyIds')
 const { migrateTaskIds } = require('./utils/migrateLegacyTaskIds')
 const { cleanupLegacyTestTasks } = require('./utils/cleanupDevData')
@@ -66,8 +66,6 @@ const start = async () => {
         if (cleaned.deleted > 0) console.log(`Deleted ${cleaned.deleted} legacy test tasks`)
       }
 
-      const { inserted } = await ensureDailyChallengeTasks()
-      if (inserted > 0) console.log(`Seeded ${inserted} challenge tasks`)
       if (devAuthEnabled) {
         const scenario = await ensureDevScenarioTasks()
         if (scenario.inserted > 0) console.log(`Seeded ${scenario.inserted} dev scenario tasks`)

@@ -1,5 +1,6 @@
 const Task = require('../models/Task')
 const mongoose = require('mongoose')
+const { ensureUserChallengeTasks } = require('../utils/seedTasks')
 
 const TASK_STATUS = ['pending', 'in_progress', 'review_pending', 'completed', 'closed']
 const REWARD_TYPE = ['strength', 'wisdom', 'agility']
@@ -288,13 +289,20 @@ exports.getChallengeTasks = async (req, res) => {
     const userId = ensureAuthorized(req, res)
     if (!userId) return
 
+    try {
+      await ensureUserChallengeTasks(userId, 5)
+    } catch (err) {
+      console.error('ensureUserChallengeTasks error:', err)
+    }
+
     const now = new Date()
     const start = startOfDay(now)
     const end = endOfDay(now)
 
     const tasks = await Task.find({
-      creatorId: SYSTEM_USER_ID,
+      creatorId: `sys:${userId}`,
       status: 'pending',
+      assigneeId: null,
       dueAt: { $gte: start, $lte: end },
     }).sort({ createdAt: 1 })
 
