@@ -80,6 +80,7 @@ const metaText = {
   assignee: '执行人:',
   creator: '发起人:',
   unassigned: '未指派',
+  closeBlocked: '请执行人放弃任务后再关闭',
   restart: '重启任务',
   close: '关闭任务',
   edit: '编辑任务',
@@ -466,7 +467,18 @@ function CollabCard({
         {isClosed ? (
           <ActionButton icon='🚀' label={metaText.restart} onClick={onRestart} />
         ) : (
-          <ActionButton icon='📦' label={metaText.close} ghost onClick={onClose} />
+          <ActionButton
+            icon='📦'
+            label={metaText.close}
+            ghost
+            onClick={() => {
+              if (task.assigneeId) {
+                Taro.showToast({ title: metaText.closeBlocked, icon: 'none' })
+                return
+              }
+              onClose?.()
+            }}
+          />
         )}
       </View>
     </View>

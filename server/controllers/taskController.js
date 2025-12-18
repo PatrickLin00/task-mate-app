@@ -213,6 +213,7 @@ exports.closeTask = async (req, res) => {
 
     if (task.creatorId !== userId) return res.status(403).json({ error: 'forbidden' })
     if (task.status === 'closed') return res.json(buildResponse(task))
+    if (task.assigneeId) return res.status(400).json({ error: '请执行人放弃任务后再关闭' })
 
     const now = new Date()
     const deleteAt = new Date(now.getTime() + CLOSE_RETENTION_DAYS * 24 * 60 * 60 * 1000)
