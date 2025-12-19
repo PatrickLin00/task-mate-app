@@ -802,6 +802,11 @@ export default function TasksPane({
     }
   }
 
+  const refreshTasksWithNotice = async () => {
+    await refreshTasks()
+    Taro.showToast({ title: '数据已刷新', icon: 'none' })
+  }
+
   useEffect(() => {
     if (!isActive) {
       setExpandedTaskId(null)
@@ -1131,7 +1136,7 @@ export default function TasksPane({
       await refreshTasks()
     } catch (err: any) {
       console.error('accept rework error', err)
-      Taro.showToast({ title: err?.message || '接受失败', icon: 'none' })
+      await refreshTasksWithNotice()
     }
   }
 
@@ -1142,7 +1147,7 @@ export default function TasksPane({
       await refreshTasks()
     } catch (err: any) {
       console.error('reject rework error', err)
-      Taro.showToast({ title: err?.message || '拒绝失败', icon: 'none' })
+      await refreshTasksWithNotice()
     }
   }
 
@@ -1153,7 +1158,7 @@ export default function TasksPane({
       await refreshTasks()
     } catch (err: any) {
       console.error('cancel rework error', err)
-      Taro.showToast({ title: err?.message || '撤销失败', icon: 'none' })
+      await refreshTasksWithNotice()
     }
   }
 
