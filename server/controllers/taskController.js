@@ -2,9 +2,17 @@ const Task = require('../models/Task')
 const mongoose = require('mongoose')
 const { ensureUserChallengeTasks } = require('../utils/seedTasks')
 
-const TASK_STATUS = ['pending', 'in_progress', 'review_pending', 'completed', 'closed']
+const TASK_STATUS = [
+  'pending',
+  'in_progress',
+  'review_pending',
+  'pending_confirmation',
+  'completed',
+  'closed',
+  'refactored',
+]
 const REWARD_TYPE = ['strength', 'wisdom', 'agility']
-const ACTIVE_ASSIGNEE_STATUS = ['in_progress', 'review_pending']
+const ACTIVE_ASSIGNEE_STATUS = ['in_progress', 'review_pending', 'pending_confirmation']
 const CLOSE_RETENTION_DAYS = 7
 
 const clamp = (value, min, max) => Math.max(min, Math.min(value, max))
@@ -45,6 +53,18 @@ const parseDueAt = (value) => {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return null
   return d
+}
+
+const areSubtasksEqual = (a = [], b = []) => {
+  if (!Array.isArray(a) || !Array.isArray(b)) return false
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const sa = a[i]
+    const sb = b[i]
+    if ((sa?.title || '').trim() !== (sb?.title || '').trim()) return false
+    if (Number(sa?.total) !== Number(sb?.total)) return false
+  }
+  return true
 }
 
 const normalizeSubtasks = (subtasks) => {
@@ -233,6 +253,168 @@ exports.closeTask = async (req, res) => {
   } catch (error) {
     console.error('closeTask error:', error)
     return res.status(500).json({ error: 'close task failed' })
+  }
+}
+
+exports.reworkTask = async (req, res) => {
+  try {
+    const userId = ensureAuthorized(req, res)
+    if (!userId) return
+
+    const { id } = req.params
+    if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
+
+    const original = await Task.findById(id)
+    if (!original) return res.status(404).json({ error: 'task not found' })
+    if (original.creatorId !== userId) return res.status(403).json({ error: 'forbidden' })
+
+    const body = req.body || {}
+    const title = typeof body.title === 'string' ? body.title.trim() : ''
+    const detail =
+      typeof body.detail === 'string'
+        ? body.detail.trim()
+        : typeof body.description === 'string'
+          ? body.description.trim()
+          : ''
+    const dueAt = parseDueAt(body.dueAt)
+    const subtasks = normalizeSubtasks(body.subtasks)
+    const reward = body.attributeReward
+    const rewardType = reward?.type
+    const rewardValue = reward?.value
+
+    if (!title) return res.status(400).json({ error: 'title is required' })
+    if (!dueAt) return res.status(400).json({ error: 'dueAt is required and must be a valid date' })
+    if (subtasks.length === 0) return res.status(400).json({ error: 'subtasks must be a non-empty array' })
+    if (!REWARD_TYPE.includes(rewardType)) return res.status(400).json({ error: 'attributeReward.type is invalid' })
+    if (typeof rewardValue !== 'number' || !Number.isFinite(rewardValue) || rewardValue <= 0) {
+      return res.status(400).json({ error: 'attributeReward.value must be a positive number' })
+    }
+
+    if (original.previousTaskId && !body.confirmDeletePrevious) {
+      return res.status(409).json({
+        error: 'rework confirmation required',
+        code: 'REWORK_CONFIRM_REQUIRED',
+        previousTaskId: original.previousTaskId,
+      })
+    }
+
+    const isSame =
+      title === original.title &&
+      detail === (original.detail || '') &&
+      Number(dueAt.getTime()) === Number(new Date(original.dueAt).getTime()) &&
+      rewardType === original.attributeReward?.type &&
+      Number(rewardValue) === Number(original.attributeReward?.value) &&
+      areSubtasksEqual(
+        subtasks,
+        (original.subtasks || []).map((s) => ({ title: s.title, total: s.total }))
+      )
+
+    if (isSame) {
+      return res.json({ message: 'no changes', task: buildResponse(original) })
+    }
+
+    if (original.previousTaskId && body.confirmDeletePrevious) {
+      await Task.deleteOne({ _id: original.previousTaskId })
+    }
+
+    const now = new Date()
+    if (!original.originalStatus) original.originalStatus = original.status
+    if (!original.originalStartAt) original.originalStartAt = original.startAt || original.createdAt
+    if (!original.originalDueAt) original.originalDueAt = original.dueAt
+
+    if (!original.assigneeId) {
+      const deleteAt = new Date(now.getTime() + CLOSE_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+      original.closedAt = now
+      original.startAt = now
+      original.dueAt = deleteAt
+      original.status = 'refactored'
+    } else {
+      original.status = 'refactored'
+    }
+    await original.save()
+
+    const newTask = await Task.create({
+      title,
+      detail,
+      dueAt,
+      startAt: now,
+      status: original.assigneeId ? 'pending_confirmation' : 'pending',
+      creatorId: original.creatorId,
+      assigneeId: original.assigneeId || null,
+      icon: body.icon || original.icon,
+      previousTaskId: original._id,
+      subtasks,
+      attributeReward: { type: rewardType, value: rewardValue },
+    })
+
+    return res.status(201).json(buildResponse(newTask))
+  } catch (error) {
+    console.error('reworkTask error:', error)
+    return res.status(500).json({ error: 'rework task failed' })
+  }
+}
+
+exports.acceptReworkTask = async (req, res) => {
+  try {
+    const userId = ensureAuthorized(req, res)
+    if (!userId) return
+
+    const { id } = req.params
+    if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
+
+    const task = await Task.findById(id)
+    if (!task) return res.status(404).json({ error: 'task not found' })
+    if (task.assigneeId !== userId) return res.status(403).json({ error: 'forbidden' })
+    if (task.status !== 'pending_confirmation') {
+      return res.status(400).json({ error: 'task is not pending_confirmation' })
+    }
+
+    task.status = 'in_progress'
+    await task.save()
+
+    return res.json(buildResponse(task))
+  } catch (error) {
+    console.error('acceptReworkTask error:', error)
+    return res.status(500).json({ error: 'accept rework failed' })
+  }
+}
+
+exports.rejectReworkTask = async (req, res) => {
+  try {
+    const userId = ensureAuthorized(req, res)
+    if (!userId) return
+
+    const { id } = req.params
+    if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
+
+    const task = await Task.findById(id)
+    if (!task) return res.status(404).json({ error: 'task not found' })
+    if (task.assigneeId !== userId) return res.status(403).json({ error: 'forbidden' })
+    if (task.status !== 'pending_confirmation') {
+      return res.status(400).json({ error: 'task is not pending_confirmation' })
+    }
+
+    const previousId = task.previousTaskId
+    await Task.deleteOne({ _id: task._id })
+
+    if (previousId) {
+      const previous = await Task.findById(previousId)
+      if (previous && previous.assigneeId === userId && previous.status === 'refactored') {
+        previous.status = previous.originalStatus || 'in_progress'
+        if (previous.originalStartAt) previous.startAt = previous.originalStartAt
+        if (previous.originalDueAt) previous.dueAt = previous.originalDueAt
+        previous.closedAt = null
+        previous.originalStatus = null
+        previous.originalStartAt = null
+        previous.originalDueAt = null
+        await previous.save()
+      }
+    }
+
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('rejectReworkTask error:', error)
+    return res.status(500).json({ error: 'reject rework failed' })
   }
 }
 

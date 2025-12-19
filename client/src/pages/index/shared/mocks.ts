@@ -2,7 +2,14 @@ export type Attr = '智慧' | '力量' | '敏捷'
 
 export type Difficulty = '简单' | '中等' | '困难'
 
-export type TaskStatus = 'pending' | 'in_progress' | 'review_pending' | 'completed' | 'closed'
+export type TaskStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'review_pending'
+  | 'pending_confirmation'
+  | 'completed'
+  | 'closed'
+  | 'refactored'
 
 export type Subtask = {
   id: string
@@ -27,6 +34,7 @@ type TaskBase = {
   status: TaskStatus
   creatorId: string
   assigneeId?: string | null
+  previousTaskId?: string | null
 }
 
 export type RoadTask = TaskBase & {
@@ -576,8 +584,10 @@ export const statusLabel: Record<TaskStatus, string> = {
   pending: '待接取',
   in_progress: '待完成',
   review_pending: '待检视',
+  pending_confirmation: '待确认',
   completed: '已完成',
   closed: '已关闭',
+  refactored: '已重构',
 }
 
 export const quietLines = [

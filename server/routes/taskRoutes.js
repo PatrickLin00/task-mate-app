@@ -16,5 +16,8 @@ router.patch('/:id/complete', auth, taskController.completeTask)
 router.patch('/:id/abandon', auth, taskController.abandonTask)
 router.patch('/:id/close', auth, taskController.closeTask)
 router.patch('/:id/restart', auth, taskController.restartTask)
+router.post('/:id/rework', auth, taskController.reworkTask)
+router.post('/:id/rework/accept', auth, taskController.acceptReworkTask)
+router.post('/:id/rework/reject', auth, taskController.rejectReworkTask)
 
 module.exports = router

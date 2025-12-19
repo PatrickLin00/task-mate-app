@@ -21,16 +21,17 @@ const taskSchema = new mongoose.Schema(
     originalStartAt: { type: Date, default: null },
     originalStatus: {
       type: String,
-      enum: ['pending', 'in_progress', 'review_pending', 'completed', 'closed'],
+      enum: ['pending', 'in_progress', 'review_pending', 'pending_confirmation', 'completed', 'closed', 'refactored'],
       default: null,
     },
     status: {
       type: String,
-      enum: ['pending', 'in_progress', 'review_pending', 'completed', 'closed'],
+      enum: ['pending', 'in_progress', 'review_pending', 'pending_confirmation', 'completed', 'closed', 'refactored'],
       default: 'pending',
     },
     creatorId: { type: String, default: 'sys:system', trim: true },
     assigneeId: { type: String, default: null, trim: true },
+    previousTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null, index: true },
     subtasks: { type: [subtaskSchema], default: [] },
     attributeReward: {
       type: {

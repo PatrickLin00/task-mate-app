@@ -6,7 +6,14 @@ declare const API_BASE_URL: string
 const BASE_URL: string =
   typeof API_BASE_URL !== 'undefined' && API_BASE_URL ? API_BASE_URL : 'http://localhost:3000'
 
-export type TaskStatus = 'pending' | 'in_progress' | 'review_pending' | 'completed' | 'closed'
+export type TaskStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'review_pending'
+  | 'pending_confirmation'
+  | 'completed'
+  | 'closed'
+  | 'refactored'
 export type RewardType = 'strength' | 'wisdom' | 'agility'
 
 export type Subtask = { _id?: string; title: string; current: number; total: number }
@@ -25,6 +32,7 @@ export type Task = {
   status: TaskStatus
   creatorId: string
   assigneeId?: string | null
+  previousTaskId?: string | null
   attributeReward: { type: RewardType; value: number }
   computedProgress?: { current: number; total: number }
   createdAt?: string
@@ -177,6 +185,45 @@ export async function getTask(id: string) {
   return requestJson<Task>({
     url: `${BASE_URL}/api/tasks/${id}`,
     method: 'GET',
+    header: await authHeaderAsync(),
+  })
+}
+
+export async function reworkTask(
+  id: string,
+  payload: {
+    title: string
+    detail?: string
+    dueAt: string
+    subtasks: { title: string; total: number; current?: number }[]
+    attributeReward: { type: RewardType; value: number }
+    icon?: string
+    confirmDeletePrevious?: boolean
+  }
+) {
+  return requestJson<Task>({
+    url: `${BASE_URL}/api/tasks/${id}/rework`,
+    method: 'POST',
+    data: {
+      ...payload,
+      subtasks: payload.subtasks.map((s) => ({ current: 0, ...s })),
+    },
+    header: { 'Content-Type': 'application/json', ...(await authHeaderAsync()) },
+  })
+}
+
+export async function acceptReworkTask(id: string) {
+  return requestJson<Task>({
+    url: `${BASE_URL}/api/tasks/${id}/rework/accept`,
+    method: 'POST',
+    header: await authHeaderAsync(),
+  })
+}
+
+export async function rejectReworkTask(id: string) {
+  return requestJson<{ ok: boolean }>({
+    url: `${BASE_URL}/api/tasks/${id}/rework/reject`,
+    method: 'POST',
     header: await authHeaderAsync(),
   })
 }

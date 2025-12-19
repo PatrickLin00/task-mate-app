@@ -1,4 +1,4 @@
-import { View, Text, Swiper, SwiperItem, ScrollView, Button, Input, Textarea, Slider, Picker } from '@tarojs/components'
+import { View, Text, Swiper, SwiperItem, ScrollView, Button, Input, Textarea, Slider, Picker, Image } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import '../tasks.scss'
@@ -21,12 +21,16 @@ import {
   type ArchivedTask,
 } from '../shared/mocks'
 import {
+  acceptReworkTask,
   closeTask,
   createTask,
   fetchArchivedTasks,
   fetchCollabTasks,
   fetchMissionTasks,
+  getTask,
+  rejectReworkTask,
   restartTask,
+  reworkTask,
   type Task,
 } from '@/services/api'
 
@@ -49,8 +53,10 @@ const statusTone: Record<TaskStatus | 'archived', 'blue' | 'gray' | 'green'> = {
   pending: 'gray',
   in_progress: 'blue',
   review_pending: 'blue',
+  pending_confirmation: 'blue',
   completed: 'green',
   closed: 'gray',
+  refactored: 'gray',
   archived: 'green',
 }
 
@@ -58,8 +64,10 @@ const statusIcon: Record<TaskStatus | 'archived', string> = {
   pending: '⏳',
   in_progress: '🚀',
   review_pending: '📑',
+  pending_confirmation: '⏳',
   completed: '✅',
   closed: '📦',
+  refactored: '♻️',
   archived: '📂',
 }
 
@@ -83,7 +91,7 @@ const metaText = {
   closeBlocked: '请执行人放弃任务后再关闭',
   restart: '重启任务',
   close: '关闭任务',
-  edit: '编辑任务',
+  edit: '重构奇遇',
   assign: '指派任务',
 } as const
 
@@ -110,6 +118,23 @@ function AttributeTag({ attr, points }: { attr: Attr; points: number }) {
       <Text className='tag-text'>
         {attr}+{points}
       </Text>
+    </View>
+  )
+}
+
+const historyIcon =
+  'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAyNCAyNCcgZmlsbD0nbm9uZSc+PHBhdGggZD0nTTMgMTJhOSA5IDAgMSAwIDMtNi43JyBzdHJva2U9JyM3YzNhZWQnIHN0cm9rZS13aWR0aD0nMS44JyBzdHJva2UtbGluZWNhcD0ncm91bmQnIHN0cm9rZS1saW5lam9pbj0ncm91bmQnLz48cGF0aCBkPSdNMyA1djRoNCcgc3Ryb2tlPScjN2MzYWVkJyBzdHJva2Utd2lkdGg9JzEuOCcgc3Ryb2tlLWxpbmVjYXA9J3JvdW5kJyBzdHJva2UtbGluZWpvaW49J3JvdW5kJy8+PHBhdGggZD0nTTEyIDd2NWwzIDInIHN0cm9rZT0nIzdjM2FlZCcgc3Ryb2tlLXdpZHRoPScxLjgnIHN0cm9rZS1saW5lY2FwPSdyb3VuZCcgc3Ryb2tlLWxpbmVqb2luPSdyb3VuZCcvPjwvc3ZnPg=='
+
+function HistoryButton({ onClick }: { onClick?: () => void }) {
+  return (
+    <View
+      className='history-btn'
+      onClick={(e) => {
+        e.stopPropagation?.()
+        onClick?.()
+      }}
+    >
+      <Image className='history-icon' src={historyIcon} mode='aspectFit' />
     </View>
   )
 }
@@ -191,6 +216,9 @@ function MissionCard({
   onToggleExpand,
   onReview,
   onCollect,
+  onAccept,
+  onReject,
+  onHistory,
 }: {
   task: MissionTask
   expanded: boolean
@@ -204,6 +232,9 @@ function MissionCard({
   onToggleExpand?: (taskId: string) => void
   onReview?: () => void
   onCollect?: () => void
+  onAccept?: () => void
+  onReject?: () => void
+  onHistory?: (taskId?: string | null) => void
 }) {
   const tone = attrTone[task.attr]
   const hasSubtasks = subtasks?.length > 0
@@ -226,12 +257,17 @@ function MissionCard({
       <View className='card-click-area'>
         <View className='card-main'>
           <View className='card-head'>
-            <View className='title-wrap'>
-              <Text className='task-icon'>{task.icon}</Text>
-              <Text className='task-title'>{task.title}</Text>
-            </View>
+          <View className='title-wrap'>
+            <Text className='task-icon'>{task.icon}</Text>
+            <Text className='task-title'>{task.title}</Text>
+          </View>
+          <View className='attr-wrap'>
+            {task.previousTaskId ? (
+              <HistoryButton onClick={() => onHistory?.(task.previousTaskId)} />
+            ) : null}
             <AttributeTag attr={task.attr} points={task.points} />
           </View>
+        </View>
           <Text className='task-desc'>{task.detail}</Text>
           <ProgressBar current={progress.current} total={progress.total} />
           <View className='card-meta'>
@@ -338,6 +374,11 @@ function MissionCard({
             <ActionButton icon='📝' label='提交检视' onClick={onReview} />
             <ActionButton icon='✖' label='取消变更' ghost onClick={onCancel} />
           </>
+        ) : task.status === 'pending_confirmation' ? (
+          <>
+            <ActionButton icon='✅' label='接受奇遇' onClick={onAccept} />
+            <ActionButton icon='✖' label='拒绝奇遇' ghost onClick={onReject} />
+          </>
         ) : (
           <>
             <ActionButton icon='🔁' label='更新进度' onClick={onEdit} />
@@ -358,6 +399,7 @@ function CollabCard({
   onAssign,
   onClose,
   onRestart,
+  onHistory,
 }: {
   task: CollabTask
   expanded: boolean
@@ -366,6 +408,7 @@ function CollabCard({
   onAssign?: () => void
   onClose?: () => void
   onRestart?: () => void
+  onHistory?: (taskId?: string | null) => void
 }) {
   const tone = attrTone[task.attr]
   const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
@@ -388,7 +431,12 @@ function CollabCard({
             <Text className='task-title'>{task.title}</Text>
           </View>
         </View>
-        <AttributeTag attr={task.attr} points={task.points} />
+        <View className='attr-wrap'>
+          {task.previousTaskId ? (
+            <HistoryButton onClick={() => onHistory?.(task.previousTaskId)} />
+          ) : null}
+          <AttributeTag attr={task.attr} points={task.points} />
+        </View>
       </View>
       <Text className='task-desc'>{task.detail}</Text>
       <ProgressBar current={progress.current} total={progress.total} />
@@ -507,6 +555,81 @@ function ArchivedCard({ task }: { task: ArchivedTask }) {
   )
 }
 
+function HistoryCard({ task }: { task: CollabTask }) {
+  const tone = attrTone[task.attr]
+  const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
+  const progress = task.progress || summarizeSubtasksProgress(task.subtasks || [])
+  const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain || ''
+  const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel || ''
+  const startIso = task.startAt || task.createdAt
+  const startLabel = formatStartDate(startIso)
+  const assigneeLabel = task.assigneeId || metaText.unassigned
+  const creatorLabel = task.creatorId || ''
+
+  return (
+    <View className={`task-card tone-${tone}`}>
+      <View className='card-head'>
+        <View className='title-stack'>
+          <StatusBadge status={task.status as TaskStatus} />
+          <View className='title-wrap'>
+            <Text className='task-icon'>{task.icon}</Text>
+            <Text className='task-title'>{task.title}</Text>
+          </View>
+        </View>
+        <AttributeTag attr={task.attr} points={task.points} />
+      </View>
+      <Text className='task-desc'>{task.detail}</Text>
+      <ProgressBar current={progress.current} total={progress.total} />
+      <View className='card-meta'>
+        <View className='meta-item'>
+          <Text>{metaIcon.remain}</Text>
+          <Text>{metaText.remain}</Text>
+          <Text>{remainLabel}</Text>
+        </View>
+        <View className='meta-item'>
+          <Text>{metaIcon.due}</Text>
+          <Text>{metaText.due}</Text>
+          <Text>{dueLabel}</Text>
+        </View>
+        <View className='meta-item meta-start'>
+          <Text>{metaIcon.start}</Text>
+          <Text>{metaText.start}</Text>
+          <Text>{startLabel}</Text>
+        </View>
+        <View className='meta-item'>
+          <Text>{metaIcon.assignee}</Text>
+          <Text>{metaText.assignee}</Text>
+          <Text>{assigneeLabel}</Text>
+          <Text>{metaText.creator}</Text>
+          <Text>{creatorLabel}</Text>
+        </View>
+      </View>
+      {hasSubtasks && (
+        <View className='subtask-group open'>
+          <View className='subtask-group-inner' onTouchMove={(e) => e.stopPropagation()}>
+            {task.subtasks?.map((s) => {
+              const percent = calcPercent(s.current, s.total)
+              return (
+                <View className='subtask-item' key={s.id}>
+                  <View className='subtask-row'>
+                    <Text className='subtask-title'>{s.title}</Text>
+                    <Text className='subtask-count'>
+                      {s.current}/{s.total}
+                    </Text>
+                  </View>
+                  <View className='subtask-track'>
+                    <View className='subtask-fill' style={{ width: percent + '%' }} />
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+        </View>
+      )}
+    </View>
+  )
+}
+
 export default function TasksPane({
   isActive = true,
   onSwipeToHome,
@@ -524,6 +647,20 @@ export default function TasksPane({
   const [archivedTasks, setArchivedTasks] = useState<ArchivedTask[]>(archivedSeed)
   const [loadingRemote, setLoadingRemote] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [reworkTaskId, setReworkTaskId] = useState<string | null>(null)
+  const [historyTask, setHistoryTask] = useState<CollabTask | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [confirmReworkOpen, setConfirmReworkOpen] = useState(false)
+  const [confirmPayload, setConfirmPayload] = useState<{
+    taskId: string
+    payload: {
+      title: string
+      detail?: string
+      dueAt: string
+      subtasks: { title: string; total: number; current?: number }[]
+      attributeReward: { type: 'wisdom' | 'strength' | 'agility'; value: number }
+    }
+  } | null>(null)
   const [creating, setCreating] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [oneLine, setOneLine] = useState('')
@@ -550,6 +687,7 @@ export default function TasksPane({
   const hourOptions = useMemo(() => Array.from({ length: 24 }, (_, i) => i), [])
   const minuteOptions = useMemo(() => Array.from({ length: 60 }, (_, i) => i), [])
   const dueDisplay = `${dueYear}年${pad2(dueMonth)}月${pad2(dueDay)}日 ${pad2(dueHour)}:${pad2(dueMinute)}`
+  const historyVisible = historyLoading || !!historyTask
 
   useEffect(() => {
     const maxDay = new Date(dueYear, dueMonth, 0).getDate()
@@ -618,6 +756,42 @@ export default function TasksPane({
     }
   }
 
+  const applyTaskLists = (mission: Task[], collab: Task[], archived: Task[]) => {
+    setMissionTasks(
+      mission
+        .map((t) => mapApiTaskToMission(t))
+        .filter((t) => t.status !== 'refactored')
+    )
+    setCollabTasks(
+      collab
+        .map((t) => mapApiTaskToCollab(t))
+        .filter((t) => t.status !== 'refactored')
+    )
+    setArchivedTasks(
+      archived
+        .map((t) => mapApiTaskToArchived(t))
+        .filter((t) => t.status !== 'refactored')
+    )
+  }
+
+  const refreshTasks = async (shouldCancel?: () => boolean) => {
+    if (loadingRemote) return
+    setLoadingRemote(true)
+    try {
+      const [mission, collab, archived] = await Promise.all([
+        fetchMissionTasks(),
+        fetchCollabTasks(),
+        fetchArchivedTasks(),
+      ])
+      if (shouldCancel?.()) return
+      applyTaskLists(mission, collab, archived)
+    } catch (err: any) {
+      console.error('load tasks error', err)
+    } finally {
+      if (!shouldCancel?.()) setLoadingRemote(false)
+    }
+  }
+
   useEffect(() => {
     if (!isActive) {
       setExpandedTaskId(null)
@@ -630,29 +804,9 @@ export default function TasksPane({
 
   useEffect(() => {
     if (!isActive) return
-
     let cancelled = false
-    const run = async () => {
-      if (loadingRemote) return
-      setLoadingRemote(true)
-      try {
-        const [mission, collab, archived] = await Promise.all([
-          fetchMissionTasks(),
-          fetchCollabTasks(),
-          fetchArchivedTasks(),
-        ])
-        if (cancelled) return
-        setMissionTasks(mission.map((t) => mapApiTaskToMission(t)))
-        setCollabTasks(collab.map((t) => mapApiTaskToCollab(t)))
-        setArchivedTasks(archived.map((t) => mapApiTaskToArchived(t)))
-      } catch (err: any) {
-        console.error('load tasks error', err)
-      } finally {
-        if (!cancelled) setLoadingRemote(false)
-      }
-    }
-
-    void run()
+    const cancelCheck = () => cancelled
+    void refreshTasks(cancelCheck)
     return () => {
       cancelled = true
     }
@@ -765,22 +919,6 @@ export default function TasksPane({
   []
 )
 
-  const resetForm = () => {
-    setTitleInput('')
-    setDescInput('')
-    setAttrReward('')
-    setAttrValue('')
-    setDueYear(today.getFullYear())
-    setDueMonth(today.getMonth() + 1)
-    setDueDay(today.getDate())
-    setDueHour(23)
-    setDueMinute(59)
-    setSubtasks([
-      { title: '', total: 1 },
-      { title: '', total: 1 },
-    ])
-  }
-
   const handleAddSubtask = () => {
     setSubtasks((prev) => [...prev, { title: '', total: 1 }])
   }
@@ -854,6 +992,7 @@ export default function TasksPane({
       attr,
       points: task.attributeReward.value,
       createdAt,
+      previousTaskId: task.previousTaskId ?? null,
       status: task.status,
       creatorId: task.creatorId,
       assigneeId: task.assigneeId ?? null,
@@ -890,6 +1029,7 @@ export default function TasksPane({
       attr,
       points: task.attributeReward.value,
       createdAt,
+      previousTaskId: task.previousTaskId ?? null,
       startAt: task.startAt || undefined,
       closedAt: task.closedAt ?? null,
       originalDueAt: task.originalDueAt ?? null,
@@ -916,12 +1056,136 @@ export default function TasksPane({
       attr,
       points: task.attributeReward.value,
       createdAt,
+      previousTaskId: task.previousTaskId ?? null,
       status: task.status,
       creatorId: task.creatorId,
       assigneeId: task.assigneeId ?? null,
       icon: task.icon || '✨',
       finishedAgo: formatAgo(finishedAt),
     }
+  }
+
+  const resetForm = (clearLine = true) => {
+    if (clearLine) setOneLine('')
+    setTitleInput('')
+    setDescInput('')
+    setAttrReward('')
+    setAttrValue('')
+    setDueYear(today.getFullYear())
+    setDueMonth(today.getMonth() + 1)
+    setDueDay(today.getDate())
+    setDueHour(23)
+    setDueMinute(59)
+    setSubtasks([
+      { title: '', total: 1 },
+      { title: '', total: 1 },
+    ])
+    setReworkTaskId(null)
+  }
+
+  const mapAttrToReward = (attr: Attr): 'wisdom' | 'strength' | 'agility' => {
+    if (attr === '智慧') return 'wisdom'
+    if (attr === '力量') return 'strength'
+    return 'agility'
+  }
+
+  const fillFormFromTask = (task: CollabTask) => {
+    setTitleInput(task.title || '')
+    setDescInput(task.detail || '')
+    setAttrReward(mapAttrToReward(task.attr))
+    setAttrValue(String(task.points || ''))
+    const due = task.dueAt ? new Date(task.dueAt) : new Date()
+    if (!Number.isNaN(due.getTime())) {
+      setDueYear(due.getFullYear())
+      setDueMonth(due.getMonth() + 1)
+      setDueDay(due.getDate())
+      setDueHour(due.getHours())
+      setDueMinute(due.getMinutes())
+    }
+    if (task.subtasks && task.subtasks.length > 0) {
+      setSubtasks(task.subtasks.map((s) => ({ title: s.title, total: s.total || 1 })))
+    }
+  }
+
+  const handleStartRework = (task: CollabTask) => {
+    resetForm(false)
+    setReworkTaskId(task.id)
+    fillFormFromTask(task)
+    setShowCreate(true)
+  }
+
+  const handleAcceptRework = async (taskId: string) => {
+    try {
+      await acceptReworkTask(taskId)
+      Taro.showToast({ title: '已接受', icon: 'success' })
+      await refreshTasks()
+    } catch (err: any) {
+      console.error('accept rework error', err)
+      Taro.showToast({ title: err?.message || '接受失败', icon: 'none' })
+    }
+  }
+
+  const handleRejectRework = async (taskId: string) => {
+    try {
+      await rejectReworkTask(taskId)
+      Taro.showToast({ title: '已拒绝', icon: 'success' })
+      await refreshTasks()
+    } catch (err: any) {
+      console.error('reject rework error', err)
+      Taro.showToast({ title: err?.message || '拒绝失败', icon: 'none' })
+    }
+  }
+
+  const handleOpenHistory = async (taskId?: string | null) => {
+    if (!taskId) return
+    setHistoryLoading(true)
+    try {
+      const task = await getTask(taskId)
+      setHistoryTask(mapApiTaskToCollab(task))
+    } catch (err: any) {
+      console.error('load history error', err)
+      Taro.showToast({ title: err?.message || '加载失败', icon: 'none' })
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const handleCloseHistory = () => {
+    setHistoryTask(null)
+    setHistoryLoading(false)
+  }
+
+  const handleConfirmRework = async () => {
+    if (!confirmPayload) return
+    setCreating(true)
+    try {
+      const created = await reworkTask(confirmPayload.taskId, {
+        ...confirmPayload.payload,
+        confirmDeletePrevious: true,
+      })
+      const actualTask: any = (created as any).task ? (created as any).task : created
+      const mapped = mapApiTaskToCollab(actualTask as Task)
+      setCollabTasks((prev) => [
+        mapped,
+        ...prev.filter((t) => t.id !== confirmPayload.taskId && t.status !== 'refactored'),
+      ])
+      setActiveTab('collab')
+      Taro.showToast({ title: '奇遇已重构', icon: 'success' })
+      setShowCreate(false)
+      resetForm()
+      setConfirmReworkOpen(false)
+      setConfirmPayload(null)
+    } catch (err: any) {
+      console.error('confirm rework error', err)
+      Taro.showToast({ title: err?.message || '重构失败', icon: 'none' })
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleCancelConfirmRework = () => {
+    setConfirmReworkOpen(false)
+    setConfirmPayload(null)
   }
 
   const handleSubmitCreate = async () => {
@@ -951,17 +1215,61 @@ export default function TasksPane({
 
     setCreating(true)
     try {
-      const created = await createTask({
-        title,
-        detail: descInput.trim(),
-        dueAt: selectedDueAt(),
-        subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
-        attributeReward: { type: attrReward, value: rewardValNum },
-      })
-      const mapped = mapApiTaskToCollab(created)
-      setCollabTasks((prev) => [mapped, ...prev])
-      setActiveTab('collab')
-      Taro.showToast({ title: '奇遇已发起', icon: 'success' })
+      if (reworkTaskId) {
+        let created: any
+        try {
+          created = await reworkTask(reworkTaskId, {
+            title,
+            detail: descInput.trim(),
+            dueAt: selectedDueAt(),
+            subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
+            attributeReward: { type: attrReward, value: rewardValNum },
+          })
+        } catch (err: any) {
+          const data = err?.data
+          if (data?.code === 'REWORK_CONFIRM_REQUIRED') {
+            setConfirmPayload({
+              taskId: reworkTaskId,
+              payload: {
+                title,
+                detail: descInput.trim(),
+                dueAt: selectedDueAt(),
+                subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
+                attributeReward: { type: attrReward, value: rewardValNum },
+              },
+            })
+            setConfirmReworkOpen(true)
+            setCreating(false)
+            return
+          } else {
+            throw err
+          }
+        }
+        const actualTask: any = (created as any).task ? (created as any).task : created
+        if ((created as any).message === 'no changes') {
+          Taro.showToast({ title: '未检测到改动，已取消', icon: 'none' })
+        } else {
+          const mapped = mapApiTaskToCollab(actualTask as Task)
+          setCollabTasks((prev) => [
+            mapped,
+            ...prev.filter((t) => t.id !== reworkTaskId && t.status !== 'refactored'),
+          ])
+          setActiveTab('collab')
+          Taro.showToast({ title: '奇遇已重构', icon: 'success' })
+        }
+      } else {
+        const created = await createTask({
+          title,
+          detail: descInput.trim(),
+          dueAt: selectedDueAt(),
+          subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
+          attributeReward: { type: attrReward, value: rewardValNum },
+        })
+        const mapped = mapApiTaskToCollab(created)
+        setCollabTasks((prev) => [mapped, ...prev])
+        setActiveTab('collab')
+        Taro.showToast({ title: '奇遇已发起', icon: 'success' })
+      }
       setShowCreate(false)
       resetForm()
     } catch (err: any) {
@@ -1046,12 +1354,14 @@ export default function TasksPane({
               }}
             >
               <View className='task-list'>
-                {missionTasks.map((task) => {
-                  const editing = editingTaskId === task.id
-                  const subsDraft = (editing && draftSubtasks[task.id]) || task.subtasks
-                  const progress = editing
-                    ? summarizeSubtasksProgress(subsDraft || [])
-                    : task.progress
+                {missionTasks
+                  .filter((t) => t.status !== 'refactored')
+                  .map((task) => {
+                    const editing = editingTaskId === task.id
+                    const subsDraft = (editing && draftSubtasks[task.id]) || task.subtasks
+                    const progress = editing
+                      ? summarizeSubtasksProgress(subsDraft || [])
+                      : task.progress
                   return (
                     <MissionCard
                       key={task.id}
@@ -1067,6 +1377,9 @@ export default function TasksPane({
                       onToggleExpand={(id) => handleToggleCard(id, !!task.subtasks?.length)}
                       onReview={() => showPlaceholder('提交检视待接入')}
                       onCollect={() => showPlaceholder('放弃任务待接入')}
+                      onAccept={() => handleAcceptRework(task.id)}
+                      onReject={() => handleRejectRework(task.id)}
+                      onHistory={handleOpenHistory}
                     />
                   )
                 })}
@@ -1077,24 +1390,27 @@ export default function TasksPane({
           <SwiperItem>
             <ScrollView scrollY scrollWithAnimation enableFlex className='task-scroll'>
               <View className='task-list'>
-                {collabTasks.map((task) => {
-                  const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
-                  return (
-                     <CollabCard
-                       key={task.id}
-                       task={task}
-                       expanded={expandedCollabId === task.id}
-                       onToggleExpand={(id) => handleToggleCollabCard(id, hasSubtasks)}
-                       onEdit={() => showPlaceholder('编辑任务待接入')}
-                       onAssign={() => showPlaceholder('指派任务待接入')}
-                       onClose={() => void handleCloseCollabTask(task.id)}
-                       onRestart={() => void handleRestartCollabTask(task.id)}
-                     />
-                   )
-                 })}
-               </View>
-             </ScrollView>
-          </SwiperItem>
+                {collabTasks
+                  .filter((t) => t.status !== 'refactored')
+                  .map((task) => {
+                    const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
+                    return (
+                      <CollabCard
+                        key={task.id}
+                        task={task}
+                        expanded={expandedCollabId === task.id}
+                        onToggleExpand={(id) => handleToggleCollabCard(id, hasSubtasks)}
+                        onEdit={() => handleStartRework(task)}
+                        onAssign={() => showPlaceholder('指派任务待接入')}
+                        onClose={() => void handleCloseCollabTask(task.id)}
+                        onRestart={() => void handleRestartCollabTask(task.id)}
+                        onHistory={handleOpenHistory}
+                      />
+                    )
+                  })}
+                </View>
+              </ScrollView>
+           </SwiperItem>
 
           <SwiperItem>
             <ScrollView scrollY scrollWithAnimation enableFlex className='task-scroll'>
@@ -1108,12 +1424,25 @@ export default function TasksPane({
         </Swiper>
       </View>
 
-      <Button className='fab' hoverClass='pressing' onClick={() => setShowCreate(true)}>
+      <Button
+        className='fab'
+        hoverClass='pressing'
+        onClick={() => {
+          resetForm()
+          setShowCreate(true)
+        }}
+      >
         发起奇遇
       </Button>
 
       {showCreate && (
-        <View className='task-modal-overlay' onClick={() => setShowCreate(false)}>
+        <View
+          className='task-modal-overlay'
+          onClick={() => {
+            setShowCreate(false)
+            resetForm()
+          }}
+        >
           <View
             className='task-modal card'
             onClick={(e) => {
@@ -1122,36 +1451,44 @@ export default function TasksPane({
           >
             <View className='modal-head'>
               <View>
-                <Text className='modal-title'>发起一场新的奇遇</Text>
-                <Text className='modal-sub'>写下你想完成的事，其余交给星辰来编织</Text>
+                <Text className='modal-title'>{reworkTaskId ? '重构奇遇' : '发起一场新的奇遇'}</Text>
+                <Text className='modal-sub'>{reworkTaskId ? '奇遇重塑，命途再启' : '写下你想完成的事，其余交给星辰来编织'}</Text>
               </View>
-              <Text className='modal-close' onClick={() => setShowCreate(false)}>
+              <Text
+                className='modal-close'
+                onClick={() => {
+                  setShowCreate(false)
+                  resetForm()
+                }}
+              >
                 ✕
               </Text>
             </View>
 
             <View className='modal-body'>
-              <View className='modal-section bubble soft'>
-                <View className='section-head-row'>
-                  <Text className='modal-label'>一句话奇遇</Text>
-                  <Text className='modal-hint'>先随便描述一下，星旅帮你织成完整奇遇</Text>
-                </View>
-                <View className='one-line-col'>
-                  <View className='one-line-row'>
-                    <Input
-                      className='modal-input'
-                      value={oneLine}
-                      onInput={(e) => setOneLine(e.detail.value)}
-                      placeholder='例如：每天睡前冥想 10 分钟，坚持一周'
-                    />
-                    <View className='one-line-actions'>
-                      <Button className='ai-btn' loading={generating} onClick={handleGenerate}>
-                        ✨ 由星旅生成
-                      </Button>
+              {!reworkTaskId && (
+                <View className='modal-section bubble soft'>
+                  <View className='section-head-row'>
+                    <Text className='modal-label'>一句话奇遇</Text>
+                    <Text className='modal-hint'>先随便描述一下，星旅帮你织成完整奇遇</Text>
+                  </View>
+                  <View className='one-line-col'>
+                    <View className='one-line-row'>
+                      <Input
+                        className='modal-input'
+                        value={oneLine}
+                        onInput={(e) => setOneLine(e.detail.value)}
+                        placeholder='例如：每天睡前冥想 10 分钟，坚持一周'
+                      />
+                      <View className='one-line-actions'>
+                        <Button className='ai-btn' loading={generating} onClick={handleGenerate}>
+                          ✨ 由星旅生成
+                        </Button>
+                      </View>
                     </View>
                   </View>
                 </View>
-              </View>
+              )}
 
               <View className='modal-section bubble soft'>
                 <Text className='modal-label'>详细设定</Text>
@@ -1279,11 +1616,79 @@ export default function TasksPane({
             </View>
 
             <View className='modal-actions'>
-              <Button className='modal-cancel' onClick={() => setShowCreate(false)}>
+              <Button
+                className='modal-cancel'
+                onClick={() => {
+                  setShowCreate(false)
+                  resetForm()
+                }}
+              >
                 取消
               </Button>
               <Button className='modal-submit' loading={creating} onClick={handleSubmitCreate}>
-                发起奇遇
+                {reworkTaskId ? '发起重构' : '发起奇遇'}
+              </Button>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {historyVisible && (
+        <View className='task-modal-overlay' onClick={handleCloseHistory}>
+          <View
+            className='task-modal card'
+            onClick={(e) => {
+              e.stopPropagation()
+            }}
+          >
+            <View className='modal-head'>
+              <View>
+                <Text className='modal-title'>上一版奇遇</Text>
+                <Text className='modal-sub'>仅供查看，不可编辑</Text>
+              </View>
+              <Text className='modal-close' onClick={handleCloseHistory}>
+                ✕
+              </Text>
+            </View>
+            <View className='modal-body'>
+              {historyLoading || !historyTask ? (
+                <Text className='modal-hint'>加载中...</Text>
+              ) : (
+                <HistoryCard task={historyTask} />
+              )}
+            </View>
+          </View>
+        </View>
+      )}
+
+      {confirmReworkOpen && (
+        <View className='task-modal-overlay' onClick={handleCancelConfirmRework}>
+          <View
+            className='task-modal card confirm-modal'
+            onClick={(e) => {
+              e.stopPropagation()
+            }}
+          >
+            <View className='modal-head'>
+              <View>
+                <Text className='modal-title'>确认重构</Text>
+                <Text className='modal-sub'>将删除更早版本的内容</Text>
+              </View>
+              <Text className='modal-close' onClick={handleCancelConfirmRework}>
+                ✕
+              </Text>
+            </View>
+            <View className='modal-body'>
+              <Text className='modal-hint'>
+                该任务已存在上一版。继续重构会删除更早版本，是否确认？
+              </Text>
+            </View>
+            <View className='modal-actions'>
+              <Button className='modal-cancel' onClick={handleCancelConfirmRework}>
+                取消
+              </Button>
+              <Button className='modal-submit' loading={creating} onClick={handleConfirmRework}>
+                确认删除
               </Button>
             </View>
           </View>

@@ -179,6 +179,40 @@
   font-weight: 600;
 }
 
+.attr-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #7c3aed;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.history-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(76, 29, 149, 0.15);
+}
+
+.history-btn svg {
+  display: block;
+}
+
+.history-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .attr-tag {
   display: inline-flex;
   align-items: center;
@@ -917,4 +951,23 @@
   font-size: 16px;
   box-shadow: 0 16px 26px rgba(99, 102, 241, 0.26);
   flex: 1;
+}
+
+.confirm-modal .modal-title {
+  font-size: 24px;
+}
+
+.confirm-modal .modal-sub {
+  font-size: 16px;
+}
+
+.confirm-modal .modal-hint {
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.confirm-modal .modal-cancel,
+.confirm-modal .modal-submit {
+  font-size: 17px;
+  padding: 10px 14px;
 }
