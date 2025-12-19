@@ -1241,34 +1241,27 @@ export default function TasksPane({
     setCreating(true)
     try {
       if (reworkTaskId) {
-        let created: any
-        try {
-          created = await reworkTask(reworkTaskId, {
-            title,
-            detail: descInput.trim(),
-            dueAt: selectedDueAt(),
-            subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
-            attributeReward: { type: attrReward, value: rewardValNum },
+        const created: any = await reworkTask(reworkTaskId, {
+          title,
+          detail: descInput.trim(),
+          dueAt: selectedDueAt(),
+          subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
+          attributeReward: { type: attrReward, value: rewardValNum },
+        })
+        if (created?.code === 'REWORK_CONFIRM_REQUIRED') {
+          setConfirmPayload({
+            taskId: reworkTaskId,
+            payload: {
+              title,
+              detail: descInput.trim(),
+              dueAt: selectedDueAt(),
+              subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
+              attributeReward: { type: attrReward, value: rewardValNum },
+            },
           })
-        } catch (err: any) {
-          const data = err?.data
-          if (data?.code === 'REWORK_CONFIRM_REQUIRED') {
-            setConfirmPayload({
-              taskId: reworkTaskId,
-              payload: {
-                title,
-                detail: descInput.trim(),
-                dueAt: selectedDueAt(),
-                subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
-                attributeReward: { type: attrReward, value: rewardValNum },
-              },
-            })
-            setConfirmReworkOpen(true)
-            setCreating(false)
-            return
-          } else {
-            throw err
-          }
+          setConfirmReworkOpen(true)
+          setCreating(false)
+          return
         }
         const actualTask: any = (created as any).task ? (created as any).task : created
         if ((created as any).message === 'no changes') {
@@ -1698,7 +1691,6 @@ export default function TasksPane({
             <View className='modal-head'>
               <View>
                 <Text className='modal-title'>确认重构</Text>
-                <Text className='modal-sub'>更早版本将在对方确认后删除</Text>
               </View>
               <Text className='modal-close' onClick={handleCancelConfirmRework}>
                 ✕
@@ -1706,7 +1698,7 @@ export default function TasksPane({
             </View>
             <View className='modal-body'>
               <Text className='modal-hint'>
-                该任务已存在上一版。继续重构后，当执行人确认新版本时将删除更早版本，是否确认？
+                重构后会删除更早版本。是否继续？
               </Text>
             </View>
             <View className='modal-actions'>
@@ -1714,7 +1706,7 @@ export default function TasksPane({
                 取消
               </Button>
               <Button className='modal-submit' loading={creating} onClick={handleConfirmRework}>
-                确认删除
+                确认重构
               </Button>
             </View>
           </View>

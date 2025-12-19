@@ -189,6 +189,11 @@ export async function getTask(id: string) {
   })
 }
 
+export type ReworkConfirmResponse = {
+  code: 'REWORK_CONFIRM_REQUIRED'
+  previousTaskId?: string | null
+}
+
 export async function reworkTask(
   id: string,
   payload: {
@@ -201,7 +206,7 @@ export async function reworkTask(
     confirmDeletePrevious?: boolean
   }
 ) {
-  return requestJson<Task>({
+  return requestJson<Task | ReworkConfirmResponse>({
     url: `${BASE_URL}/api/tasks/${id}/rework`,
     method: 'POST',
     data: {
