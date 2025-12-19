@@ -228,6 +228,14 @@ export async function rejectReworkTask(id: string) {
   })
 }
 
+export async function cancelReworkTask(id: string) {
+  return requestJson<{ ok: boolean }>({
+    url: `${BASE_URL}/api/tasks/${id}/rework/cancel`,
+    method: 'POST',
+    header: await authHeaderAsync(),
+  })
+}
+
 export async function generateTaskSuggestion(prompt: string) {
   return requestJson<{
     title: string

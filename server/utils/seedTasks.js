@@ -266,17 +266,20 @@ const buildDevScenarioSeeds = () => {
 }
 
 async function ensureDevScenarioTasks() {
+  const allowUpsert = String(process.env.DEV_RESET_TEST_TASKS || '').toLowerCase() === 'true'
   const seeds = buildDevScenarioSeeds()
   const ops = seeds.map((seed) => ({
     updateOne: {
-      filter: { seedKey: seed.seedKey },
+      filter: allowUpsert
+        ? { seedKey: seed.seedKey }
+        : { seedKey: seed.seedKey, status: { $ne: 'refactored' }, previousTaskId: null },
       update: { $set: seed },
-      upsert: true,
+      upsert: allowUpsert,
     },
   }))
 
   const res = await Task.bulkWrite(ops, { ordered: false })
-  const inserted = res.upsertedCount || 0
+  const inserted = allowUpsert ? res.upsertedCount || 0 : 0
   return { inserted }
 }
 

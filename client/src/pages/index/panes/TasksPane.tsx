@@ -22,6 +22,7 @@ import {
 } from '../shared/mocks'
 import {
   acceptReworkTask,
+  cancelReworkTask,
   closeTask,
   createTask,
   fetchArchivedTasks,
@@ -93,6 +94,7 @@ const metaText = {
   close: '关闭任务',
   edit: '重构奇遇',
   assign: '指派任务',
+  reworkCancel: '撤销修改',
 } as const
 
 type SubtaskInput = { title: string; total: number }
@@ -400,6 +402,7 @@ function CollabCard({
   onClose,
   onRestart,
   onHistory,
+  onCancelRework,
 }: {
   task: CollabTask
   expanded: boolean
@@ -409,6 +412,7 @@ function CollabCard({
   onClose?: () => void
   onRestart?: () => void
   onHistory?: (taskId?: string | null) => void
+  onCancelRework?: () => void
 }) {
   const tone = attrTone[task.attr]
   const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
@@ -510,23 +514,29 @@ function CollabCard({
         onTouchStart={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
       >
-        <ActionButton icon='✏' label={metaText.edit} disabled={isClosed} onClick={onEdit} />
-        <ActionButton icon='🧭' label={metaText.assign} disabled={isClosed} onClick={onAssign} />
-        {isClosed ? (
-          <ActionButton icon='🚀' label={metaText.restart} onClick={onRestart} />
+        {task.status === 'pending_confirmation' ? (
+          <ActionButton icon='↩️' label={metaText.reworkCancel} onClick={onCancelRework} />
         ) : (
-          <ActionButton
-            icon='📦'
-            label={metaText.close}
-            ghost
-            onClick={() => {
-              if (task.assigneeId) {
-                Taro.showToast({ title: metaText.closeBlocked, icon: 'none' })
-                return
-              }
-              onClose?.()
-            }}
-          />
+          <>
+            <ActionButton icon='✏' label={metaText.edit} disabled={isClosed} onClick={onEdit} />
+            <ActionButton icon='🧭' label={metaText.assign} disabled={isClosed} onClick={onAssign} />
+            {isClosed ? (
+              <ActionButton icon='🚀' label={metaText.restart} onClick={onRestart} />
+            ) : (
+              <ActionButton
+                icon='📦'
+                label={metaText.close}
+                ghost
+                onClick={() => {
+                  if (task.assigneeId) {
+                    Taro.showToast({ title: metaText.closeBlocked, icon: 'none' })
+                    return
+                  }
+                  onClose?.()
+                }}
+              />
+            )}
+          </>
         )}
       </View>
     </View>
@@ -1136,6 +1146,17 @@ export default function TasksPane({
     }
   }
 
+  const handleCancelRework = async (taskId: string) => {
+    try {
+      await cancelReworkTask(taskId)
+      Taro.showToast({ title: '已撤销', icon: 'success' })
+      await refreshTasks()
+    } catch (err: any) {
+      console.error('cancel rework error', err)
+      Taro.showToast({ title: err?.message || '撤销失败', icon: 'none' })
+    }
+  }
+
   const handleOpenHistory = async (taskId?: string | null) => {
     if (!taskId) return
     setHistoryLoading(true)
@@ -1164,13 +1185,17 @@ export default function TasksPane({
         confirmDeletePrevious: true,
       })
       const actualTask: any = (created as any).task ? (created as any).task : created
-      const mapped = mapApiTaskToCollab(actualTask as Task)
-      setCollabTasks((prev) => [
-        mapped,
-        ...prev.filter((t) => t.id !== confirmPayload.taskId && t.status !== 'refactored'),
-      ])
-      setActiveTab('collab')
-      Taro.showToast({ title: '奇遇已重构', icon: 'success' })
+      if ((created as any).message === 'no changes') {
+        Taro.showToast({ title: '未检测到改动，已取消', icon: 'none' })
+      } else {
+        const mapped = mapApiTaskToCollab(actualTask as Task)
+        setCollabTasks((prev) => [
+          mapped,
+          ...prev.filter((t) => t.id !== confirmPayload.taskId && t.status !== 'refactored'),
+        ])
+        setActiveTab('collab')
+        Taro.showToast({ title: '奇遇已重构', icon: 'success' })
+      }
       setShowCreate(false)
       resetForm()
       setConfirmReworkOpen(false)
@@ -1405,6 +1430,7 @@ export default function TasksPane({
                         onClose={() => void handleCloseCollabTask(task.id)}
                         onRestart={() => void handleRestartCollabTask(task.id)}
                         onHistory={handleOpenHistory}
+                        onCancelRework={() => void handleCancelRework(task.id)}
                       />
                     )
                   })}
@@ -1672,7 +1698,7 @@ export default function TasksPane({
             <View className='modal-head'>
               <View>
                 <Text className='modal-title'>确认重构</Text>
-                <Text className='modal-sub'>将删除更早版本的内容</Text>
+                <Text className='modal-sub'>更早版本将在对方确认后删除</Text>
               </View>
               <Text className='modal-close' onClick={handleCancelConfirmRework}>
                 ✕
@@ -1680,7 +1706,7 @@ export default function TasksPane({
             </View>
             <View className='modal-body'>
               <Text className='modal-hint'>
-                该任务已存在上一版。继续重构会删除更早版本，是否确认？
+                该任务已存在上一版。继续重构后，当执行人确认新版本时将删除更早版本，是否确认？
               </Text>
             </View>
             <View className='modal-actions'>

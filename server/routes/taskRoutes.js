@@ -19,5 +19,6 @@ router.patch('/:id/restart', auth, taskController.restartTask)
 router.post('/:id/rework', auth, taskController.reworkTask)
 router.post('/:id/rework/accept', auth, taskController.acceptReworkTask)
 router.post('/:id/rework/reject', auth, taskController.rejectReworkTask)
+router.post('/:id/rework/cancel', auth, taskController.cancelReworkTask)
 
 module.exports = router

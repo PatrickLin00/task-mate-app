@@ -55,6 +55,9 @@ const parseDueAt = (value) => {
   return d
 }
 
+const fetchReworkedIds = async () =>
+  Task.distinct('previousTaskId', { previousTaskId: { $ne: null } })
+
 const areSubtasksEqual = (a = [], b = []) => {
   if (!Array.isArray(a) || !Array.isArray(b)) return false
   if (a.length !== b.length) return false
@@ -191,9 +194,11 @@ exports.getMissionTasks = async (req, res) => {
     const userId = ensureAuthorized(req, res)
     if (!userId) return
 
+    const reworkedIds = await fetchReworkedIds()
     const tasks = await Task.find({
       assigneeId: userId,
       status: { $in: ACTIVE_ASSIGNEE_STATUS },
+      _id: reworkedIds.length > 0 ? { $nin: reworkedIds } : undefined,
     }).sort({ dueAt: 1, createdAt: -1 })
 
     return res.json(tasks.map((t) => buildResponse(t)))
@@ -209,10 +214,12 @@ exports.getCollabTasks = async (req, res) => {
     if (!userId) return
 
     const now = new Date()
+    const reworkedIds = await fetchReworkedIds()
     const tasks = await Task.find({
       creatorId: userId,
-      status: { $ne: 'completed' },
+      status: { $nin: ['completed', 'refactored'] },
       $or: [{ status: { $ne: 'closed' } }, { dueAt: { $gte: now } }],
+      _id: reworkedIds.length > 0 ? { $nin: reworkedIds } : undefined,
     }).sort({ dueAt: 1, createdAt: -1 })
 
     return res.json(tasks.map((t) => buildResponse(t)))
@@ -313,24 +320,23 @@ exports.reworkTask = async (req, res) => {
       return res.json({ message: 'no changes', task: buildResponse(original) })
     }
 
-    if (original.previousTaskId && body.confirmDeletePrevious) {
-      await Task.deleteOne({ _id: original.previousTaskId })
-    }
-
     const now = new Date()
-    if (!original.originalStatus) original.originalStatus = original.status
-    if (!original.originalStartAt) original.originalStartAt = original.startAt || original.createdAt
-    if (!original.originalDueAt) original.originalDueAt = original.dueAt
+    const originalStatus = original.originalStatus || original.status
+    const originalStartAt = original.originalStartAt || original.startAt || original.createdAt
+    const originalDueAt = original.originalDueAt || original.dueAt
+
+    original.status = 'refactored'
+    original.originalStatus = originalStatus
+    original.originalStartAt = originalStartAt
+    original.originalDueAt = originalDueAt
 
     if (!original.assigneeId) {
       const deleteAt = new Date(now.getTime() + CLOSE_RETENTION_DAYS * 24 * 60 * 60 * 1000)
       original.closedAt = now
       original.startAt = now
       original.dueAt = deleteAt
-      original.status = 'refactored'
-    } else {
-      original.status = 'refactored'
     }
+
     await original.save()
 
     const newTask = await Task.create({
@@ -371,6 +377,20 @@ exports.acceptReworkTask = async (req, res) => {
 
     task.status = 'in_progress'
     await task.save()
+
+    if (task.previousTaskId) {
+      const previous = await Task.findById(task.previousTaskId)
+      if (previous) {
+        if (!previous.originalStatus) previous.originalStatus = previous.status
+        if (!previous.originalStartAt) previous.originalStartAt = previous.startAt || previous.createdAt
+        if (!previous.originalDueAt) previous.originalDueAt = previous.dueAt
+        previous.status = 'refactored'
+        await previous.save()
+        if (previous.previousTaskId) {
+          await Task.deleteOne({ _id: previous.previousTaskId })
+        }
+      }
+    }
 
     return res.json(buildResponse(task))
   } catch (error) {
@@ -415,6 +435,45 @@ exports.rejectReworkTask = async (req, res) => {
   } catch (error) {
     console.error('rejectReworkTask error:', error)
     return res.status(500).json({ error: 'reject rework failed' })
+  }
+}
+
+exports.cancelReworkTask = async (req, res) => {
+  try {
+    const userId = ensureAuthorized(req, res)
+    if (!userId) return
+
+    const { id } = req.params
+    if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
+
+    const task = await Task.findById(id)
+    if (!task) return res.status(404).json({ error: 'task not found' })
+    if (task.creatorId !== userId) return res.status(403).json({ error: 'forbidden' })
+    if (task.status !== 'pending_confirmation') {
+      return res.status(400).json({ error: 'task is not pending_confirmation' })
+    }
+
+    const previousId = task.previousTaskId
+    await Task.deleteOne({ _id: task._id })
+
+    if (previousId) {
+      const previous = await Task.findById(previousId)
+      if (previous && previous.creatorId === userId && previous.status === 'refactored') {
+        previous.status = 'in_progress'
+        if (previous.originalStartAt) previous.startAt = previous.originalStartAt
+        if (previous.originalDueAt) previous.dueAt = previous.originalDueAt
+        previous.closedAt = null
+        previous.originalStatus = null
+        previous.originalStartAt = null
+        previous.originalDueAt = null
+        await previous.save()
+      }
+    }
+
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('cancelReworkTask error:', error)
+    return res.status(500).json({ error: 'cancel rework failed' })
   }
 }
 
@@ -504,9 +563,11 @@ exports.getTodayTasks = async (req, res) => {
     const start = startOfDay(now)
     const end = endOfDay(now)
 
+    const reworkedIds = await fetchReworkedIds()
     const base = await Task.find({
       assigneeId: userId,
       status: { $in: ACTIVE_ASSIGNEE_STATUS },
+      _id: reworkedIds.length > 0 ? { $nin: reworkedIds } : undefined,
     }).sort({ dueAt: 1, createdAt: -1 })
 
     const overdue = base.filter((t) => t.dueAt && t.dueAt < start)
