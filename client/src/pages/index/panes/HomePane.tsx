@@ -17,7 +17,7 @@ import {
   humanizeRemain,
   formatDueLabel,
 } from '../shared/mocks'
-import { fetchChallengeTasks, fetchTodayTasks, type Task } from '@/services/api'
+import { abandonTask, fetchChallengeTasks, fetchTodayTasks, patchProgress, type Task } from '@/services/api'
 
 const attrList: Attr[] = ['智慧', '力量', '敏捷']
 const attrToneHome: Record<Attr, 'blue' | 'red' | 'yellow'> = {
@@ -164,16 +164,51 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
     setDialogDraft((prev) => prev.map((s) => (s.id === id ? { ...s, current: val } : s)))
   }
 
-  const handleDialogSubmit = () => {
+  const handleDialogSubmit = async () => {
     if (!modalTask || dialogDraft.length === 0) return
-    const progress = summarizeSubtasksProgress(dialogDraft)
-    setModalTask({ ...modalTask, subtasks: dialogDraft, progress })
-    setDialogEditing(false)
+    try {
+      for (let i = 0; i < dialogDraft.length; i += 1) {
+        await patchProgress(modalTask.id, { subtaskIndex: i, current: dialogDraft[i].current })
+      }
+      const progress = summarizeSubtasksProgress(dialogDraft)
+      const nextTask = { ...modalTask, subtasks: dialogDraft, progress }
+      setModalTask(nextTask)
+      setTodayTasks((prev) => prev.map((t) => (t.id === nextTask.id ? nextTask : t)))
+      Taro.showToast({ title: '已提交', icon: 'success' })
+    } catch (err) {
+      console.error('update progress error', err)
+      await refreshHomeTasks(true)
+    } finally {
+      setDialogEditing(false)
+      setDialogDraft([])
+    }
   }
 
   const handleDialogCancel = () => {
     setDialogEditing(false)
     setDialogDraft([])
+  }
+
+  const handleDialogAbandon = async () => {
+    if (!modalTask) return
+    const result = await Taro.showModal({
+      title: '放弃任务',
+      content: '确认放弃该任务吗？',
+      confirmText: '确认放弃',
+      cancelText: '取消',
+    })
+    if (!result.confirm) return
+    try {
+      await abandonTask(modalTask.id)
+      Taro.showToast({ title: '已放弃', icon: 'success' })
+      setModalTask(null)
+      setDialogEditing(false)
+      setDialogDraft([])
+      await refreshHomeTasks()
+    } catch (err) {
+      console.error('abandon task error', err)
+      await refreshHomeTasks(true)
+    }
   }
 
   const dialogSubtasks = dialogEditing && dialogDraft.length > 0 ? dialogDraft : modalTask?.subtasks
@@ -184,6 +219,24 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
   const dialogRemain = modalTask?.dueAt ? humanizeRemain(modalTask.dueAt) : modalTask?.remain
   const dialogDueLabel = modalTask?.dueAt ? formatDueLabel(modalTask.dueAt) : modalTask?.due
   const dialogStartLabel = modalTask?.createdAt ? formatStartDate(modalTask.createdAt) : undefined
+
+  const refreshHomeTasks = async (showNotice = false, shouldCancel?: () => boolean) => {
+    try {
+      const [todayRes, challenge] = await Promise.all([fetchTodayTasks(), fetchChallengeTasks()])
+      if (shouldCancel?.()) return
+      setDueTodayCount(todayRes.dueTodayCount || 0)
+      setTodayTasks((todayRes.tasks || []).map((t) => mapApiTaskToRoad(t)))
+      setFeedTasks((challenge || []).map((t) => mapApiTaskToRoad(t)))
+      if (showNotice) {
+        Taro.showToast({ title: '数据已刷新', icon: 'none' })
+      }
+    } catch (err) {
+      console.error('load home tasks error', err)
+      if (showNotice) {
+        Taro.showToast({ title: '数据已刷新', icon: 'none' })
+      }
+    }
+  }
 
   // Auto close the dialog when the pane becomes inactive.
   useEffect(() => {
@@ -198,18 +251,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
     if (!isActive) return
 
     let cancelled = false
-    const run = async () => {
-      try {
-        const [todayRes, challenge] = await Promise.all([fetchTodayTasks(), fetchChallengeTasks()])
-        if (cancelled) return
-        setDueTodayCount(todayRes.dueTodayCount || 0)
-        setTodayTasks((todayRes.tasks || []).map((t) => mapApiTaskToRoad(t)))
-        setFeedTasks((challenge || []).map((t) => mapApiTaskToRoad(t)))
-      } catch (err) {
-        console.error('load home tasks error', err)
-      }
-    }
-    void run()
+    void refreshHomeTasks(false, () => cancelled)
     return () => {
       cancelled = true
     }
@@ -514,7 +556,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
                     hoverStartTime={0}
                     hoverStayTime={120}
                     hoverStopPropagation
-                    onClick={() => handlePlaceholder('放弃任务待接入')}
+                    onClick={handleDialogAbandon}
                   >
                     <Text className='action-icon'>📥</Text>
                     <Text>放弃任务</Text>

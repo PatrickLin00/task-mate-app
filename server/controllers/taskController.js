@@ -252,7 +252,6 @@ exports.closeTask = async (req, res) => {
 
     if (task.creatorId !== userId) return res.status(403).json({ error: 'forbidden' })
     if (task.status === 'closed') return res.json(buildResponse(task))
-    if (task.assigneeId) return res.status(400).json({ error: '请执行人放弃任务后再关闭' })
 
     const now = new Date()
     const deleteAt = new Date(now.getTime() + CLOSE_RETENTION_DAYS * 24 * 60 * 60 * 1000)
@@ -260,6 +259,11 @@ exports.closeTask = async (req, res) => {
     task.originalDueAt = task.dueAt
     task.originalStartAt = task.startAt || task.createdAt
     task.originalStatus = task.status
+
+    if (task.assigneeId) {
+      // TODO: notify assignee about closure (subscription message).
+      task.assigneeId = null
+    }
 
     task.closedAt = now
     task.startAt = now
@@ -271,6 +275,27 @@ exports.closeTask = async (req, res) => {
   } catch (error) {
     console.error('closeTask error:', error)
     return res.status(500).json({ error: 'close task failed' })
+  }
+}
+
+exports.deleteTask = async (req, res) => {
+  try {
+    const userId = ensureAuthorized(req, res)
+    if (!userId) return
+
+    const { id } = req.params
+    if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
+    const task = await Task.findById(id)
+    if (!task) return res.status(404).json({ error: 'task not found' })
+
+    if (task.creatorId !== userId) return res.status(403).json({ error: 'forbidden' })
+    if (task.assigneeId) return res.status(400).json({ error: 'task has assignee' })
+
+    await Task.deleteOne({ _id: task._id })
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('deleteTask error:', error)
+    return res.status(500).json({ error: 'delete task failed' })
   }
 }
 

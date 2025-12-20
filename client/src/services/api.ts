@@ -181,6 +181,14 @@ export async function restartTask(id: string) {
   })
 }
 
+export async function deleteTask(id: string) {
+  return requestJson<{ ok: boolean }>({
+    url: `${BASE_URL}/api/tasks/${id}`,
+    method: 'DELETE',
+    header: await authHeaderAsync(),
+  })
+}
+
 export async function getTask(id: string) {
   return requestJson<Task>({
     url: `${BASE_URL}/api/tasks/${id}`,

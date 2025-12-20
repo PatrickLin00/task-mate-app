@@ -25,10 +25,13 @@ import {
   cancelReworkTask,
   closeTask,
   createTask,
+  abandonTask,
+  deleteTask,
   fetchArchivedTasks,
   fetchCollabTasks,
   fetchMissionTasks,
   getTask,
+  patchProgress,
   rejectReworkTask,
   restartTask,
   reworkTask,
@@ -92,6 +95,7 @@ const metaText = {
   closeBlocked: '请执行人放弃任务后再关闭',
   restart: '重启任务',
   close: '关闭任务',
+  delete: '删除任务',
   edit: '重构奇遇',
   assign: '指派任务',
   reworkCancel: '撤销修改',
@@ -403,6 +407,7 @@ function CollabCard({
   onRestart,
   onHistory,
   onCancelRework,
+  onDelete,
 }: {
   task: CollabTask
   expanded: boolean
@@ -413,6 +418,7 @@ function CollabCard({
   onRestart?: () => void
   onHistory?: (taskId?: string | null) => void
   onCancelRework?: () => void
+  onDelete?: () => void
 }) {
   const tone = attrTone[task.attr]
   const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
@@ -517,26 +523,18 @@ function CollabCard({
         {task.status === 'pending_confirmation' ? (
           <ActionButton icon='↩️' label={metaText.reworkCancel} onClick={onCancelRework} />
         ) : (
-          <>
-            <ActionButton icon='✏' label={metaText.edit} disabled={isClosed} onClick={onEdit} />
-            <ActionButton icon='🧭' label={metaText.assign} disabled={isClosed} onClick={onAssign} />
-            {isClosed ? (
+          isClosed ? (
+            <>
+              <ActionButton icon='🗑️' label={metaText.delete} ghost onClick={onDelete} />
               <ActionButton icon='🚀' label={metaText.restart} onClick={onRestart} />
-            ) : (
-              <ActionButton
-                icon='📦'
-                label={metaText.close}
-                ghost
-                onClick={() => {
-                  if (task.assigneeId) {
-                    Taro.showToast({ title: metaText.closeBlocked, icon: 'none' })
-                    return
-                  }
-                  onClose?.()
-                }}
-              />
-            )}
-          </>
+            </>
+          ) : (
+            <>
+              <ActionButton icon='✏' label={metaText.edit} onClick={onEdit} />
+              <ActionButton icon='🧭' label={metaText.assign} onClick={onAssign} />
+              <ActionButton icon='📦' label={metaText.close} ghost onClick={onClose} />
+            </>
+          )
         )}
       </View>
     </View>
@@ -878,6 +876,42 @@ export default function TasksPane({
     }
   }
 
+  const handleDeleteCollabTask = async (taskId: string) => {
+    const result = await Taro.showModal({
+      title: metaText.delete,
+      content: '确认删除该任务吗？',
+      confirmText: '确认删除',
+      cancelText: '取消',
+    })
+    if (!result.confirm) return
+    try {
+      await deleteTask(taskId)
+      setCollabTasks((prev) => prev.filter((t) => t.id !== taskId))
+      Taro.showToast({ title: '已删除', icon: 'success' })
+    } catch (err: any) {
+      console.error('delete task error', err)
+      await refreshTasksWithNotice()
+    }
+  }
+
+  const handleAbandonTask = async (taskId: string) => {
+    const result = await Taro.showModal({
+      title: '放弃任务',
+      content: '确认放弃该任务吗？',
+      confirmText: '确认放弃',
+      cancelText: '取消',
+    })
+    if (!result.confirm) return
+    try {
+      await abandonTask(taskId)
+      Taro.showToast({ title: '已放弃', icon: 'success' })
+      await refreshTasks()
+    } catch (err: any) {
+      console.error('abandon task error', err)
+      await refreshTasksWithNotice()
+    }
+  }
+
   const startEditing = (task: MissionTask) => {
     if (!task.subtasks?.length) return
     setExpandedTaskId(task.id)
@@ -907,22 +941,32 @@ export default function TasksPane({
     })
   }
 
-  const handleSubmitEditing = () => {
+  const handleSubmitEditing = async () => {
     if (!editingTaskId) return
     const draft = draftSubtasks[editingTaskId]
     if (!draft) return
-    const progress = summarizeSubtasksProgress(draft)
-    setMissionTasks((prev) =>
-      prev.map((t) =>
-        t.id === editingTaskId ? { ...t, subtasks: draft, progress } : t
+    try {
+      for (let i = 0; i < draft.length; i += 1) {
+        await patchProgress(editingTaskId, { subtaskIndex: i, current: draft[i].current })
+      }
+      const progress = summarizeSubtasksProgress(draft)
+      setMissionTasks((prev) =>
+        prev.map((t) =>
+          t.id === editingTaskId ? { ...t, subtasks: draft, progress } : t
+        )
       )
-    )
-    setEditingTaskId(null)
-    setDraftSubtasks((prev) => {
-      const next = { ...prev }
-      delete next[editingTaskId]
-      return next
-    })
+      Taro.showToast({ title: '已提交', icon: 'success' })
+    } catch (err: any) {
+      console.error('update progress error', err)
+      await refreshTasksWithNotice()
+    } finally {
+      setEditingTaskId(null)
+      setDraftSubtasks((prev) => {
+        const next = { ...prev }
+        delete next[editingTaskId]
+        return next
+      })
+    }
   }
 
   const rewardOptions = useMemo(
@@ -1399,7 +1443,7 @@ export default function TasksPane({
                       onEdit={() => startEditing(task)}
                       onToggleExpand={(id) => handleToggleCard(id, !!task.subtasks?.length)}
                       onReview={() => showPlaceholder('提交检视待接入')}
-                      onCollect={() => showPlaceholder('放弃任务待接入')}
+                      onCollect={() => void handleAbandonTask(task.id)}
                       onAccept={() => handleAcceptRework(task.id)}
                       onReject={() => handleRejectRework(task.id)}
                       onHistory={handleOpenHistory}
@@ -1429,6 +1473,7 @@ export default function TasksPane({
                         onRestart={() => void handleRestartCollabTask(task.id)}
                         onHistory={handleOpenHistory}
                         onCancelRework={() => void handleCancelRework(task.id)}
+                        onDelete={() => void handleDeleteCollabTask(task.id)}
                       />
                     )
                   })}
