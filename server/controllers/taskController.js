@@ -266,6 +266,7 @@ exports.closeTask = async (req, res) => {
     }
 
     task.closedAt = now
+    task.deleteAt = deleteAt
     task.startAt = now
     task.dueAt = deleteAt
     task.status = 'closed'
@@ -368,13 +369,7 @@ exports.reworkTask = async (req, res) => {
     original.originalStatus = originalStatus
     original.originalStartAt = originalStartAt
     original.originalDueAt = originalDueAt
-
-    if (!original.assigneeId) {
-      const deleteAt = new Date(now.getTime() + CLOSE_RETENTION_DAYS * 24 * 60 * 60 * 1000)
-      original.closedAt = now
-      original.startAt = now
-      original.dueAt = deleteAt
-    }
+    original.deleteAt = null
 
     await original.save()
 
@@ -471,6 +466,7 @@ exports.rejectReworkTask = async (req, res) => {
     task.originalDueAt = task.dueAt
     task.assigneeId = null
     task.closedAt = now
+    task.deleteAt = deleteAt
     task.startAt = now
     task.dueAt = deleteAt
     task.status = 'closed'
@@ -541,6 +537,7 @@ exports.restartTask = async (req, res) => {
     task.status = task.originalStatus && TASK_STATUS.includes(task.originalStatus) ? task.originalStatus : 'in_progress'
 
     task.closedAt = null
+    task.deleteAt = null
     task.originalDueAt = null
     task.originalStartAt = null
     task.originalStatus = null
@@ -596,6 +593,36 @@ exports.getChallengeTasks = async (req, res) => {
   } catch (error) {
     console.error('getChallengeTasks error:', error)
     return res.status(500).json({ error: 'get challenge tasks failed' })
+  }
+}
+
+exports.acceptChallengeTask = async (req, res) => {
+  try {
+    const userId = ensureAuthorized(req, res)
+    if (!userId) return
+
+    const { id } = req.params
+    if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
+
+    const task = await Task.findById(id)
+    if (!task) return res.status(404).json({ error: 'task not found' })
+
+    const expectedCreator = `sys:${userId}`
+    if (task.creatorId !== expectedCreator) return res.status(403).json({ error: 'forbidden' })
+    if (task.assigneeId) return res.status(400).json({ error: 'task already assigned' })
+    if (task.status !== 'pending') return res.status(400).json({ error: 'task is not pending' })
+
+    task.assigneeId = userId
+    task.status = 'in_progress'
+    if (!task.deleteAt && task.dueAt) {
+      task.deleteAt = task.dueAt
+    }
+    await task.save()
+
+    return res.json(buildResponse(task))
+  } catch (error) {
+    console.error('acceptChallengeTask error:', error)
+    return res.status(500).json({ error: 'accept challenge failed' })
   }
 }
 

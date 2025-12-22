@@ -114,6 +114,14 @@ export async function fetchChallengeTasks() {
   })
 }
 
+export async function acceptChallengeTask(id: string) {
+  return requestJson<Task>({
+    url: `${BASE_URL}/api/tasks/challenge/${id}/accept`,
+    method: 'POST',
+    header: await authHeaderAsync(),
+  })
+}
+
 export async function fetchTodayTasks() {
   return requestJson<TodayTasksResponse>({
     url: `${BASE_URL}/api/tasks/today`,

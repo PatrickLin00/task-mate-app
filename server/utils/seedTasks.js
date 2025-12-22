@@ -161,34 +161,43 @@ async function ensureUserChallengeTasks(userId, count = 5) {
     $or: [{ dueAt: { $lt: start } }, { dueAt: { $gt: end } }],
   })
 
-  const existingCount = await Task.countDocuments({
-    creatorId,
-    assigneeId: null,
-    status: 'pending',
-    dueAt: { $gte: start, $lte: end },
-  })
-  if (existingCount > 0) return { inserted: 0 }
+  await Task.updateMany(
+    { creatorId, dueAt: { $gte: start, $lte: end }, seedKey: { $regex: '^challenge_' }, deleteAt: null },
+    { $set: { deleteAt: end } }
+  )
 
-  const templates = pickDailyTemplates(userId, dayKey, count)
-  const seeds = templates.map((t) => ({
-    seedKey: `challenge_${dayKey}_${t.id}_${hashSeed(userId)}`,
-    title: t.title,
-    detail: t.detail,
-    icon: t.icon,
+  const existing = await Task.find({
     creatorId,
-    assigneeId: null,
-    status: 'pending',
-    createdAt: start,
-    startAt: start,
-    dueAt: end,
-    subtasks: t.subtasks.map((s) => ({ title: s.title, current: 0, total: s.total })),
-    attributeReward: { type: t.reward.type, value: t.reward.value },
-  }))
+    dueAt: { $gte: start, $lte: end },
+  }).select('seedKey').lean()
+  if (existing.length >= count) return { inserted: 0 }
+
+  const existingSeeds = new Set(existing.map((t) => t.seedKey).filter(Boolean))
+  const templates = pickDailyTemplates(userId, dayKey, count)
+  const seeds = templates
+    .map((t) => ({
+      seedKey: `challenge_${dayKey}_${t.id}_${hashSeed(userId)}`,
+      title: t.title,
+      detail: t.detail,
+      icon: t.icon,
+      creatorId,
+      assigneeId: null,
+      status: 'pending',
+      createdAt: start,
+      startAt: start,
+      dueAt: end,
+      deleteAt: end,
+      subtasks: t.subtasks.map((s) => ({ title: s.title, current: 0, total: s.total })),
+      attributeReward: { type: t.reward.type, value: t.reward.value },
+    }))
+    .filter((seed) => !existingSeeds.has(seed.seedKey))
+
+  if (seeds.length === 0) return { inserted: 0 }
 
   const ops = seeds.map((seed) => ({
     updateOne: {
       filter: { seedKey: seed.seedKey },
-      update: { $set: seed },
+      update: { $setOnInsert: seed },
       upsert: true,
     },
   }))

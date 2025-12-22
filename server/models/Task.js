@@ -17,6 +17,7 @@ const taskSchema = new mongoose.Schema(
     dueAt: { type: Date, required: true },
     startAt: { type: Date, default: Date.now },
     closedAt: { type: Date, default: null },
+    deleteAt: { type: Date, default: null, index: { expires: '0s' } },
     originalDueAt: { type: Date, default: null },
     originalStartAt: { type: Date, default: null },
     originalStatus: {

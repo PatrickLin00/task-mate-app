@@ -1053,7 +1053,7 @@ export default function TasksPane({
       createdAt,
       previousTaskId: task.previousTaskId ?? null,
       status: task.status,
-      creatorId: task.creatorId,
+      creatorId: task.seedKey?.startsWith('challenge_') ? '星旅' : task.creatorId,
       assigneeId: task.assigneeId ?? null,
       icon: task.icon || '✨',
       progress: { current: progress.current, total: progress.total || 1 },

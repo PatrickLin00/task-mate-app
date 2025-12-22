@@ -17,7 +17,7 @@ import {
   humanizeRemain,
   formatDueLabel,
 } from '../shared/mocks'
-import { abandonTask, fetchChallengeTasks, fetchTodayTasks, patchProgress, type Task } from '@/services/api'
+import { abandonTask, acceptChallengeTask, fetchChallengeTasks, fetchTodayTasks, patchProgress, type Task } from '@/services/api'
 
 const attrList: Attr[] = ['智慧', '力量', '敏捷']
 const attrToneHome: Record<Attr, 'blue' | 'red' | 'yellow'> = {
@@ -117,7 +117,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
       points: task.attributeReward.value,
       createdAt: task.createdAt || defaultCreatedAt,
       status: task.status,
-      creatorId: task.creatorId,
+      creatorId: task.seedKey?.startsWith('challenge_') ? '星旅' : task.creatorId,
       assigneeId: task.assigneeId ?? null,
       dueAt,
       due: formatDueLabel(dueAt),
@@ -187,6 +187,17 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
   const handleDialogCancel = () => {
     setDialogEditing(false)
     setDialogDraft([])
+  }
+
+  const handleAcceptChallenge = async (taskId: string) => {
+    try {
+      await acceptChallengeTask(taskId)
+      Taro.showToast({ title: '已接取', icon: 'success' })
+      await refreshHomeTasks()
+    } catch (err) {
+      console.error('accept challenge error', err)
+      await refreshHomeTasks(true)
+    }
   }
 
   const handleDialogAbandon = async () => {
@@ -381,7 +392,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
                           hoverStartTime={0}
                           hoverStayTime={120}
                           hoverStopPropagation
-                          onClick={() => handlePlaceholder('接取任务待接入')}
+                          onClick={() => void handleAcceptChallenge(t.id)}
                         >
                           {STRINGS.button}
                         </Button>
