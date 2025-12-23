@@ -4,7 +4,11 @@ import { ensureWeappLogin, getToken } from '@/services/auth'
 declare const API_BASE_URL: string
 
 const BASE_URL: string =
-  typeof API_BASE_URL !== 'undefined' && API_BASE_URL ? API_BASE_URL : 'http://localhost:3000'
+  typeof API_BASE_URL !== 'undefined' && API_BASE_URL
+    ? API_BASE_URL
+    : process.env.NODE_ENV === 'production'
+      ? ''
+      : 'http://localhost:3000'
 
 export type TaskStatus =
   | 'pending'

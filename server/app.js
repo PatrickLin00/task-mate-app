@@ -15,11 +15,11 @@ const { cleanupLegacyTestTasks } = require('./utils/cleanupDevData')
 const app = express()
 
 // Middleware
-app.use(cors({
-  // In dev allow any origin; tighten in production
-  // TODO: Restrict CORS origins in production (pending frontend domain)
-  origin: process.env.CORS_ORIGIN || true,
-}))
+const rawCorsOrigin = process.env.CORS_ORIGIN
+const corsOrigin = rawCorsOrigin
+  ? rawCorsOrigin.split(',').map((item) => item.trim()).filter(Boolean)
+  : true
+app.use(cors({ origin: corsOrigin }))
 app.use(express.json())
 
 // Routes

@@ -28,14 +28,23 @@ const readEnvFile = (filePath: string) => {
 
 const fileEnv = {
   ...readEnvFile(path.resolve(__dirname, '..', '.env')),
-  ...readEnvFile(path.resolve(__dirname, '..', '..', 'server', '.env')),
 }
 
 const getEnvValue = (key: string) => process.env[key] ?? fileEnv[key]
 
 // https://taro-docs.jd.com/docs/next/config#defineconfig
 export default defineConfig<'vite'>(async (merge, { command, mode }) => {
+  const appId = getEnvValue('TARO_APP_ID')
+  const devAuthEnabled =
+    String(getEnvValue('DEV_AUTH_ENABLED') || getEnvValue('TASKMATE_DEV_AUTH_ENABLED') || '').toLowerCase() ===
+    'true'
+  const devAuth = process.env.NODE_ENV === 'production' ? false : devAuthEnabled
+  const apiBaseUrl =
+    getEnvValue('TASKMATE_API_BASE_URL') ||
+    getEnvValue('TARO_APP_API_BASE_URL') ||
+    (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000')
   const baseConfig: UserConfigExport<'vite'> = {
+    appId: appId || undefined,
     projectName: 'client',
     date: '2025-11-1',
     designWidth: 750,
@@ -54,15 +63,8 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
       '@': path.resolve(__dirname, '..', 'src'),
     },
     defineConstants: {
-      API_BASE_URL: JSON.stringify(
-        getEnvValue('TASKMATE_API_BASE_URL') ||
-        getEnvValue('TARO_APP_API_BASE_URL') ||
-        'http://localhost:3000'
-      ),
-      DEV_AUTH_ENABLED: JSON.stringify(
-        String(getEnvValue('DEV_AUTH_ENABLED') || getEnvValue('TASKMATE_DEV_AUTH_ENABLED') || '').toLowerCase() ===
-          'true'
-      ),
+      API_BASE_URL: JSON.stringify(apiBaseUrl),
+      DEV_AUTH_ENABLED: JSON.stringify(devAuth),
     },
     copy: {
       patterns: [

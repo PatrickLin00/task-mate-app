@@ -3,7 +3,11 @@ import Taro from "@tarojs/taro"
 declare const API_BASE_URL: string
 declare const DEV_AUTH_ENABLED: boolean
 const BASE_URL: string =
-  typeof API_BASE_URL !== "undefined" && API_BASE_URL ? API_BASE_URL : "http://localhost:3000"
+  typeof API_BASE_URL !== "undefined" && API_BASE_URL
+    ? API_BASE_URL
+    : process.env.NODE_ENV === "production"
+      ? ""
+      : "http://localhost:3000"
 
 let loginPromise: Promise<{ token: string; userId: string } | null> | null = null
 
