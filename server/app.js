@@ -22,6 +22,14 @@ const corsOrigin = rawCorsOrigin
 app.use(cors({ origin: corsOrigin }))
 app.use(express.json())
 
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    env: process.env.NODE_ENV || 'development',
+    mongoHost: getMongoHost(process.env.MONGODB_URI),
+  })
+})
+
 // Routes
 app.use('/api/tasks', taskRoutes)
 app.use('/api/auth', authRoutes)
@@ -39,6 +47,19 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' })
 })
 
+const getMongoHost = (uri) => {
+  if (!uri) return 'unknown'
+  try {
+    const parsed = new URL(uri)
+    return parsed.host || 'unknown'
+  } catch (err) {
+    const cleaned = uri.replace(/^mongodb\+srv:\/\//, '').replace(/^mongodb:\/\//, '')
+    const withoutCreds = cleaned.replace(/^[^@]*@/, '')
+    const host = withoutCreds.split('/')[0].split('?')[0]
+    return host || 'unknown'
+  }
+}
+
 const start = async () => {
   const mongoUri = process.env.MONGODB_URI
   if (!mongoUri) {
@@ -49,6 +70,7 @@ const start = async () => {
   try {
     await mongoose.connect(mongoUri)
     console.log('MongoDB connected')
+    console.log(`MongoDB host: ${getMongoHost(mongoUri)}`)
 
     try {
       await migrateUserIds()

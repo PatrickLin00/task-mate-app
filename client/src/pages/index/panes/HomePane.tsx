@@ -7,7 +7,6 @@ import {
   type Subtask,
   attrIcon,
   attrTone as attrToneMap,
-  role,
   defaultCreatedAt,
   chipText,
   quietLines,
@@ -17,7 +16,14 @@ import {
   humanizeRemain,
   formatDueLabel,
 } from '../shared/mocks'
-import { abandonTask, acceptChallengeTask, fetchChallengeTasks, fetchTodayTasks, patchProgress, type Task } from '@/services/api'
+import {
+  abandonTask,
+  acceptChallengeTask,
+  fetchChallengeTasks,
+  fetchTodayTasks,
+  patchProgress,
+  type Task,
+} from '@/services/api'
 
 const attrList: Attr[] = ['智慧', '力量', '敏捷']
 const attrToneHome: Record<Attr, 'blue' | 'red' | 'yellow'> = {
@@ -30,11 +36,20 @@ const attrMeta: Record<Attr, { icon: string }> = {
   '力量': { icon: '💪' },
   '敏捷': { icon: '🐺' },
 }
+const heroName = 'Player'
+const heroStars = 0
+const heroStats: Record<Attr, number> = attrList.reduce(
+  (acc, attr) => {
+    acc[attr] = 0
+    return acc
+  },
+  {} as Record<Attr, number>
+)
 
 const UI = {
   stars: '★★★★★',
   timelineIcon: '🎿',
-  challengeIcon: '🤐',
+  challengeIcon: '🤔',
   calendarIcon: '🕰',
 }
 
@@ -60,9 +75,9 @@ const pad2 = (num: number) => (num < 10 ? `0${num}` : `${num}`)
 
 const formatStartDate = (iso?: string) => {
   if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getFullYear()}/${pad2(date.getMonth() + 1)}/${pad2(date.getDate())}`
 }
 
 type HomePaneProps = {
@@ -98,12 +113,11 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
       task.subtasks && task.subtasks.length > 0
         ? task.subtasks.map((s, idx) => ({
             id: s._id || baseId + '-sub-' + (idx + 1),
-            title: s.title || '子任务 ' + (idx + 1),
+            title: s.title || `子任务 ${idx + 1}`,
             current: s.current ?? 0,
             total: s.total || 1,
           }))
         : []
-
     const progress = task.computedProgress || summarizeSubtasksProgress(subtasks)
     const dueAt = task.dueAt
 
@@ -132,7 +146,6 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
     const timer = setInterval(() => {
       setFrameIndex((idx) => (idx + 1) % catIdleFrames.length)
     }, FRAME_DURATION)
-
     return () => clearInterval(timer)
   }, [])
 
@@ -142,8 +155,8 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
     Taro.showToast({ title, icon: 'none' })
   }
 
-  const handleMiniCardPress = (t: RoadTask) => {
-    setModalTask(t)
+  const handleMiniCardPress = (task: RoadTask) => {
+    setModalTask(task)
     setDialogEditing(false)
     setDialogDraft([])
   }
@@ -204,7 +217,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
     if (!modalTask) return
     const result = await Taro.showModal({
       title: '放弃任务',
-      content: '确认放弃该任务吗？',
+      content: '确认放弃该任务吗?',
       confirmText: '确认放弃',
       cancelText: '取消',
     })
@@ -243,13 +256,16 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
       }
     } catch (err) {
       console.error('load home tasks error', err)
+      if (shouldCancel?.()) return
+      setDueTodayCount(0)
+      setTodayTasks([])
+      setFeedTasks([])
       if (showNotice) {
         Taro.showToast({ title: '数据已刷新', icon: 'none' })
       }
     }
   }
 
-  // Auto close the dialog when the pane becomes inactive.
   useEffect(() => {
     if (!isActive && modalTask) {
       setModalTask(null)
@@ -260,7 +276,6 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
 
   useEffect(() => {
     if (!isActive) return
-
     let cancelled = false
     void refreshHomeTasks(false, () => cancelled)
     return () => {
@@ -270,7 +285,6 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
 
   return (
     <View className='home-pane'>
-      {/* Hero summary */}
       <View id='hero' className='hero card'>
         <View className='hero-panel'>
           <View className='hero-avatar'>
@@ -286,8 +300,8 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
               <View className='badge'>{STRINGS.heroBadge}</View>
             </View>
             <View className='hero-info'>
-              <Text className='hero-name'>{role.name}</Text>
-              <Text className='hero-stars'>{UI.stars.slice(0, role.stars)}</Text>
+              <Text className='hero-name'>{heroName}</Text>
+              <Text className='hero-stars'>{UI.stars.slice(0, heroStars)}</Text>
             </View>
           </View>
           <View className='hero-pill'>
@@ -298,21 +312,20 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
           {attrList.map((attr) => (
             <View key={attr} className='stat'>
               <View className='stat-label'>
-              <View className={`stat-icon ${attrToneHome[attr]}`}>
+                <View className={`stat-icon ${attrToneHome[attr]}`}>
                   <Text aria-hidden>{attrMeta[attr].icon}</Text>
                 </View>
                 <Text className='label'>{attr}</Text>
               </View>
               <View className='track'>
-                <View className={`fill ${attrToneHome[attr]}`} style={{ width: `${role[attr]}%` }} />
+                <View className={`fill ${attrToneHome[attr]}`} style={{ width: `${heroStats[attr]}%` }} />
               </View>
-              <Text className='val'>{role[attr]}</Text>
+              <Text className='val'>{heroStats[attr]}</Text>
             </View>
           ))}
         </View>
       </View>
 
-      {/* Today highlights */}
       <View id='today' className='section card'>
         <View className='section-bar'>
           <View className='section-head'>
@@ -320,7 +333,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
             <Text className='section-title'>{STRINGS.todayTitle}</Text>
           </View>
           <Text className='section-meta'>
-            {STRINGS.todayMeta} · {dueTodayCount} {STRINGS.todayUnit}
+            {STRINGS.todayMeta} - {dueTodayCount} {STRINGS.todayUnit}
           </Text>
         </View>
         {todayTasks.length > 0 ? (
@@ -356,7 +369,6 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
         )}
       </View>
 
-      {/* Challenge feed */}
       <View className='section card feed-section'>
         <View id='feed-head' className='feed-head'>
           <View className='section-head'>
@@ -371,35 +383,33 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
           {visibleTasks.length > 0 ? (
             <ScrollView scrollY scrollWithAnimation className='feed-scroll'>
               <View className='feed-list'>
-                {visibleTasks.map((t) => {
-                  return (
-                    <View className={`feed-card tone-${attrToneHome[t.type]}`} key={t.id}>
-                      <View className='feed-left'>
-                        <Text className='emoji'>{t.icon}</Text>
-                      </View>
-                      <View className='feed-body'>
-                        <Text className='feed-title'>{t.title}</Text>
-                        <Text className='feed-desc'>{t.detail}</Text>
-                        <View className='feed-meta'>
-                          <Text className='feed-due'>{t.due}</Text>
-                        </View>
-                      </View>
-                      <View className='feed-side'>
-                        <View className={`feed-chip tone-${attrToneHome[t.type]}`}>{chipText(t)}</View>
-                        <Button
-                          className='cta'
-                          hoverClass='pressing'
-                          hoverStartTime={0}
-                          hoverStayTime={120}
-                          hoverStopPropagation
-                          onClick={() => void handleAcceptChallenge(t.id)}
-                        >
-                          {STRINGS.button}
-                        </Button>
+                {visibleTasks.map((t) => (
+                  <View className={`feed-card tone-${attrToneHome[t.type]}`} key={t.id}>
+                    <View className='feed-left'>
+                      <Text className='emoji'>{t.icon}</Text>
+                    </View>
+                    <View className='feed-body'>
+                      <Text className='feed-title'>{t.title}</Text>
+                      <Text className='feed-desc'>{t.detail}</Text>
+                      <View className='feed-meta'>
+                        <Text className='feed-due'>{t.due}</Text>
                       </View>
                     </View>
-                  )
-                })}
+                    <View className='feed-side'>
+                      <View className={`feed-chip tone-${attrToneHome[t.type]}`}>{chipText(t)}</View>
+                      <Button
+                        className='cta'
+                        hoverClass='pressing'
+                        hoverStartTime={0}
+                        hoverStayTime={120}
+                        hoverStopPropagation
+                        onClick={() => void handleAcceptChallenge(t.id)}
+                      >
+                        {STRINGS.button}
+                      </Button>
+                    </View>
+                  </View>
+                ))}
               </View>
             </ScrollView>
           ) : (
@@ -443,9 +453,9 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
               <Text className='dialog-desc'>{modalTask.detail}</Text>
 
               <View className='dialog-meta'>
-                {dialogRemain && <Text>⏱ 剩余时间：{dialogRemain}</Text>}
-                {dialogDueLabel && <Text>📅 截止：{dialogDueLabel}</Text>}
-                {dialogStartLabel && <Text>🗓 起始：{dialogStartLabel}</Text>}
+                {dialogRemain && <Text>⏱ 剩余时间: {dialogRemain}</Text>}
+                {dialogDueLabel && <Text>📅 截止: {dialogDueLabel}</Text>}
+                {dialogStartLabel && <Text>🗓 起始: {dialogStartLabel}</Text>}
               </View>
 
               {dialogProgress && (
@@ -461,22 +471,18 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
                   <View className='progress-track'>
                     <View
                       className='progress-fill'
-                      style={{
-                        width: `${calcPercent(dialogProgress.current, dialogProgress.total)}%`,
-                      }}
+                      style={{ width: `${calcPercent(dialogProgress.current, dialogProgress.total)}%` }}
                     />
                   </View>
                 </View>
               )}
 
               {dialogSubtasks && dialogSubtasks.length > 0 && (
-                <View
-                  className='dialog-steps'
-                >
+                <View className='dialog-steps'>
                   <View className='dialog-steps-head'>
                     <Text className='dialog-step-label'>子任务</Text>
                     <Text className='dialog-step-hint'>
-                      {dialogEditing ? '拖动编辑，每步即时汇总' : '子进度自动汇总总进度'}
+                      {dialogEditing ? '拖动编辑,每步即时汇总' : '子进度自动汇总总进度'}
                     </Text>
                   </View>
                   {dialogSubtasks.map((s) => {

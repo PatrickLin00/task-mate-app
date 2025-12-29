@@ -69,6 +69,8 @@ export type CollabTask = TaskBase & {
 
 export type ArchivedTask = TaskBase & {
   finishedAgo: string
+  deleteAt?: string
+  deleteRemain?: string
 }
 
 export const role = { name: '我的小猫', stars: 5, '智慧': 75, '力量': 60, '敏捷': 85 }

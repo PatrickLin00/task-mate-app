@@ -29,6 +29,8 @@ export type Task = {
   dueAt: string
   startAt?: string
   closedAt?: string | null
+  completedAt?: string | null
+  deleteAt?: string | null
   originalDueAt?: string | null
   originalStartAt?: string | null
   originalStatus?: TaskStatus | null
@@ -37,6 +39,8 @@ export type Task = {
   creatorId: string
   assigneeId?: string | null
   previousTaskId?: string | null
+  ownerId?: string | null
+  sourceTaskId?: string | null
   attributeReward: { type: RewardType; value: number }
   computedProgress?: { current: number; total: number }
   createdAt?: string
@@ -140,6 +144,7 @@ export async function createTask(payload: {
   dueAt: string
   subtasks: { title: string; total: number; current?: number }[]
   attributeReward: { type: RewardType; value: number }
+  selfAssign?: boolean
 }) {
   return requestJson<Task>({
     url: `${BASE_URL}/api/tasks`,
@@ -262,15 +267,18 @@ export async function cancelReworkTask(id: string) {
 }
 
 export async function generateTaskSuggestion(prompt: string) {
+  const now = Date.now()
+  const tzOffset = new Date().getTimezoneOffset()
   return requestJson<{
     title: string
     description?: string
     subtasks: { title: string; total: number }[]
     attributeReward?: { type: RewardType; value: number }
+    dueAt?: string
   }>({
     url: `${BASE_URL}/api/ai/generate-task`,
     method: 'POST',
-    data: { prompt },
+    data: { prompt, clientNow: now, clientTzOffset: tzOffset },
     header: { 'Content-Type': 'application/json', ...(await authHeaderAsync()) },
   })
 }

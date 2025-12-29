@@ -685,14 +685,23 @@
   box-sizing: border-box;
   border-radius: 16px;
   border: 1px solid rgba(209, 213, 219, 0.8);
-  padding: 12px 14px;
   background: rgba(255, 255, 255, 0.96);
   font-size: 16px;
   color: #111827;
 }
 
+.modal-input,
+.subtask-input,
+.subtask-num {
+  height: 44px;
+  line-height: 44px;
+  padding: 0 14px;
+}
+
 .modal-textarea {
-  min-height: 100px;
+  min-height: 120px;
+  line-height: 1.5;
+  padding: 12px 14px;
 }
 
 .modal-row {
@@ -950,6 +959,17 @@
   font-weight: 800;
   font-size: 16px;
   box-shadow: 0 16px 26px rgba(99, 102, 241, 0.26);
+  flex: 1;
+}
+
+.modal-self {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: linear-gradient(140deg, #22c55e, #16a34a);
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+  box-shadow: 0 16px 26px rgba(34, 197, 94, 0.25);
   flex: 1;
 }
 

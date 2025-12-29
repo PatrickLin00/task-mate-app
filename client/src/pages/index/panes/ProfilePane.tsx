@@ -2,7 +2,6 @@ import { View, Text, Button, Input } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import { useState } from 'react'
 import '../home.scss'
-import { role } from '../shared/mocks'
 import { devLoginWeapp, getDevUserId, getUserId } from '@/services/auth'
 
 declare const DEV_AUTH_ENABLED: boolean
@@ -11,6 +10,9 @@ export default function ProfilePane({ onAuthChanged }: { onAuthChanged?: () => v
   const [currentUserId, setCurrentUserId] = useState(() => getUserId() || '')
   const [devUserId, setDevUserId] = useState(() => getDevUserId() || '')
   const [switching, setSwitching] = useState(false)
+
+  const displayName = currentUserId || "Player"
+  const displayStars = 0
 
   const canUseDev = DEV_AUTH_ENABLED
 
@@ -43,8 +45,8 @@ export default function ProfilePane({ onAuthChanged }: { onAuthChanged?: () => v
           </View>
           <View className='hero-main'>
             <View className='hero-head'>
-              <Text className='hero-name'>{role.name}</Text>
-              <Text className='hero-stars'>{'★★★★★'.slice(0, role.stars)}</Text>
+              <Text className='hero-name'>{displayName}</Text>
+              <Text className='hero-stars'>{'★★★★★'.slice(0, displayStars)}</Text>
             </View>
             <Text className='feed-desc'>勇敢的探索者，继续你的星旅吧！</Text>
           </View>
