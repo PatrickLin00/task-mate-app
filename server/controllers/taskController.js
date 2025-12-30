@@ -303,6 +303,7 @@ exports.getMissionTasks = async (req, res) => {
     const userId = ensureAuthorized(req, res)
     if (!userId) return
 
+    taskDebugLog('getMissionTasks start', { userId })
     const reworkedIds = await fetchReworkedIds()
     const query = {
       assigneeId: userId,
@@ -312,6 +313,7 @@ exports.getMissionTasks = async (req, res) => {
       query._id = { $nin: reworkedIds }
     }
     const tasks = await Task.find(query).sort({ dueAt: 1, createdAt: -1 })
+    taskDebugLog('getMissionTasks ok', { userId, count: tasks.length })
 
     return res.json(tasks.map((t) => buildResponse(t)))
   } catch (error) {
@@ -1002,6 +1004,7 @@ exports.acceptChallengeTask = async (req, res) => {
     const userId = ensureAuthorized(req, res)
     if (!userId) return
 
+    taskDebugLog('acceptChallengeTask start', { userId, taskId: req.params?.id })
     const { id } = req.params
     if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
 
@@ -1027,6 +1030,12 @@ exports.acceptChallengeTask = async (req, res) => {
     )
 
     if (!updated) return conflict(res)
+    taskDebugLog('acceptChallengeTask ok', {
+      userId,
+      taskId: updated._id?.toString?.() || updated._id,
+      status: updated.status,
+      assigneeId: updated.assigneeId,
+    })
 
     if (!updated.deleteAt && updated.dueAt) {
       await Task.updateOne(
@@ -1048,6 +1057,7 @@ exports.getTodayTasks = async (req, res) => {
     const userId = ensureAuthorized(req, res)
     if (!userId) return
 
+    taskDebugLog('getTodayTasks start', { userId })
     const now = new Date()
     const start = startOfDay(now)
     const end = endOfDay(now)
@@ -1069,6 +1079,7 @@ exports.getTodayTasks = async (req, res) => {
     const dueNow = [...overdue, ...dueToday]
     const picked = (dueNow.length >= 5 ? dueNow : [...dueNow, ...upcoming]).slice(0, 5)
 
+    taskDebugLog('getTodayTasks ok', { userId, dueToday: dueToday.length, picked: picked.length })
     return res.json({
       dueTodayCount: dueToday.length,
       tasks: picked.map((t) => buildResponse(t)),
