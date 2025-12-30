@@ -1,4 +1,5 @@
 const axios = require('axios')
+const https = require('https')
 const jwt = require('jsonwebtoken')
 const User = require('../models/User')
 const { ensureDevScenarioTasks } = require('../utils/seedTasks')
@@ -18,6 +19,13 @@ const normalizeWxUserId = (openid) => {
   const v = typeof openid === 'string' ? openid.trim() : ''
   if (!v) return ''
   return `wx:${v}`
+}
+
+const buildWeappRequestOptions = () => {
+  const insecure = String(process.env.WEAPP_TLS_INSECURE || '').toLowerCase() === 'true'
+  const base = { proxy: false }
+  if (!insecure) return base
+  return { ...base, httpsAgent: new https.Agent({ rejectUnauthorized: false }) }
 }
 
 exports.loginWeapp = async (req, res) => {
@@ -47,7 +55,7 @@ exports.loginWeapp = async (req, res) => {
 
     const url = 'https://api.weixin.qq.com/sns/jscode2session'
     const params = { appid, secret, js_code: code, grant_type: 'authorization_code' }
-    const { data } = await axios.get(url, { params })
+    const { data } = await axios.get(url, { params, ...buildWeappRequestOptions() })
     if (data.errcode) {
       return res.status(400).json({ error: 'jscode2session failed', detail: data })
     }

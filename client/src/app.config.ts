@@ -3,6 +3,7 @@ export default defineAppConfig({
     'pages/index/index',
     'pages/task/detail'
   ],
+  lazyCodeLoading: 'requiredComponents',
   window: {
     backgroundTextStyle: 'light',
     navigationBarBackgroundColor: '#fff',

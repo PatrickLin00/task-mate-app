@@ -11,10 +11,18 @@ const BASE_URL: string =
 
 let loginPromise: Promise<{ token: string; userId: string } | null> | null = null
 
+const getEnvFlag = (key: string) => {
+  const env = typeof process !== "undefined" ? process.env : undefined
+  return String(env?.[key] || "").toLowerCase() === "true"
+}
+
 export async function loginWeapp() {
   // WeApp only: obtain code then exchange on server
   try {
-    const { code } = await Taro.login()
+    const { code, errMsg } = await Taro.login()
+    if (getEnvFlag("TARO_APP_TASK_DEBUG")) {
+      console.log("weapp login result", { code, errMsg })
+    }
     if (!code) throw new Error("no code")
     const res = await Taro.request<{ token: string; userId: string }>({
       url: `${BASE_URL}/api/auth/weapp/login`,

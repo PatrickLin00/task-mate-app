@@ -75,17 +75,19 @@ export type ArchivedTask = TaskBase & {
 
 export const role = { name: '我的小猫', stars: 5, '智慧': 75, '力量': 60, '敏捷': 85 }
 
-export const catIdleFrames = [
-  '/assets/avatars/series_orange/cat_f2_idle_01.png',
-  '/assets/avatars/series_orange/cat_f2_idle_02.png',
-  '/assets/avatars/series_orange/cat_f2_idle_03.png',
-  '/assets/avatars/series_orange/cat_f2_idle_04.png',
-  '/assets/avatars/series_orange/cat_f2_idle_05.png',
-  '/assets/avatars/series_orange/cat_f2_idle_06.png',
-  '/assets/avatars/series_orange/cat_f2_idle_07.png',
-  '/assets/avatars/series_orange/cat_f2_idle_08.png',
-  '/assets/avatars/series_orange/cat_f2_idle_09.png',
+const avatarBaseUrl = 'https://task-mate-avatars-1393072338.piccd.myqcloud.com'
+const avatarFrameNames = [
+  'cat_f2_idle_01.png',
+  'cat_f2_idle_02.png',
+  'cat_f2_idle_03.png',
+  'cat_f2_idle_04.png',
+  'cat_f2_idle_05.png',
+  'cat_f2_idle_06.png',
+  'cat_f2_idle_07.png',
+  'cat_f2_idle_08.png',
+  'cat_f2_idle_09.png',
 ] as const
+export const catIdleFrames = avatarFrameNames.map((name) => `${avatarBaseUrl}/${name}`)
 
 export function summarizeSubtasksProgress(subtasks: Subtask[]) {
   const total = subtasks.reduce((sum, s) => sum + Math.max(1, s.total || 1), 0)
