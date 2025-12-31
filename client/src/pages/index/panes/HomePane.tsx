@@ -9,8 +9,6 @@ import {
   attrTone as attrToneMap,
   defaultCreatedAt,
   chipText,
-  quietLines,
-  challengeQuietLines,
   catIdleFrames,
   summarizeSubtasksProgress,
   humanizeRemain,
@@ -19,24 +17,30 @@ import {
 import {
   abandonTask,
   acceptChallengeTask,
+  completeTask,
   fetchChallengeTasks,
   fetchTodayTasks,
   patchProgress,
   type Task,
 } from '@/services/api'
+import { taskStrings } from '../shared/strings'
 
-const attrList: Attr[] = ['智慧', '力量', '敏捷']
+const attrList: Attr[] = [
+  taskStrings.rewards.wisdom.label,
+  taskStrings.rewards.strength.label,
+  taskStrings.rewards.agility.label,
+]
 const attrToneHome: Record<Attr, 'blue' | 'red' | 'yellow'> = {
-  '智慧': 'blue',
-  '力量': 'red',
-  '敏捷': 'yellow',
+  [taskStrings.rewards.wisdom.label]: 'blue',
+  [taskStrings.rewards.strength.label]: 'red',
+  [taskStrings.rewards.agility.label]: 'yellow',
 }
 const attrMeta: Record<Attr, { icon: string }> = {
-  '智慧': { icon: '🧠' },
-  '力量': { icon: '💪' },
-  '敏捷': { icon: '🐺' },
+  [taskStrings.rewards.wisdom.label]: { icon: taskStrings.home.statsIcons.wisdom },
+  [taskStrings.rewards.strength.label]: { icon: taskStrings.home.statsIcons.strength },
+  [taskStrings.rewards.agility.label]: { icon: taskStrings.home.statsIcons.agility },
 }
-const heroName = 'Player'
+const heroName = taskStrings.home.heroName
 const heroStars = 0
 const heroStats: Record<Attr, number> = attrList.reduce(
   (acc, attr) => {
@@ -47,26 +51,15 @@ const heroStats: Record<Attr, number> = attrList.reduce(
 )
 
 const UI = {
-  stars: '★★★★★',
-  timelineIcon: '🎿',
-  challengeIcon: '🤔',
-  calendarIcon: '🕰',
+  stars: taskStrings.home.stars,
+  timelineIcon: taskStrings.home.timelineIcon,
+  challengeIcon: taskStrings.home.challengeIcon,
+  calendarIcon: taskStrings.home.calendarIcon,
 }
+
+const homeStrings = taskStrings.home
 
 const FRAME_DURATION = 240
-
-const STRINGS = {
-  heroBadge: 'Lv.5',
-  heroPill: '星旅者',
-  todayTitle: '星程简录',
-  todayMeta: '今天',
-  todayUnit: '项',
-  feedTitle: '星旅挑战',
-  difficultyLabel: '难度',
-  feedUnit: '个任务',
-  typeLabel: '类型',
-  button: '接取任务',
-}
 
 const calcPercent = (current: number, total: number) =>
   Math.min(100, Math.round((current / Math.max(1, total || 1)) * 100))
@@ -90,9 +83,12 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
   const [dueTodayCount, setDueTodayCount] = useState(0)
   const [feedTasks, setFeedTasks] = useState<RoadTask[]>([])
   const visibleTasks = useMemo(() => feedTasks, [feedTasks])
-  const quietLine = useMemo(() => quietLines[Math.floor(Math.random() * quietLines.length)], [])
+  const quietLine = useMemo(
+    () => homeStrings.quietLines[Math.floor(Math.random() * homeStrings.quietLines.length)],
+    []
+  )
   const challengeLine = useMemo(
-    () => challengeQuietLines[Math.floor(Math.random() * challengeQuietLines.length)],
+    () => homeStrings.challengeQuietLines[Math.floor(Math.random() * homeStrings.challengeQuietLines.length)],
     []
   )
   const [frameIndex, setFrameIndex] = useState(0)
@@ -101,19 +97,20 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
   const [dialogDraft, setDialogDraft] = useState<Subtask[]>([])
 
   const mapRewardToAttr = (val: 'wisdom' | 'strength' | 'agility') => {
-    if (val === 'wisdom') return '智慧'
-    if (val === 'strength') return '力量'
-    return '敏捷'
+    if (val === 'wisdom') return taskStrings.rewards.wisdom.label
+    if (val === 'strength') return taskStrings.rewards.strength.label
+    return taskStrings.rewards.agility.label
   }
 
   const mapApiTaskToRoad = (task: Task): RoadTask => {
     const attr = mapRewardToAttr(task.attributeReward.type)
     const baseId = task._id || 'task'
+    const isChallenge = Boolean(task.seedKey?.startsWith('challenge_'))
     const subtasks =
       task.subtasks && task.subtasks.length > 0
         ? task.subtasks.map((s, idx) => ({
             id: s._id || baseId + '-sub-' + (idx + 1),
-            title: s.title || `子任务 ${idx + 1}`,
+            title: s.title || `${taskStrings.labels.subtaskFallback} ${idx + 1}`,
             current: s.current ?? 0,
             total: s.total || 1,
           }))
@@ -131,14 +128,15 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
       points: task.attributeReward.value,
       createdAt: task.createdAt || defaultCreatedAt,
       status: task.status,
-      creatorId: task.seedKey?.startsWith('challenge_') ? '星旅' : task.creatorId,
+      creatorId: isChallenge ? taskStrings.labels.creatorSystem : task.creatorId,
       assigneeId: task.assigneeId ?? null,
       dueAt,
       due: formatDueLabel(dueAt),
       remain: humanizeRemain(dueAt),
       progress: { current: progress.current, total: progress.total || 1 },
       subtasks,
-      difficulty: task.attributeReward.value >= 20 ? '中等' : '简单',
+      difficulty: task.attributeReward.value >= 20 ? taskStrings.labels.difficultyMid : taskStrings.labels.difficultyEasy,
+      isChallenge,
     }
   }
 
@@ -187,7 +185,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
       const nextTask = { ...modalTask, subtasks: dialogDraft, progress }
       setModalTask(nextTask)
       setTodayTasks((prev) => prev.map((t) => (t.id === nextTask.id ? nextTask : t)))
-      Taro.showToast({ title: '已提交', icon: 'success' })
+      Taro.showToast({ title: taskStrings.toast.submitted, icon: 'success' })
     } catch (err) {
       console.error('update progress error', err)
       await refreshHomeTasks(true)
@@ -205,7 +203,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
   const handleAcceptChallenge = async (taskId: string) => {
     try {
       await acceptChallengeTask(taskId)
-      Taro.showToast({ title: '已接取', icon: 'success' })
+      Taro.showToast({ title: taskStrings.toast.createAccepted, icon: 'success' })
       await refreshHomeTasks()
     } catch (err) {
       console.error('accept challenge error', err)
@@ -216,21 +214,36 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
   const handleDialogAbandon = async () => {
     if (!modalTask) return
     const result = await Taro.showModal({
-      title: '放弃任务',
-      content: '确认放弃该任务吗?',
-      confirmText: '确认放弃',
-      cancelText: '取消',
+      title: taskStrings.toast.abandonTitle,
+      content: taskStrings.toast.abandonContent,
+      confirmText: taskStrings.toast.abandonOk,
+      cancelText: taskStrings.toast.cancel,
     })
     if (!result.confirm) return
     try {
       await abandonTask(modalTask.id)
-      Taro.showToast({ title: '已放弃', icon: 'success' })
+      Taro.showToast({ title: taskStrings.toast.abandoned, icon: 'success' })
       setModalTask(null)
       setDialogEditing(false)
       setDialogDraft([])
       await refreshHomeTasks()
     } catch (err) {
       console.error('abandon task error', err)
+      await refreshHomeTasks(true)
+    }
+  }
+
+  const handleDialogComplete = async () => {
+    if (!modalTask) return
+    try {
+      await completeTask(modalTask.id)
+      Taro.showToast({ title: taskStrings.toast.completed, icon: 'success' })
+      setModalTask(null)
+      setDialogEditing(false)
+      setDialogDraft([])
+      await refreshHomeTasks()
+    } catch (err) {
+      console.error('complete task error', err)
       await refreshHomeTasks(true)
     }
   }
@@ -243,6 +256,17 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
   const dialogRemain = modalTask?.dueAt ? humanizeRemain(modalTask.dueAt) : modalTask?.remain
   const dialogDueLabel = modalTask?.dueAt ? formatDueLabel(modalTask.dueAt) : modalTask?.due
   const dialogStartLabel = modalTask?.createdAt ? formatStartDate(modalTask.createdAt) : undefined
+  const dialogUseComplete = Boolean(
+    modalTask?.isChallenge ||
+      (modalTask?.creatorId && modalTask?.assigneeId && modalTask.creatorId === modalTask.assigneeId)
+  )
+  const dialogReviewLabel = dialogUseComplete ? taskStrings.actions.completeTask : taskStrings.actions.submitReview
+  const dialogReviewIcon = dialogUseComplete
+    ? taskStrings.icons.actions.completeTask
+    : taskStrings.icons.actions.submitReview
+  const dialogReviewHandler = dialogUseComplete
+    ? handleDialogComplete
+    : () => handlePlaceholder(taskStrings.toast.reviewPending)
 
   const refreshHomeTasks = async (showNotice = false, shouldCancel?: () => boolean) => {
     try {
@@ -252,7 +276,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
       setTodayTasks((todayRes.tasks || []).map((t) => mapApiTaskToRoad(t)))
       setFeedTasks((challenge || []).map((t) => mapApiTaskToRoad(t)))
       if (showNotice) {
-        Taro.showToast({ title: '数据已刷新', icon: 'none' })
+        Taro.showToast({ title: taskStrings.toast.dataRefreshed, icon: 'none' })
       }
     } catch (err) {
       console.error('load home tasks error', err)
@@ -261,7 +285,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
       setTodayTasks([])
       setFeedTasks([])
       if (showNotice) {
-        Taro.showToast({ title: '数据已刷新', icon: 'none' })
+        Taro.showToast({ title: taskStrings.toast.dataRefreshed, icon: 'none' })
       }
     }
   }
@@ -297,7 +321,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
                   alt='hero-cat'
                 />
               </View>
-              <View className='badge'>{STRINGS.heroBadge}</View>
+              <View className='badge'>{homeStrings.heroBadge}</View>
             </View>
             <View className='hero-info'>
               <Text className='hero-name'>{heroName}</Text>
@@ -305,7 +329,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
             </View>
           </View>
           <View className='hero-pill'>
-            <Text>{STRINGS.heroPill}</Text>
+            <Text>{homeStrings.heroPill}</Text>
           </View>
         </View>
         <View className='hero-stats'>
@@ -330,10 +354,10 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
         <View className='section-bar'>
           <View className='section-head'>
             <Text className='section-icon'>{UI.timelineIcon}</Text>
-            <Text className='section-title'>{STRINGS.todayTitle}</Text>
+            <Text className='section-title'>{homeStrings.todayTitle}</Text>
           </View>
           <Text className='section-meta'>
-            {STRINGS.todayMeta} - {dueTodayCount} {STRINGS.todayUnit}
+            {homeStrings.todayMeta} - {dueTodayCount} {homeStrings.todayUnit}
           </Text>
         </View>
         {todayTasks.length > 0 ? (
@@ -373,10 +397,10 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
         <View id='feed-head' className='feed-head'>
           <View className='section-head'>
             <Text className='section-icon'>{UI.challengeIcon}</Text>
-            <Text className='section-title'>{STRINGS.feedTitle}</Text>
+            <Text className='section-title'>{homeStrings.feedTitle}</Text>
           </View>
           <Text className='section-meta'>
-            {feedTasks.length} {STRINGS.feedUnit}
+            {feedTasks.length} {homeStrings.feedUnit}
           </Text>
         </View>
         <View className='feed-scroll-shell'>
@@ -405,7 +429,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
                         hoverStopPropagation
                         onClick={() => void handleAcceptChallenge(t.id)}
                       >
-                        {STRINGS.button}
+                        {homeStrings.button}
                       </Button>
                     </View>
                   </View>
@@ -453,16 +477,16 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
               <Text className='dialog-desc'>{modalTask.detail}</Text>
 
               <View className='dialog-meta'>
-                {dialogRemain && <Text>⏱ 剩余时间: {dialogRemain}</Text>}
-                {dialogDueLabel && <Text>📅 截止: {dialogDueLabel}</Text>}
-                {dialogStartLabel && <Text>🗓 起始: {dialogStartLabel}</Text>}
+                {dialogRemain && <Text>{homeStrings.dialogRemainPrefix} {dialogRemain}</Text>}
+                {dialogDueLabel && <Text>{homeStrings.dialogDuePrefix} {dialogDueLabel}</Text>}
+                {dialogStartLabel && <Text>{homeStrings.dialogStartPrefix} {dialogStartLabel}</Text>}
               </View>
 
               {dialogProgress && (
                 <View className='progress'>
                   <View className='progress-head'>
                     <Text className='progress-label'>
-                      进度 {dialogProgress.current}/{dialogProgress.total}
+                      {taskStrings.labels.progress} {dialogProgress.current}/{dialogProgress.total}
                     </Text>
                     <Text className='progress-percent'>
                       {calcPercent(dialogProgress.current, dialogProgress.total)}%
@@ -480,9 +504,9 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
               {dialogSubtasks && dialogSubtasks.length > 0 && (
                 <View className='dialog-steps'>
                   <View className='dialog-steps-head'>
-                    <Text className='dialog-step-label'>子任务</Text>
+                    <Text className='dialog-step-label'>{homeStrings.dialogStepLabel}</Text>
                     <Text className='dialog-step-hint'>
-                      {dialogEditing ? '拖动编辑,每步即时汇总' : '子进度自动汇总总进度'}
+                      {dialogEditing ? homeStrings.dialogStepHintEdit : homeStrings.dialogStepHintView}
                     </Text>
                   </View>
                   {dialogSubtasks.map((s) => {
@@ -527,8 +551,8 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
                     hoverStopPropagation
                     onClick={handleDialogSubmit}
                   >
-                    <Text className='action-icon'>✅</Text>
-                    <Text>提交变更</Text>
+                    <Text className='action-icon'>{taskStrings.icons.actions.submitChange}</Text>
+                    <Text>{taskStrings.actions.submitChange}</Text>
                   </View>
                 ) : (
                   <View
@@ -539,8 +563,8 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
                     hoverStopPropagation
                     onClick={handleStartDialogEdit}
                   >
-                    <Text className='action-icon'>🔁</Text>
-                    <Text>更新进度</Text>
+                    <Text className='action-icon'>{taskStrings.icons.actions.updateProgress}</Text>
+                    <Text>{taskStrings.actions.updateProgress}</Text>
                   </View>
                 )}
                 <View
@@ -549,10 +573,10 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
                   hoverStartTime={0}
                   hoverStayTime={120}
                   hoverStopPropagation
-                  onClick={() => handlePlaceholder('提交检视待接入')}
+                  onClick={dialogReviewHandler}
                 >
-                  <Text className='action-icon'>📝</Text>
-                  <Text>提交检视</Text>
+                  <Text className='action-icon'>{dialogReviewIcon}</Text>
+                  <Text>{dialogReviewLabel}</Text>
                 </View>
                 {dialogEditing ? (
                   <View
@@ -563,8 +587,8 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
                     hoverStopPropagation
                     onClick={handleDialogCancel}
                   >
-                    <Text className='action-icon'>✖</Text>
-                    <Text>取消变更</Text>
+                    <Text className='action-icon'>{taskStrings.icons.actions.cancelChange}</Text>
+                    <Text>{taskStrings.actions.cancelChange}</Text>
                   </View>
                 ) : (
                   <View
@@ -575,14 +599,14 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
                     hoverStopPropagation
                     onClick={handleDialogAbandon}
                   >
-                    <Text className='action-icon'>📥</Text>
-                    <Text>放弃任务</Text>
+                    <Text className='action-icon'>{taskStrings.icons.actions.abandonTask}</Text>
+                    <Text>{taskStrings.actions.abandonTask}</Text>
                   </View>
                 )}
               </View>
             </View>
 
-            <Text className='dialog-hint'>点击空白处收起</Text>
+            <Text className='dialog-hint'>{homeStrings.dialogHint}</Text>
           </View>
         </View>
       )}

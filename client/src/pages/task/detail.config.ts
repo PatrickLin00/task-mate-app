@@ -1,5 +1,6 @@
+﻿import { taskStrings } from '@/pages/index/shared/strings'
+
 export default definePageConfig({
-  navigationBarTitleText: '任务详情',
+  navigationBarTitleText: taskStrings.taskDetail.navTitle,
   enableShareAppMessage: true,
 })
-

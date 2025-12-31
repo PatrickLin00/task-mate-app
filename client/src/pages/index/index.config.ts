@@ -1,4 +1,6 @@
+import { taskStrings } from './shared/strings'
+
 export default definePageConfig({
-  navigationBarTitleText: '首页',
-  enableShareAppMessage: true
+  navigationBarTitleText: taskStrings.index.navTitle,
+  enableShareAppMessage: true,
 })

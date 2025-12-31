@@ -1,25 +1,23 @@
-import { View, Text } from '@tarojs/components'
+﻿import { View, Text } from '@tarojs/components'
 import '../home.scss'
+import { taskStrings } from '../shared/strings'
 
-const achs = [
-  { id: 'a1', title: '晨曦勇士', desc: '连续 7 天早起打卡' },
-  { id: 'a2', title: '疾风行者', desc: '单日步数达 20,000' },
-]
+const achievements = taskStrings.achievements
 
 export default function AchievementsPane() {
   return (
     <View className='ach-page'>
       <View className='section'>
-        <Text className='section-title'>成就</Text>
+        <Text className='section-title'>{achievements.title}</Text>
         <View className='feed-list'>
-          {achs.map((a) => (
-            <View className='feed-card' key={a.id}>
+          {achievements.items.map((item) => (
+            <View className='feed-card' key={item.id}>
               <View className='feed-left'>
-                <Text className='emoji'>🏅</Text>
+                <Text className='emoji'>{achievements.icon}</Text>
               </View>
               <View className='feed-body'>
-                <Text className='feed-title'>{a.title}</Text>
-                <Text className='feed-desc'>{a.desc}</Text>
+                <Text className='feed-title'>{item.title}</Text>
+                <Text className='feed-desc'>{item.desc}</Text>
               </View>
             </View>
           ))}

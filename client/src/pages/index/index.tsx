@@ -6,15 +6,11 @@ import HomePane from './panes/HomePane'
 import TasksPane from './panes/TasksPane'
 import AchievementsPane from './panes/AchievementsPane'
 import ProfilePane from './panes/ProfilePane'
+import { taskStrings } from './shared/strings'
 
 type Tab = 'home' | 'tasks' | 'achievements' | 'profile'
 const tabOrder: Tab[] = ['home', 'tasks', 'achievements', 'profile']
-const tabMeta: Record<Tab, { label: string; icon: string }> = {
-  home: { label: '首页', icon: '🏠' },
-  tasks: { label: '任务', icon: '📝' },
-  achievements: { label: '成就', icon: '🏆' },
-  profile: { label: '我的', icon: '👤' },
-}
+const tabMeta: Record<Tab, { label: string; icon: string }> = taskStrings.nav
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>('home')

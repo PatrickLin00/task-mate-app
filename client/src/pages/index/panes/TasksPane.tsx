@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import '../tasks.scss'
 import {
   defaultCreatedAt,
-  statusLabel,
   attrTone,
   attrIcon,
   summarizeSubtasksProgress,
@@ -147,7 +146,7 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
 
 function StatusBadge({ status }: { status: TaskStatus | 'archived' }) {
   const tone = statusTone[status]
-  const label = status === 'archived' ? taskStrings.status.archived : statusLabel[status]
+  const label = status === 'archived' ? taskStrings.status.archived : taskStrings.statusLabels[status]
   return (
     <View className={`status-badge tone-${tone}`}>
       <Text className='status-icon'>{statusIcon[status]}</Text>
@@ -238,7 +237,7 @@ function MissionCard({
   const isSelfAssigned = !!task.assigneeId && task.assigneeId === task.creatorId
   const useComplete = isChallengeTask || isSelfAssigned
   const reviewLabel = useComplete ? taskStrings.actions.completeTask : taskStrings.actions.submitReview
-  const reviewIcon = useComplete ? '✅' : '📝'
+  const reviewIcon = useComplete ? taskStrings.icons.actions.completeTask : taskStrings.icons.actions.submitReview
   const reviewHandler = useComplete ? onComplete : onReview
 
   return (
@@ -377,20 +376,20 @@ function MissionCard({
       >
         {editing ? (
           <>
-            <ActionButton icon='✅' label={taskStrings.actions.submitChange} onClick={onSubmit} />
-            <ActionButton icon='📝' label={taskStrings.actions.submitReview} onClick={onReview} />
-            <ActionButton icon='✖' label={taskStrings.actions.cancelChange} ghost onClick={onCancel} />
+            <ActionButton icon={taskStrings.icons.actions.submitChange} label={taskStrings.actions.submitChange} onClick={onSubmit} />
+            <ActionButton icon={reviewIcon} label={reviewLabel} onClick={reviewHandler} />
+            <ActionButton icon={taskStrings.icons.actions.cancelChange} label={taskStrings.actions.cancelChange} ghost onClick={onCancel} />
           </>
         ) : task.status === 'pending_confirmation' ? (
           <>
-            <ActionButton icon='✅' label={taskStrings.actions.acceptRework} onClick={onAccept} />
-            <ActionButton icon='✖' label={taskStrings.actions.rejectRework} ghost onClick={onReject} />
+            <ActionButton icon={taskStrings.icons.actions.acceptRework} label={taskStrings.actions.acceptRework} onClick={onAccept} />
+            <ActionButton icon={taskStrings.icons.actions.rejectRework} label={taskStrings.actions.rejectRework} ghost onClick={onReject} />
           </>
         ) : (
           <>
-            <ActionButton icon='🔁' label={taskStrings.actions.updateProgress} onClick={onEdit} />
+            <ActionButton icon={taskStrings.icons.actions.updateProgress} label={taskStrings.actions.updateProgress} onClick={onEdit} />
             <ActionButton icon={reviewIcon} label={reviewLabel} onClick={reviewHandler} />
-            <ActionButton icon='📥' label={taskStrings.actions.abandonTask} ghost onClick={onCollect} />
+            <ActionButton icon={taskStrings.icons.actions.abandonTask} label={taskStrings.actions.abandonTask} ghost onClick={onCollect} />
           </>
         )}
       </View>
@@ -528,18 +527,18 @@ function CollabCard({
         onTouchEnd={(e) => e.stopPropagation()}
       >
         {task.status === 'pending_confirmation' ? (
-          <ActionButton icon='↩️' label={metaText.reworkCancel} onClick={onCancelRework} />
+          <ActionButton icon={taskStrings.icons.actions.cancelRework} label={metaText.reworkCancel} onClick={onCancelRework} />
         ) : (
           isClosed ? (
             <>
-              <ActionButton icon='🗑️' label={metaText.delete} ghost onClick={onDelete} />
-              <ActionButton icon='🚀' label={metaText.restart} onClick={onRestart} />
+              <ActionButton icon={taskStrings.icons.actions.delete} label={metaText.delete} ghost onClick={onDelete} />
+              <ActionButton icon={taskStrings.icons.actions.restart} label={metaText.restart} onClick={onRestart} />
             </>
           ) : (
             <>
-              <ActionButton icon='✏' label={metaText.edit} onClick={onEdit} />
-              <ActionButton icon='🧭' label={metaText.assign} onClick={onAssign} />
-              <ActionButton icon='📦' label={metaText.close} ghost onClick={onClose} />
+              <ActionButton icon={taskStrings.icons.actions.edit} label={metaText.edit} onClick={onEdit} />
+              <ActionButton icon={taskStrings.icons.actions.assign} label={metaText.assign} onClick={onAssign} />
+              <ActionButton icon={taskStrings.icons.actions.close} label={metaText.close} ghost onClick={onClose} />
             </>
           )
         )}
@@ -584,7 +583,7 @@ function ArchivedCard({ task, onDelete }: { task: ArchivedTask; onDelete?: () =>
         onTouchStart={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
       >
-        <ActionButton icon='🗑' label={taskStrings.actions.delete} ghost onClick={onDelete} />
+        <ActionButton icon={taskStrings.icons.actions.delete} label={taskStrings.actions.delete} ghost onClick={onDelete} />
       </View>
     </View>
   )
