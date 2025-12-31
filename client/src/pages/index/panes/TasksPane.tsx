@@ -161,13 +161,44 @@ function ActionButton({
   ghost,
   disabled,
   onClick,
+  openType,
+  taskId,
+  taskTitle,
 }: {
   icon: string
   label: string
   ghost?: boolean
   disabled?: boolean
   onClick?: () => void
+  openType?: 'share'
+  taskId?: string
+  taskTitle?: string
 }) {
+  if (openType === 'share') {
+    return (
+      <Button
+        className={`task-action ${ghost ? 'ghost' : ''} ${disabled ? 'disabled' : ''}`}
+        data-noexpand
+        openType='share'
+        data-taskid={taskId}
+        data-tasktitle={taskTitle}
+        disabled={disabled}
+        hoverClass={disabled ? '' : 'pressing'}
+        hoverStartTime={0}
+        hoverStayTime={120}
+        hoverStopPropagation
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
+        }}
+      >
+        <Text className='action-icon'>{icon}</Text>
+        <Text data-noexpand>{label}</Text>
+      </Button>
+    )
+  }
   return (
     <View
       className={`task-action ${ghost ? 'ghost' : ''} ${disabled ? 'disabled' : ''}`}
@@ -402,7 +433,6 @@ function CollabCard({
   expanded,
   onToggleExpand,
   onEdit,
-  onAssign,
   onClose,
   onRestart,
   onHistory,
@@ -413,7 +443,6 @@ function CollabCard({
   expanded: boolean
   onToggleExpand?: (taskId: string) => void
   onEdit?: () => void
-  onAssign?: () => void
   onClose?: () => void
   onRestart?: () => void
   onHistory?: (taskId?: string | null) => void
@@ -537,7 +566,15 @@ function CollabCard({
           ) : (
             <>
               <ActionButton icon={taskStrings.icons.actions.edit} label={metaText.edit} onClick={onEdit} />
-              <ActionButton icon={taskStrings.icons.actions.assign} label={metaText.assign} onClick={onAssign} />
+              {task.assigneeId ? null : (
+                <ActionButton
+                  icon={taskStrings.icons.actions.assign}
+                  label={metaText.assign}
+                  openType='share'
+                  taskId={task.id}
+                  taskTitle={task.title}
+                />
+              )}
               <ActionButton icon={taskStrings.icons.actions.close} label={metaText.close} ghost onClick={onClose} />
             </>
           )
@@ -1708,7 +1745,6 @@ export default function TasksPane({
                         expanded={expandedCollabId === task.id}
                         onToggleExpand={(id) => handleToggleCollabCard(id, hasSubtasks)}
                         onEdit={() => handleStartRework(task)}
-                        onAssign={() => showPlaceholder(taskStrings.toast.assignPending)}
                         onClose={() => void handleCloseCollabTask(task.id)}
                         onRestart={() => void handleRestartCollabTask(task.id)}
                         onHistory={handleOpenHistory}

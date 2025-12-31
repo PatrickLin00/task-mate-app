@@ -284,11 +284,14 @@ exports.getTask = async (req, res) => {
     if (!task) return res.status(404).json({ error: 'task not found' })
 
     if (!visibleToUserId(task, userId)) {
-      const hasAccess = await Task.exists({
-        previousTaskId: task._id,
-        $or: [{ creatorId: userId }, { assigneeId: userId }],
-      })
-      if (!hasAccess) return res.status(403).json({ error: 'forbidden' })
+      const canPreviewShared = task.status === 'pending' && !task.assigneeId
+      if (!canPreviewShared) {
+        const hasAccess = await Task.exists({
+          previousTaskId: task._id,
+          $or: [{ creatorId: userId }, { assigneeId: userId }],
+        })
+        if (!hasAccess) return res.status(403).json({ error: 'forbidden' })
+      }
     }
 
     return res.json(buildResponse(task))
@@ -1049,6 +1052,48 @@ exports.acceptChallengeTask = async (req, res) => {
   } catch (error) {
     console.error('acceptChallengeTask error:', error)
     return res.status(500).json({ error: 'accept challenge failed' })
+  }
+}
+
+exports.acceptTask = async (req, res) => {
+  try {
+    const userId = ensureAuthorized(req, res)
+    if (!userId) return
+
+    const { id } = req.params
+    if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
+
+    const task = await Task.findById(id)
+    if (!task) return res.status(404).json({ error: 'task not found' })
+    if (isChallengeTask(task)) return res.status(400).json({ error: 'challenge task must be accepted via challenge flow' })
+    if (task.assigneeId) return res.status(400).json({ error: 'task already assigned' })
+    if (task.status !== 'pending') return conflict(res)
+
+    const now = new Date()
+    const updated = await Task.findOneAndUpdate(
+      {
+        _id: task._id,
+        status: 'pending',
+        assigneeId: null,
+        updatedAt: task.updatedAt,
+      },
+      { $set: { assigneeId: userId, status: 'in_progress', updatedAt: now } },
+      { new: true, runValidators: true }
+    )
+
+    if (!updated) return conflict(res)
+
+    taskDebugLog('acceptTask ok', {
+      userId,
+      taskId: updated._id?.toString?.() || updated._id,
+      status: updated.status,
+      assigneeId: updated.assigneeId,
+    })
+
+    return res.json(buildResponse(updated))
+  } catch (error) {
+    console.error('acceptTask error:', error)
+    return res.status(500).json({ error: 'accept task failed' })
   }
 }
 

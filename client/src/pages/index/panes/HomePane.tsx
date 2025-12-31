@@ -16,10 +16,12 @@ import {
 } from '../shared/mocks'
 import {
   abandonTask,
+  acceptTask,
   acceptChallengeTask,
   completeTask,
   fetchChallengeTasks,
   fetchTodayTasks,
+  getTask,
   patchProgress,
   type Task,
 } from '@/services/api'
@@ -76,9 +78,10 @@ const formatStartDate = (iso?: string) => {
 type HomePaneProps = {
   isActive?: boolean
   authVersion?: number
+  openTaskId?: string
 }
 
-export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneProps) {
+export default function HomePane({ isActive = true, authVersion = 0, openTaskId }: HomePaneProps) {
   const [todayTasks, setTodayTasks] = useState<RoadTask[]>([])
   const [dueTodayCount, setDueTodayCount] = useState(0)
   const [feedTasks, setFeedTasks] = useState<RoadTask[]>([])
@@ -95,6 +98,8 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
   const [modalTask, setModalTask] = useState<RoadTask | null>(null)
   const [dialogEditing, setDialogEditing] = useState(false)
   const [dialogDraft, setDialogDraft] = useState<Subtask[]>([])
+  const [shareOnly, setShareOnly] = useState(false)
+  const [handledShareId, setHandledShareId] = useState<string | null>(null)
 
   const mapRewardToAttr = (val: 'wisdom' | 'strength' | 'agility') => {
     if (val === 'wisdom') return taskStrings.rewards.wisdom.label
@@ -163,9 +168,11 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
     setModalTask(null)
     setDialogEditing(false)
     setDialogDraft([])
+    setShareOnly(false)
   }
 
   const handleStartDialogEdit = () => {
+    if (shareOnly) return
     if (!modalTask?.subtasks?.length) return
     setDialogEditing(true)
     setDialogDraft(modalTask.subtasks.map((s) => ({ ...s })))
@@ -248,6 +255,22 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
     }
   }
 
+  const handleDialogAccept = async () => {
+    if (!modalTask) return
+    try {
+      await acceptTask(modalTask.id)
+      Taro.showToast({ title: taskStrings.toast.accepted, icon: 'success' })
+      setModalTask(null)
+      setDialogEditing(false)
+      setDialogDraft([])
+      setShareOnly(false)
+      await refreshHomeTasks()
+    } catch (err) {
+      console.error('accept task error', err)
+      await refreshHomeTasks(true)
+    }
+  }
+
   const dialogSubtasks = dialogEditing && dialogDraft.length > 0 ? dialogDraft : modalTask?.subtasks
   const dialogProgress =
     dialogEditing && dialogSubtasks
@@ -295,6 +318,7 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
       setModalTask(null)
       setDialogEditing(false)
       setDialogDraft([])
+      setShareOnly(false)
     }
   }, [isActive, modalTask])
 
@@ -306,6 +330,33 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
       cancelled = true
     }
   }, [authVersion, isActive])
+
+  useEffect(() => {
+    if (!openTaskId) return
+    if (openTaskId === handledShareId) return
+    let active = true
+    setHandledShareId(openTaskId)
+    const loadSharedTask = async () => {
+      try {
+        const task = await getTask(openTaskId)
+        if (!active) return
+        const mapped = mapApiTaskToRoad(task)
+        setModalTask(mapped)
+        setDialogEditing(false)
+        setDialogDraft([])
+        setShareOnly(true)
+      } catch (err) {
+        console.error('load share task error', err)
+        if (!active) return
+        setShareOnly(false)
+        Taro.showToast({ title: taskStrings.toast.loadFail, icon: 'none' })
+      }
+    }
+    void loadSharedTask()
+    return () => {
+      active = false
+    }
+  }, [openTaskId, handledShareId])
 
   return (
     <View className='home-pane'>
@@ -542,66 +593,82 @@ export default function HomePane({ isActive = true, authVersion = 0 }: HomePaneP
               )}
 
               <View className='action-row'>
-                {dialogEditing ? (
+                {shareOnly ? (
                   <View
                     className='task-action'
                     hoverClass='pressing'
                     hoverStartTime={0}
                     hoverStayTime={120}
                     hoverStopPropagation
-                    onClick={handleDialogSubmit}
+                    onClick={handleDialogAccept}
                   >
-                    <Text className='action-icon'>{taskStrings.icons.actions.submitChange}</Text>
-                    <Text>{taskStrings.actions.submitChange}</Text>
+                    <Text className='action-icon'>{taskStrings.icons.actions.acceptTask}</Text>
+                    <Text>{taskStrings.actions.acceptTask}</Text>
                   </View>
                 ) : (
-                  <View
-                    className='task-action'
-                    hoverClass='pressing'
-                    hoverStartTime={0}
-                    hoverStayTime={120}
-                    hoverStopPropagation
-                    onClick={handleStartDialogEdit}
-                  >
-                    <Text className='action-icon'>{taskStrings.icons.actions.updateProgress}</Text>
-                    <Text>{taskStrings.actions.updateProgress}</Text>
-                  </View>
-                )}
-                <View
-                  className='task-action'
-                  hoverClass='pressing'
-                  hoverStartTime={0}
-                  hoverStayTime={120}
-                  hoverStopPropagation
-                  onClick={dialogReviewHandler}
-                >
-                  <Text className='action-icon'>{dialogReviewIcon}</Text>
-                  <Text>{dialogReviewLabel}</Text>
-                </View>
-                {dialogEditing ? (
-                  <View
-                    className='task-action ghost'
-                    hoverClass='pressing'
-                    hoverStartTime={0}
-                    hoverStayTime={120}
-                    hoverStopPropagation
-                    onClick={handleDialogCancel}
-                  >
-                    <Text className='action-icon'>{taskStrings.icons.actions.cancelChange}</Text>
-                    <Text>{taskStrings.actions.cancelChange}</Text>
-                  </View>
-                ) : (
-                  <View
-                    className='task-action ghost'
-                    hoverClass='pressing'
-                    hoverStartTime={0}
-                    hoverStayTime={120}
-                    hoverStopPropagation
-                    onClick={handleDialogAbandon}
-                  >
-                    <Text className='action-icon'>{taskStrings.icons.actions.abandonTask}</Text>
-                    <Text>{taskStrings.actions.abandonTask}</Text>
-                  </View>
+                  <>
+                    {dialogEditing ? (
+                      <View
+                        className='task-action'
+                        hoverClass='pressing'
+                        hoverStartTime={0}
+                        hoverStayTime={120}
+                        hoverStopPropagation
+                        onClick={handleDialogSubmit}
+                      >
+                        <Text className='action-icon'>{taskStrings.icons.actions.submitChange}</Text>
+                        <Text>{taskStrings.actions.submitChange}</Text>
+                      </View>
+                    ) : (
+                      <View
+                        className='task-action'
+                        hoverClass='pressing'
+                        hoverStartTime={0}
+                        hoverStayTime={120}
+                        hoverStopPropagation
+                        onClick={handleStartDialogEdit}
+                      >
+                        <Text className='action-icon'>{taskStrings.icons.actions.updateProgress}</Text>
+                        <Text>{taskStrings.actions.updateProgress}</Text>
+                      </View>
+                    )}
+                    <View
+                      className='task-action'
+                      hoverClass='pressing'
+                      hoverStartTime={0}
+                      hoverStayTime={120}
+                      hoverStopPropagation
+                      onClick={dialogReviewHandler}
+                    >
+                      <Text className='action-icon'>{dialogReviewIcon}</Text>
+                      <Text>{dialogReviewLabel}</Text>
+                    </View>
+                    {dialogEditing ? (
+                      <View
+                        className='task-action ghost'
+                        hoverClass='pressing'
+                        hoverStartTime={0}
+                        hoverStayTime={120}
+                        hoverStopPropagation
+                        onClick={handleDialogCancel}
+                      >
+                        <Text className='action-icon'>{taskStrings.icons.actions.cancelChange}</Text>
+                        <Text>{taskStrings.actions.cancelChange}</Text>
+                      </View>
+                    ) : (
+                      <View
+                        className='task-action ghost'
+                        hoverClass='pressing'
+                        hoverStartTime={0}
+                        hoverStayTime={120}
+                        hoverStopPropagation
+                        onClick={handleDialogAbandon}
+                      >
+                        <Text className='action-icon'>{taskStrings.icons.actions.abandonTask}</Text>
+                        <Text>{taskStrings.actions.abandonTask}</Text>
+                      </View>
+                    )}
+                  </>
                 )}
               </View>
             </View>

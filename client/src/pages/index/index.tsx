@@ -1,5 +1,6 @@
 import { View, Text, Swiper, SwiperItem } from '@tarojs/components'
-import { useState } from 'react'
+import Taro, { useRouter, useShareAppMessage } from '@tarojs/taro'
+import { useEffect, useState } from 'react'
 import './index.scss'
 
 import HomePane from './panes/HomePane'
@@ -15,6 +16,32 @@ const tabMeta: Record<Tab, { label: string; icon: string }> = taskStrings.nav
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>('home')
   const [authVersion, setAuthVersion] = useState(0)
+  const router = useRouter()
+  const openTaskId = router?.params?.openTaskId ? String(router.params.openTaskId) : undefined
+
+  useEffect(() => {
+    if (openTaskId) {
+      setActiveTab('home')
+    }
+  }, [openTaskId])
+
+  useShareAppMessage((res) => {
+    if ((res as any)?.from === 'button') {
+      const dataset = (res as any)?.target?.dataset || {}
+      const taskId = dataset.taskid
+      const taskTitle = dataset.tasktitle
+      if (taskId) {
+        return {
+          title: taskTitle || taskStrings.share.assignTitle,
+          path: `/pages/index/index?openTaskId=${encodeURIComponent(taskId)}`,
+        }
+      }
+    }
+    return {
+      title: taskStrings.share.defaultTitle,
+      path: '/pages/index/index',
+    }
+  })
 
   return (
     <View className='home'>
@@ -37,7 +64,7 @@ export default function Index() {
         duration={220}
       >
         <SwiperItem>
-          <HomePane isActive={activeTab === 'home'} authVersion={authVersion} />
+          <HomePane isActive={activeTab === 'home'} authVersion={authVersion} openTaskId={openTaskId} />
         </SwiperItem>
         <SwiperItem>
           <TasksPane
