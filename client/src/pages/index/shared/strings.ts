@@ -50,6 +50,7 @@ export const taskStrings = {
       due: '📅',
       start: '🗓',
       assignee: '🙌',
+      creator: '🧑‍🚀',
     },
     toggle: {
       expand: '▶',

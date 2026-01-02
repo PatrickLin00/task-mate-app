@@ -2,6 +2,7 @@ import Taro from "@tarojs/taro"
 
 declare const API_BASE_URL: string
 declare const DEV_AUTH_ENABLED: boolean
+declare const TASK_DEBUG: boolean
 const BASE_URL: string =
   typeof API_BASE_URL !== "undefined" && API_BASE_URL
     ? API_BASE_URL
@@ -11,16 +12,11 @@ const BASE_URL: string =
 
 let loginPromise: Promise<{ token: string; userId: string } | null> | null = null
 
-const getEnvFlag = (key: string) => {
-  const env = typeof process !== "undefined" ? process.env : undefined
-  return String(env?.[key] || "").toLowerCase() === "true"
-}
-
 export async function loginWeapp() {
   // WeApp only: obtain code then exchange on server
   try {
     const { code, errMsg } = await Taro.login()
-    if (getEnvFlag("TARO_APP_TASK_DEBUG")) {
+    if (TASK_DEBUG) {
       console.log("weapp login result", { code, errMsg })
     }
     if (!code) throw new Error("no code")
@@ -66,6 +62,13 @@ export async function devLoginWeapp(userId: string, secret?: string) {
 
 export async function ensureWeappLogin() {
   const existing = getToken()
+  if (TASK_DEBUG) {
+    console.log("ensureWeappLogin start", {
+      hasToken: Boolean(existing),
+      hasPromise: Boolean(loginPromise),
+      devAuth: DEV_AUTH_ENABLED,
+    })
+  }
   if (existing) return existing
   if (process.env.TARO_ENV !== "weapp") return ""
 
@@ -82,6 +85,11 @@ export async function ensureWeappLogin() {
   }
 
   await loginPromise
+  if (TASK_DEBUG) {
+    console.log("ensureWeappLogin done", {
+      hasToken: Boolean(getToken()),
+    })
+  }
   return getToken()
 }
 

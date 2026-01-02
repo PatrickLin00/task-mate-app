@@ -1,6 +1,6 @@
 import { View, Text, Swiper, SwiperItem } from '@tarojs/components'
-import Taro, { useRouter, useShareAppMessage } from '@tarojs/taro'
-import { useEffect, useState } from 'react'
+import Taro, { useDidShow, useShareAppMessage } from '@tarojs/taro'
+import { useState } from 'react'
 import './index.scss'
 
 import HomePane from './panes/HomePane'
@@ -16,20 +16,41 @@ const tabMeta: Record<Tab, { label: string; icon: string }> = taskStrings.nav
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>('home')
   const [authVersion, setAuthVersion] = useState(0)
-  const router = useRouter()
-  const openTaskId = router?.params?.openTaskId ? String(router.params.openTaskId) : undefined
-
-  useEffect(() => {
-    if (openTaskId) {
-      setActiveTab('home')
+  const [openTaskId, setOpenTaskId] = useState<string | undefined>(undefined)
+  const taskDebug = TASK_DEBUG
+  const readOpenTaskId = () => {
+    const routerParams = (Taro.getCurrentInstance()?.router?.params || {}) as Record<string, any>
+    const launchQuery = Taro.getLaunchOptionsSync?.().query || {}
+    const enterQuery = Taro.getEnterOptionsSync?.()?.query || {}
+    const raw = routerParams.openTaskId || enterQuery.openTaskId || launchQuery.openTaskId
+    if (taskDebug) {
+      console.log('share param snapshot', {
+        routerParams,
+        enterQuery,
+        launchQuery,
+        resolved: raw,
+      })
     }
-  }, [openTaskId])
+    return raw ? String(raw) : undefined
+  }
+
+  useDidShow(() => {
+    const next = readOpenTaskId()
+    if (taskDebug) {
+      console.log('share param resolved', { next })
+    }
+    setOpenTaskId(next)
+    if (next) setActiveTab('home')
+  })
 
   useShareAppMessage((res) => {
     if ((res as any)?.from === 'button') {
       const dataset = (res as any)?.target?.dataset || {}
       const taskId = dataset.taskid
       const taskTitle = dataset.tasktitle
+      if (taskDebug) {
+        console.log('share from button', { dataset, taskId, taskTitle })
+      }
       if (taskId) {
         return {
           title: taskTitle || taskStrings.share.assignTitle,

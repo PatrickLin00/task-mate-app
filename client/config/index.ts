@@ -26,18 +26,21 @@ const readEnvFile = (filePath: string) => {
   }
 }
 
-const fileEnv = {
-  ...readEnvFile(path.resolve(__dirname, '..', '.env')),
-}
-
-const getEnvValue = (key: string) => process.env[key] ?? fileEnv[key]
-
 // https://taro-docs.jd.com/docs/next/config#defineconfig
 export default defineConfig<'vite'>(async (merge, { command, mode }) => {
+  const fileEnv = {
+    ...readEnvFile(path.resolve(__dirname, '..', '.env')),
+    ...readEnvFile(path.resolve(__dirname, '..', `.env.${mode}`)),
+  }
+  const getEnvValue = (key: string) => process.env[key] ?? fileEnv[key]
   const appId = getEnvValue('TARO_APP_ID')
   const devAuthEnabled =
     String(getEnvValue('DEV_AUTH_ENABLED') || getEnvValue('TASKMATE_DEV_AUTH_ENABLED') || '').toLowerCase() ===
     'true'
+  const taskDebug =
+    String(getEnvValue('TARO_APP_TASK_DEBUG') || '').toLowerCase() === 'true'
+  const taskMemReport =
+    String(getEnvValue('TARO_APP_TASK_MEM_REPORT') || '').toLowerCase() === 'true'
   const devAuth = process.env.NODE_ENV === 'production' ? false : devAuthEnabled
   const apiBaseUrl =
     getEnvValue('TASKMATE_API_BASE_URL') ||
@@ -65,6 +68,8 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
     defineConstants: {
       API_BASE_URL: JSON.stringify(apiBaseUrl),
       DEV_AUTH_ENABLED: JSON.stringify(devAuth),
+      TASK_DEBUG: JSON.stringify(taskDebug),
+      TASK_MEM_REPORT: JSON.stringify(taskMemReport),
     },
     copy: {
       patterns: [

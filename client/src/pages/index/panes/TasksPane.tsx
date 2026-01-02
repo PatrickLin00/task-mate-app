@@ -83,10 +83,8 @@ type SubtaskInput = { title: string; total: number }
 
 const DAY = 24 * 60 * 60 * 1000
 const pad2 = (num: number) => (num < 10 ? `0${num}` : `${num}`)
-const getEnvFlag = (key: string) => {
-  const env = typeof process !== 'undefined' ? process.env : undefined
-  return String(env?.[key] || '').toLowerCase() === 'true'
-}
+const taskDebug = TASK_DEBUG
+const taskMemReport = TASK_MEM_REPORT
 
 const calcPercent = (current: number, total: number) =>
   Math.min(100, Math.round((current / Math.max(1, total || 1)) * 100))
@@ -947,7 +945,7 @@ export default function TasksPane({
         fetchArchivedTasks(),
       ])
       if (shouldCancel?.()) return
-      if (getEnvFlag('TARO_APP_TASK_DEBUG')) {
+      if (taskDebug) {
         console.log('refreshTasks ok', {
           missionCount: mission.length,
           collabCount: collab.length,
@@ -977,7 +975,7 @@ export default function TasksPane({
   }
 
   const reportMemoryUsage = () => {
-    const enabled = getEnvFlag('TARO_APP_TASK_MEM_REPORT')
+    const enabled = taskMemReport
     if (!enabled) return
     const getPerf = (Taro as any).getPerformance
     if (typeof getPerf !== 'function') return
@@ -1011,7 +1009,7 @@ export default function TasksPane({
   }, [isActive])
 
   useEffect(() => {
-    const enabled = getEnvFlag('TARO_APP_TASK_MEM_REPORT')
+    const enabled = taskMemReport
     if (!isActive || !enabled) return
     reportMemoryUsage()
     const timer = setInterval(reportMemoryUsage, 5 * 60 * 1000)

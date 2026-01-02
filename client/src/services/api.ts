@@ -2,6 +2,7 @@ import Taro from '@tarojs/taro'
 import { ensureWeappLogin, getToken } from '@/services/auth'
 
 declare const API_BASE_URL: string
+declare const TASK_DEBUG: boolean
 
 const BASE_URL: string =
   typeof API_BASE_URL !== 'undefined' && API_BASE_URL
@@ -54,29 +55,64 @@ const authHeader = () => {
 }
 
 const authHeaderAsync = async () => {
+  if (TASK_DEBUG) {
+    console.log("auth header start")
+  }
   await ensureWeappLogin()
-  return authHeader()
+  const header = authHeader()
+  if (TASK_DEBUG) {
+    console.log("auth header ready", {
+      hasAuth: Boolean(header.Authorization),
+    })
+  }
+  return header
 }
 
 const isOkStatus = (statusCode?: number) =>
   typeof statusCode === 'number' && statusCode >= 200 && statusCode < 300
 
 const requestJson = async <T>(options: Taro.request.Option): Promise<T> => {
-  const res = await Taro.request<T>(options)
-  if (!isOkStatus((res as any).statusCode)) {
-    const data: any = (res as any).data
-    const message =
-      typeof data?.error === 'string'
-        ? data.error
-        : typeof data?.message === 'string'
-          ? data.message
-          : 'request failed'
-    const err: any = new Error(message)
-    err.statusCode = (res as any).statusCode
-    err.data = data
+  try {
+    if (TASK_DEBUG) {
+      console.log('api request start', {
+        url: options.url,
+        method: options.method,
+      })
+    }
+    const res = await Taro.request<T>(options)
+    const statusCode = (res as any).statusCode
+    if (!isOkStatus(statusCode)) {
+      const data: any = (res as any).data
+      const message =
+        typeof data?.error === 'string'
+          ? data.error
+          : typeof data?.message === 'string'
+            ? data.message
+            : 'request failed'
+      if (TASK_DEBUG) {
+        console.log('api request error', {
+          url: options.url,
+          method: options.method,
+          statusCode,
+          data,
+        })
+      }
+      const err: any = new Error(message)
+      err.statusCode = statusCode
+      err.data = data
+      throw err
+    }
+    return res.data as any
+  } catch (err) {
+    if (TASK_DEBUG) {
+      console.log('api request exception', {
+        url: options.url,
+        method: options.method,
+        error: (err as any)?.message || String(err),
+      })
+    }
     throw err
   }
-  return res.data as any
 }
 
 export async function fetchTasks(status?: Task['status']) {
@@ -215,6 +251,9 @@ export async function deleteTask(id: string) {
 }
 
 export async function getTask(id: string) {
+  if (TASK_DEBUG) {
+    console.log("getTask start", { id })
+  }
   return requestJson<Task>({
     url: `${BASE_URL}/api/tasks/${id}`,
     method: 'GET',

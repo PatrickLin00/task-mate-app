@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, Button, Image, Slider } from '@tarojs/components'
 import Taro, { useLoad } from '@tarojs/taro'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   type Attr,
   type RoadTask,
@@ -25,6 +25,7 @@ import {
   patchProgress,
   type Task,
 } from '@/services/api'
+import { ensureWeappLogin } from '@/services/auth'
 import { taskStrings } from '../shared/strings'
 
 const attrList: Attr[] = [
@@ -99,7 +100,8 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
   const [dialogEditing, setDialogEditing] = useState(false)
   const [dialogDraft, setDialogDraft] = useState<Subtask[]>([])
   const [shareOnly, setShareOnly] = useState(false)
-  const [handledShareId, setHandledShareId] = useState<string | null>(null)
+  const handledShareIdRef = useRef<string | null>(null)
+  const taskDebug = TASK_DEBUG
 
   const mapRewardToAttr = (val: 'wisdom' | 'strength' | 'agility') => {
     if (val === 'wisdom') return taskStrings.rewards.wisdom.label
@@ -332,12 +334,28 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
   }, [authVersion, isActive])
 
   useEffect(() => {
-    if (!openTaskId) return
-    if (openTaskId === handledShareId) return
+    if (taskDebug) {
+      console.log('share effect state', { openTaskId, handledShareId: handledShareIdRef.current })
+    }
+    if (!openTaskId) {
+      if (taskDebug) console.log('share load skipped', { reason: 'missing openTaskId' })
+      return
+    }
+    if (openTaskId === handledShareIdRef.current) {
+      if (taskDebug) console.log('share load skipped', { reason: 'already handled', openTaskId })
+      return
+    }
     let active = true
-    setHandledShareId(openTaskId)
+    if (taskDebug) {
+      console.log('share openTaskId received', { openTaskId })
+    }
+    handledShareIdRef.current = openTaskId
     const loadSharedTask = async () => {
       try {
+        if (taskDebug) console.log('share load start', { openTaskId })
+        await ensureWeappLogin()
+        if (!active) return
+        if (taskDebug) console.log('share login ok', { openTaskId })
         const task = await getTask(openTaskId)
         if (!active) return
         const mapped = mapApiTaskToRoad(task)
@@ -345,6 +363,9 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
         setDialogEditing(false)
         setDialogDraft([])
         setShareOnly(true)
+        if (taskDebug) {
+          console.log('share task loaded', { taskId: mapped.id, status: mapped.status })
+        }
       } catch (err) {
         console.error('load share task error', err)
         if (!active) return
@@ -352,11 +373,12 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
         Taro.showToast({ title: taskStrings.toast.loadFail, icon: 'none' })
       }
     }
+    if (taskDebug) console.log('share load invoke', { openTaskId })
     void loadSharedTask()
     return () => {
       active = false
     }
-  }, [openTaskId, handledShareId])
+  }, [openTaskId])
 
   return (
     <View className='home-pane'>
@@ -529,6 +551,11 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
 
               <View className='dialog-meta'>
                 {dialogRemain && <Text>{homeStrings.dialogRemainPrefix} {dialogRemain}</Text>}
+                {modalTask?.creatorId && (
+                  <Text>
+                    {taskStrings.icons.meta.creator} {taskStrings.metaText.creator} {modalTask.creatorId}
+                  </Text>
+                )}
                 {dialogDueLabel && <Text>{homeStrings.dialogDuePrefix} {dialogDueLabel}</Text>}
                 {dialogStartLabel && <Text>{homeStrings.dialogStartPrefix} {dialogStartLabel}</Text>}
               </View>
