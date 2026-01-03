@@ -20,6 +20,7 @@
   metaText: {
     remain: '剩余时间:',
     deleteRemain: '删除倒计时:',
+    submitted: '提交于:',
     due: '截止:',
     deleteDue: '删除于:',
     start: '起始:',
@@ -80,6 +81,8 @@
   actions: {
     submitChange: '提交变更',
     submitReview: '提交检视',
+    confirmReview: '确认完成',
+    keepGoing: '继续加油',
     completeTask: '完成任务',
     cancelChange: '取消变更',
     acceptRework: '接受奇遇',
@@ -112,6 +115,10 @@
     abandonOk: '确认放弃',
     abandoned: '已放弃',
     submitted: '已提交',
+    reviewConfirmTitle: '提交检视',
+    reviewConfirmContent: '提交检视会自动完成所有任务目标,是否确认?',
+    reviewConfirmOk: '确认提交',
+    reviewContinue: '已恢复待完成',
     completed: '已完成',
     accepted: '已接受',
     rejected: '已拒绝',
@@ -182,6 +189,8 @@
   labels: {
     progress: '进度',
     completedAt: '完成于',
+    submittedAt: '提交于',
+    reviewWaiting: '待检视确认',
     subtaskFallback: '子任务',
     difficultyMid: '中等',
     difficultyEasy: '简单',

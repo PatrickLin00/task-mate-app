@@ -67,6 +67,7 @@ export type CollabTask = TaskBase & {
   dueLabel?: string
   dueAt?: string
   dueDays?: number
+  submittedAt?: string | null
   difficulty?: Difficulty
 }
 
@@ -74,6 +75,8 @@ export type ArchivedTask = TaskBase & {
   finishedAgo: string
   deleteAt?: string
   deleteRemain?: string
+  submittedAt?: string | null
+  status: TaskStatus
 }
 
 export const defaultCreatedAt = '2000-01-01T00:00:00'

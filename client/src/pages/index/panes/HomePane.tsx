@@ -17,12 +17,15 @@ import {
 import {
   abandonTask,
   acceptTask,
+  acceptReworkTask,
   acceptChallengeTask,
   completeTask,
+  submitReview,
   fetchChallengeTasks,
   fetchTodayTasks,
   getTask,
   patchProgress,
+  rejectReworkTask,
   type Task,
 } from '@/services/api'
 import { ensureWeappLogin } from '@/services/auth'
@@ -301,6 +304,63 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
     }
   }
 
+  const handleDialogSubmitReview = async () => {
+    if (!modalTask) return
+    const progress = dialogProgress || { current: 0, total: 1 }
+    if (progress.current < progress.total) {
+      const result = await Taro.showModal({
+        title: taskStrings.toast.reviewConfirmTitle,
+        content: taskStrings.toast.reviewConfirmContent,
+        confirmText: taskStrings.toast.reviewConfirmOk,
+        cancelText: taskStrings.toast.cancel,
+      })
+      if (!result.confirm) return
+    }
+    try {
+      await submitReview(modalTask.id)
+      Taro.showToast({ title: taskStrings.toast.submitted, icon: 'success' })
+      setModalTask(null)
+      setDialogEditing(false)
+      setDialogDraft([])
+      await refreshHomeTasks()
+    } catch (err) {
+      console.error('submit review error', err)
+      await refreshHomeTasks(true)
+    }
+  }
+
+  const handleDialogReworkAccept = async () => {
+    if (!modalTask) return
+    try {
+      await acceptReworkTask(modalTask.id)
+      Taro.showToast({ title: taskStrings.toast.accepted, icon: 'success' })
+      setModalTask(null)
+      setDialogEditing(false)
+      setDialogDraft([])
+      setShareOnly(false)
+      await refreshHomeTasks()
+    } catch (err) {
+      console.error('accept rework error', err)
+      await refreshHomeTasks(true)
+    }
+  }
+
+  const handleDialogReworkReject = async () => {
+    if (!modalTask) return
+    try {
+      await rejectReworkTask(modalTask.id)
+      Taro.showToast({ title: taskStrings.toast.rejected, icon: 'success' })
+      setModalTask(null)
+      setDialogEditing(false)
+      setDialogDraft([])
+      setShareOnly(false)
+      await refreshHomeTasks()
+    } catch (err) {
+      console.error('reject rework error', err)
+      await refreshHomeTasks(true)
+    }
+  }
+
   const dialogSubtasks = dialogEditing && dialogDraft.length > 0 ? dialogDraft : modalTask?.subtasks
   const dialogSubtasksDisplay =
     dialogEditing && dialogSubtasks
@@ -318,6 +378,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
   const dialogDueLabel = modalTask?.dueAt ? formatDueLabel(modalTask.dueAt) : modalTask?.due
   const dialogStartLabel = modalTask?.createdAt ? formatStartDate(modalTask.createdAt) : undefined
   const dialogCreatorLabel = modalTask?.creatorId || ''
+  const dialogPendingConfirm = modalTask?.status === 'pending_confirmation'
   const dialogUseComplete = Boolean(
     modalTask?.isChallenge ||
       (modalTask?.creatorId && modalTask?.assigneeId && modalTask.creatorId === modalTask.assigneeId)
@@ -328,7 +389,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
     : taskStrings.icons.actions.submitReview
   const dialogReviewHandler = dialogUseComplete
     ? handleDialogComplete
-    : () => handlePlaceholder(taskStrings.toast.reviewPending)
+    : handleDialogSubmitReview
 
   const refreshHomeTasks = async (showNotice = false, shouldCancel?: () => boolean) => {
     try {
@@ -664,7 +725,32 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
               )}
 
               <View className='action-row'>
-                {shareOnly ? (
+                {dialogPendingConfirm ? (
+                  <>
+                    <View
+                      className='task-action'
+                      hoverClass='pressing'
+                      hoverStartTime={0}
+                      hoverStayTime={120}
+                      hoverStopPropagation
+                      onClick={handleDialogReworkAccept}
+                    >
+                      <Text className='action-icon'>{taskStrings.icons.actions.acceptRework}</Text>
+                      <Text>{taskStrings.actions.acceptRework}</Text>
+                    </View>
+                    <View
+                      className='task-action ghost'
+                      hoverClass='pressing'
+                      hoverStartTime={0}
+                      hoverStayTime={120}
+                      hoverStopPropagation
+                      onClick={handleDialogReworkReject}
+                    >
+                      <Text className='action-icon'>{taskStrings.icons.actions.rejectRework}</Text>
+                      <Text>{taskStrings.actions.rejectRework}</Text>
+                    </View>
+                  </>
+                ) : shareOnly ? (
                   <View
                     className='task-action'
                     hoverClass='pressing'

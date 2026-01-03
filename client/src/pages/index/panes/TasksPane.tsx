@@ -24,6 +24,8 @@ import {
   completeTask,
   createTask,
   abandonTask,
+  submitReview,
+  continueReview,
   deleteTask,
   fetchArchivedTasks,
   fetchCollabTasks,
@@ -467,6 +469,8 @@ function MissionCard({
     onCancelRework,
     onDelete,
     onRefresh,
+    onConfirmReview,
+    onKeepGoing,
   }: {
     task: CollabTask
     expanded: boolean
@@ -478,16 +482,20 @@ function MissionCard({
     onCancelRework?: () => void
     onDelete?: () => void
     onRefresh?: () => void
+    onConfirmReview?: () => void
+    onKeepGoing?: () => void
   }) {
     const tone = attrTone[task.attr]
     const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
     const isClosed = task.status === 'closed'
+    const isReviewPending = task.status === 'review_pending'
     const isOverdue = Boolean(task.dueAt && new Date(task.dueAt).getTime() < Date.now())
     const progress = task.progress || summarizeSubtasksProgress(task.subtasks || [])
   const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain || ''
   const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel || ''
   const startIso = isClosed ? task.closedAt || task.startAt || task.createdAt : task.startAt || task.createdAt
   const startLabel = formatStartDate(startIso)
+  const submittedLabel = formatStartDate(task.submittedAt || task.updatedAt || task.createdAt)
   const assigneeLabel = task.assigneeId || metaText.unassigned
   const creatorLabel = task.creatorId || ''
 
@@ -513,8 +521,8 @@ function MissionCard({
       <View className='card-meta'>
         <View className='meta-item'>
           <Text>{metaIcon.remain}</Text>
-          <Text>{isClosed ? metaText.deleteRemain : metaText.remain}</Text>
-          <Text>{remainLabel}</Text>
+          <Text>{isReviewPending ? metaText.submitted : isClosed ? metaText.deleteRemain : metaText.remain}</Text>
+          <Text>{isReviewPending ? submittedLabel : remainLabel}</Text>
         </View>
         <View className='meta-item'>
           <Text>{metaIcon.due}</Text>
@@ -588,6 +596,20 @@ function MissionCard({
       >
         {task.status === 'pending_confirmation' ? (
           <ActionButton icon={taskStrings.icons.actions.cancelRework} label={metaText.reworkCancel} onClick={onCancelRework} />
+        ) : isReviewPending ? (
+          <>
+            <ActionButton
+              icon={taskStrings.icons.actions.completeTask}
+              label={taskStrings.actions.confirmReview}
+              onClick={onConfirmReview}
+            />
+            <ActionButton
+              icon={taskStrings.icons.actions.updateProgress}
+              label={taskStrings.actions.keepGoing}
+              ghost
+              onClick={onKeepGoing}
+            />
+          </>
         ) : (
           isClosed ? (
             <>
@@ -623,6 +645,8 @@ function MissionCard({
 
 function ArchivedCard({ task, onDelete }: { task: ArchivedTask; onDelete?: () => void }) {
   const tone = attrTone[task.attr]
+  const isReviewPending = task.status === 'review_pending'
+  const statusBadge = isReviewPending ? 'review_pending' : 'archived'
   return (
     <View className={`task-card tone-${tone}`}>
       <View className='card-head'>
@@ -630,15 +654,22 @@ function ArchivedCard({ task, onDelete }: { task: ArchivedTask; onDelete?: () =>
           <Text className='task-icon'>{task.icon}</Text>
           <Text className='task-title'>{task.title}</Text>
         </View>
-        <StatusBadge status='archived' />
+        <StatusBadge status={statusBadge} />
       </View>
       <Text className='task-desc'>{task.detail}</Text>
       <View className='card-meta'>
           <Text className='meta-item'>
-            {taskStrings.icons.actions.completeTask} {taskStrings.labels.completedAt}: {task.finishedAgo}
+            {taskStrings.icons.actions.completeTask}{' '}
+            {isReviewPending ? taskStrings.labels.submittedAt : taskStrings.labels.completedAt}: {task.finishedAgo}
           </Text>
       </View>
-      {task.deleteRemain ? (
+      {isReviewPending ? (
+        <View className='card-meta'>
+          <Text className='meta-item'>
+            {metaIcon.remain} {taskStrings.labels.reviewWaiting}
+          </Text>
+        </View>
+      ) : task.deleteRemain ? (
         <View className='card-meta'>
           <Text className='meta-item'>
             {metaIcon.remain} {metaText.deleteRemain}
@@ -649,15 +680,17 @@ function ArchivedCard({ task, onDelete }: { task: ArchivedTask; onDelete?: () =>
       <View className='archive-foot'>
         <AttributeTag attr={task.attr} points={task.points} />
       </View>
-      <View
-        className='action-row'
-        data-noexpand
-        onClick={(e) => e.stopPropagation()}
-        onTouchStart={(e) => e.stopPropagation()}
-        onTouchEnd={(e) => e.stopPropagation()}
-      >
-        <ActionButton icon={taskStrings.icons.actions.delete} label={taskStrings.actions.delete} ghost onClick={onDelete} />
-      </View>
+      {!isReviewPending ? (
+        <View
+          className='action-row'
+          data-noexpand
+          onClick={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
+          <ActionButton icon={taskStrings.icons.actions.delete} label={taskStrings.actions.delete} ghost onClick={onDelete} />
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -1227,6 +1260,41 @@ export default function TasksPane({
     }
   }
 
+  const handleSubmitReview = async (task: MissionTask) => {
+    const progress = task.progress || summarizeSubtasksProgress(task.subtasks || [])
+    if (progress.current < progress.total) {
+      const result = await Taro.showModal({
+        title: taskStrings.toast.reviewConfirmTitle,
+        content: taskStrings.toast.reviewConfirmContent,
+        confirmText: taskStrings.toast.reviewConfirmOk,
+        cancelText: taskStrings.toast.cancel,
+      })
+      if (!result.confirm) return
+    }
+    try {
+      const updated = await submitReview(task.id)
+      const archivedMapped = mapApiTaskToArchived(updated)
+      setMissionTasks((prev) => prev.filter((t) => t.id !== task.id))
+      setArchivedTasks((prev) => [archivedMapped, ...prev.filter((t) => t.id !== task.id)])
+      Taro.showToast({ title: taskStrings.toast.submitted, icon: 'success' })
+    } catch (err: any) {
+      console.error('submit review error', err)
+      await refreshTasksWithNotice()
+    }
+  }
+
+  const handleContinueReview = async (taskId: string) => {
+    try {
+      const updated = await continueReview(taskId)
+      const mapped = mapApiTaskToCollab(updated)
+      setCollabTasks((prev) => prev.map((t) => (t.id === taskId ? mapped : t)))
+      Taro.showToast({ title: taskStrings.toast.reviewContinue, icon: 'success' })
+    } catch (err: any) {
+      console.error('continue review error', err)
+      await refreshTasksWithNotice()
+    }
+  }
+
   const handleDeleteArchivedTask = async (taskId: string) => {
     const result = await Taro.showModal({
       title: metaText.delete,
@@ -1351,7 +1419,7 @@ export default function TasksPane({
         ? taskStrings.labels.creatorSystem
         : task.creatorId,
       assigneeId: task.assigneeId ?? null,
-      icon: task.icon || '✨',
+      icon: task.icon || '?',
       progress: { current: progress.current, total: progress.total || 1 },
       subtasks,
       ...dueMeta,
@@ -1393,7 +1461,8 @@ export default function TasksPane({
       status: task.status,
       creatorId: task.creatorId,
       assigneeId: task.assigneeId ?? null,
-      icon: task.icon || '✨',
+      submittedAt: task.submittedAt ?? null,
+      icon: task.icon || '?',
       progress: { current: progress.current, total: progress.total || 1 },
       subtasks,
       ...dueMeta,
@@ -1403,8 +1472,11 @@ export default function TasksPane({
   const mapApiTaskToArchived = (task: Task): ArchivedTask => {
     const attr = mapRewardToAttr(task.attributeReward.type)
     const createdAt = task.createdAt || defaultCreatedAt
-    const finishedAt = task.completedAt || task.updatedAt || task.createdAt
-    const deleteAt = task.deleteAt || null
+    const isReviewPending = task.status === 'review_pending'
+    const finishedAt = isReviewPending
+      ? task.submittedAt || task.updatedAt || task.createdAt
+      : task.completedAt || task.updatedAt || task.createdAt
+    const deleteAt = isReviewPending ? null : task.deleteAt || null
     return {
       id: task._id || Math.random().toString(36).slice(2),
       title: task.title,
@@ -1416,8 +1488,9 @@ export default function TasksPane({
       status: task.status,
       creatorId: task.creatorId,
       assigneeId: task.assigneeId ?? null,
-      icon: task.icon || '✨',
+      icon: task.icon || '?',
       finishedAgo: formatAgo(finishedAt),
+      submittedAt: task.submittedAt ?? null,
       deleteAt: deleteAt || undefined,
       deleteRemain: deleteAt ? humanizeRemain(deleteAt) : undefined,
     }
@@ -1747,7 +1820,7 @@ export default function TasksPane({
             >
               <View className='task-list'>
                 {missionTasks
-                  .filter((t) => t.status !== 'refactored')
+                  .filter((t) => t.status !== 'refactored' && t.status !== 'review_pending')
                   .map((task) => {
                     const editing = editingTaskId === task.id
                     const subsDraft = (editing && draftSubtasks[task.id]) || task.subtasks
@@ -1767,7 +1840,7 @@ export default function TasksPane({
                       onCancel={handleCancelEditing}
                       onEdit={() => startEditing(task)}
                       onToggleExpand={(id) => handleToggleCard(id, !!task.subtasks?.length)}
-                      onReview={() => showPlaceholder(taskStrings.toast.reviewPending)}
+                      onReview={() => void handleSubmitReview(task)}
                       onCollect={() => void handleAbandonTask(task.id)}
                       onAccept={() => handleAcceptRework(task.id)}
                       onReject={() => handleRejectRework(task.id)}
@@ -1800,6 +1873,8 @@ export default function TasksPane({
                         onCancelRework={() => void handleCancelRework(task.id)}
                         onDelete={() => void handleDeleteCollabTask(task.id)}
                         onRefresh={() => void handleRefreshCollabTask(task.id)}
+                        onConfirmReview={() => void handleCompleteTask(task.id)}
+                        onKeepGoing={() => void handleContinueReview(task.id)}
                       />
                     )
                   })}

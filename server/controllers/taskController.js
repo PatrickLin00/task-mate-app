@@ -13,7 +13,7 @@ const TASK_STATUS = [
   'refactored',
 ]
 const REWARD_TYPE = ['strength', 'wisdom', 'agility']
-const ACTIVE_ASSIGNEE_STATUS = ['in_progress', 'review_pending', 'pending_confirmation']
+const ACTIVE_ASSIGNEE_STATUS = ['in_progress', 'pending_confirmation']
 const CLOSE_RETENTION_DAYS = 7
 
 const clamp = (value, min, max) => Math.max(min, Math.min(value, max))
@@ -105,6 +105,26 @@ const buildCompletionRecords = (taskDoc, completedAt, deleteAt) => {
     attributeReward: taskDoc.attributeReward,
     seedKey: taskDoc.seedKey || null,
   }))
+}
+
+const buildReviewRecord = (taskDoc, submittedAt) => {
+  if (!taskDoc.assigneeId) return null
+  return {
+    title: taskDoc.title,
+    icon: taskDoc.icon,
+    detail: taskDoc.detail,
+    dueAt: taskDoc.dueAt,
+    startAt: taskDoc.startAt,
+    submittedAt,
+    status: 'review_pending',
+    creatorId: taskDoc.creatorId,
+    assigneeId: taskDoc.assigneeId,
+    ownerId: taskDoc.assigneeId,
+    sourceTaskId: taskDoc._id,
+    subtasks: Array.isArray(taskDoc.subtasks) ? taskDoc.subtasks : [],
+    attributeReward: taskDoc.attributeReward,
+    seedKey: taskDoc.seedKey || null,
+  }
 }
 
 const parseDueAt = (value) => {
@@ -442,6 +462,9 @@ exports.deleteTask = async (req, res) => {
           }
           if (archived.ownerId !== userId) {
             throwAbort(403, { error: 'forbidden' })
+          }
+          if (archived.status === 'review_pending') {
+            throwAbort(400, { error: 'review pending cannot be deleted' })
           }
           const result = await CompletedTask.deleteOne({ _id: archived._id, ownerId: userId }).session(session)
           if (!result.deletedCount) {
@@ -1007,9 +1030,14 @@ exports.getArchivedTasks = async (req, res) => {
     const userId = ensureAuthorized(req, res)
     if (!userId) return
 
-    const tasks = await CompletedTask.find({ ownerId: userId }).sort({ completedAt: -1, updatedAt: -1 })
+    const tasks = await CompletedTask.find({ ownerId: userId }).sort({ updatedAt: -1 })
+    const sorted = tasks.sort((a, b) => {
+      const aTime = a.submittedAt || a.completedAt || a.updatedAt
+      const bTime = b.submittedAt || b.completedAt || b.updatedAt
+      return new Date(bTime).getTime() - new Date(aTime).getTime()
+    })
 
-    return res.json(tasks.map((t) => buildArchiveResponse(t)))
+    return res.json(sorted.map((t) => buildArchiveResponse(t)))
   } catch (error) {
     console.error('getArchivedTasks error:', error)
     return res.status(500).json({ error: 'get archived tasks failed' })
@@ -1229,6 +1257,117 @@ exports.updateProgress = async (req, res) => {
   }
 }
 
+exports.submitReview = async (req, res) => {
+  try {
+    const userId = ensureAuthorized(req, res)
+    if (!userId) return
+
+    const { id } = req.params
+    if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
+    const task = await Task.findById(id)
+    if (!task) return res.status(404).json({ error: 'task not found' })
+
+    if (task.assigneeId !== userId) return res.status(403).json({ error: 'forbidden' })
+    if (task.status !== 'in_progress') return conflict(res)
+
+    const now = new Date()
+    const updatedSubtasks = task.subtasks.map((st) => ({ ...st.toObject(), current: st.total }))
+    const reviewRecord = buildReviewRecord(task, now)
+
+    const session = await mongoose.startSession()
+    let response = null
+    try {
+      await session.withTransaction(async () => {
+        const updated = await Task.findOneAndUpdate(
+          {
+            _id: task._id,
+            assigneeId: userId,
+            status: 'in_progress',
+            updatedAt: task.updatedAt,
+          },
+          { $set: { subtasks: updatedSubtasks, status: 'review_pending', submittedAt: now, updatedAt: now } },
+          { new: true, runValidators: true, session }
+        )
+
+        if (!updated) {
+          throwAbort(409, { error: 'state changed' })
+        }
+
+        if (reviewRecord) {
+          await CompletedTask.deleteMany({
+            sourceTaskId: task._id,
+            ownerId: userId,
+            status: 'review_pending',
+          }).session(session)
+          await CompletedTask.create([reviewRecord], { session })
+        }
+
+        response = { status: 200, body: buildResponse(updated) }
+      })
+    } finally {
+      session.endSession()
+    }
+
+    if (response) return res.status(response.status).json(response.body)
+    return res.status(500).json({ error: 'submit review failed' })
+  } catch (error) {
+    console.error('submitReview error:', error)
+    return res.status(500).json({ error: 'submit review failed' })
+  }
+}
+
+exports.continueReview = async (req, res) => {
+  try {
+    const userId = ensureAuthorized(req, res)
+    if (!userId) return
+
+    const { id } = req.params
+    if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
+    const task = await Task.findById(id)
+    if (!task) return res.status(404).json({ error: 'task not found' })
+
+    if (task.creatorId !== userId) return res.status(403).json({ error: 'forbidden' })
+    if (task.status !== 'review_pending') return conflict(res)
+
+    const now = new Date()
+    const session = await mongoose.startSession()
+    let response = null
+    try {
+      await session.withTransaction(async () => {
+        const updated = await Task.findOneAndUpdate(
+          {
+            _id: task._id,
+            creatorId: userId,
+            status: 'review_pending',
+            updatedAt: task.updatedAt,
+          },
+          { $set: { status: 'in_progress', submittedAt: null, updatedAt: now } },
+          { new: true, runValidators: true, session }
+        )
+
+        if (!updated) {
+          throwAbort(409, { error: 'state changed' })
+        }
+
+        await CompletedTask.deleteMany({
+          sourceTaskId: task._id,
+          status: 'review_pending',
+        }).session(session)
+
+        response = { status: 200, body: buildResponse(updated) }
+      })
+    } finally {
+      session.endSession()
+    }
+
+    if (response) return res.status(response.status).json(response.body)
+    return res.status(500).json({ error: 'continue review failed' })
+  } catch (error) {
+    console.error('continueReview error:', error)
+    return res.status(500).json({ error: 'continue review failed' })
+  }
+}
+
 exports.completeTask = async (req, res) => {
   try {
     const userId = ensureAuthorized(req, res)
@@ -1258,6 +1397,13 @@ exports.completeTask = async (req, res) => {
 
         if (!updated) {
           throwAbort(409, { error: 'state changed' })
+        }
+
+        if (task.status === 'review_pending') {
+          await CompletedTask.deleteMany({
+            sourceTaskId: task._id,
+            status: 'review_pending',
+          }).session(session)
         }
 
         const records = buildCompletionRecords(updated, now, deleteAt)

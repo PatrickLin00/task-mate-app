@@ -31,6 +31,7 @@ export type Task = {
   startAt?: string
   closedAt?: string | null
   completedAt?: string | null
+  submittedAt?: string | null
   deleteAt?: string | null
   originalDueAt?: string | null
   originalStartAt?: string | null
@@ -213,6 +214,22 @@ export async function patchProgress(id: string, progress: { current?: number; su
 export async function completeTask(id: string) {
   return requestJson<Task>({
     url: `${BASE_URL}/api/tasks/${id}/complete`,
+    method: 'PATCH',
+    header: await authHeaderAsync(),
+  })
+}
+
+export async function submitReview(id: string) {
+  return requestJson<Task>({
+    url: `${BASE_URL}/api/tasks/${id}/review`,
+    method: 'PATCH',
+    header: await authHeaderAsync(),
+  })
+}
+
+export async function continueReview(id: string) {
+  return requestJson<Task>({
+    url: `${BASE_URL}/api/tasks/${id}/review/continue`,
     method: 'PATCH',
     header: await authHeaderAsync(),
   })

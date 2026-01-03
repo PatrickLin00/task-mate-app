@@ -12,13 +12,14 @@ const subtaskSchema = new mongoose.Schema(
 const completedTaskSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
-    icon: { type: String, default: '?', trim: true },
+    icon: { type: String, default: '✨', trim: true },
     detail: { type: String, default: '', trim: true },
     dueAt: { type: Date, required: true },
     startAt: { type: Date, default: Date.now },
-    completedAt: { type: Date, required: true },
-    deleteAt: { type: Date, required: true, index: { expires: '0s' } },
-    status: { type: String, enum: ['completed'], default: 'completed' },
+    completedAt: { type: Date, default: null },
+    submittedAt: { type: Date, default: null },
+    deleteAt: { type: Date, default: null, index: { expires: '0s' } },
+    status: { type: String, enum: ['completed', 'review_pending'], default: 'completed' },
     creatorId: { type: String, default: 'sys:system', trim: true },
     assigneeId: { type: String, default: null, trim: true },
     ownerId: { type: String, required: true, trim: true, index: true },
