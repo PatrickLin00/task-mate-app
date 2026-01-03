@@ -959,6 +959,48 @@ exports.restartTask = async (req, res) => {
   }
 }
 
+exports.refreshTaskSchedule = async (req, res) => {
+  try {
+    const userId = ensureAuthorized(req, res)
+    if (!userId) return
+
+    const { id } = req.params
+    if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
+
+    const task = await Task.findById(id)
+    if (!task) return res.status(404).json({ error: 'task not found' })
+
+    if (task.creatorId !== userId) return res.status(403).json({ error: 'forbidden' })
+    if (task.assigneeId) return res.status(400).json({ error: 'task already assigned' })
+    if (task.status !== 'pending') return conflict(res)
+
+    const now = new Date()
+    if (!task.dueAt) return res.status(400).json({ error: 'task missing dueAt' })
+    if (task.dueAt.getTime() >= now.getTime()) {
+      return res.status(400).json({ error: 'task not overdue' })
+    }
+
+    const baseStart = task.startAt || task.createdAt
+    if (!baseStart) return res.status(400).json({ error: 'task missing startAt' })
+
+    const durationMs = Math.max(60000, task.dueAt.getTime() - baseStart.getTime())
+    const nextDueAt = new Date(now.getTime() + durationMs)
+
+    const updated = await Task.findOneAndUpdate(
+      { _id: task._id, status: 'pending', assigneeId: null, updatedAt: task.updatedAt },
+      { $set: { startAt: now, dueAt: nextDueAt, updatedAt: now } },
+      { new: true, runValidators: true }
+    )
+
+    if (!updated) return conflict(res)
+
+    return res.json(buildResponse(updated))
+  } catch (error) {
+    console.error('refreshTaskSchedule error:', error)
+    return res.status(500).json({ error: 'refresh task failed' })
+  }
+}
+
 exports.getArchivedTasks = async (req, res) => {
   try {
     const userId = ensureAuthorized(req, res)
@@ -1064,18 +1106,21 @@ exports.acceptTask = async (req, res) => {
     if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
 
     const task = await Task.findById(id)
-    if (!task) return res.status(404).json({ error: 'task not found' })
-    if (isChallengeTask(task)) return res.status(400).json({ error: 'challenge task must be accepted via challenge flow' })
-    if (task.assigneeId) return res.status(400).json({ error: 'task already assigned' })
-    if (task.status !== 'pending') return conflict(res)
+      if (!task) return res.status(404).json({ error: 'task not found' })
+      if (isChallengeTask(task)) return res.status(400).json({ error: 'challenge task must be accepted via challenge flow' })
+      if (task.assigneeId) return res.status(400).json({ error: 'task already assigned' })
+      if (task.status !== 'pending') return conflict(res)
 
-    const now = new Date()
-    const updated = await Task.findOneAndUpdate(
-      {
-        _id: task._id,
-        status: 'pending',
-        assigneeId: null,
-        updatedAt: task.updatedAt,
+      const now = new Date()
+      if (task.dueAt && task.dueAt.getTime() < now.getTime()) {
+        return res.status(409).json({ error: 'task expired' })
+      }
+      const updated = await Task.findOneAndUpdate(
+        {
+          _id: task._id,
+          status: 'pending',
+          assigneeId: null,
+          updatedAt: task.updatedAt,
       },
       { $set: { assigneeId: userId, status: 'in_progress', updatedAt: now } },
       { new: true, runValidators: true }
@@ -1097,7 +1142,7 @@ exports.acceptTask = async (req, res) => {
   }
 }
 
-exports.getTodayTasks = async (req, res) => {
+  exports.getTodayTasks = async (req, res) => {
   try {
     const userId = ensureAuthorized(req, res)
     if (!userId) return

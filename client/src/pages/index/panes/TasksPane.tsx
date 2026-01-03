@@ -32,6 +32,7 @@ import {
   getTask,
   patchProgress,
   rejectReworkTask,
+  refreshTaskSchedule,
   restartTask,
   reworkTask,
   type Task,
@@ -88,6 +89,9 @@ const taskMemReport = TASK_MEM_REPORT
 
 const calcPercent = (current: number, total: number) =>
   Math.min(100, Math.round((current / Math.max(1, total || 1)) * 100))
+
+const clampValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+const snapSubtaskValue = (value: number, total: number) => clampValue(Math.round(value), 0, total)
 
 const formatStartDate = (iso?: string) => {
   if (!iso) return ''
@@ -268,6 +272,27 @@ function MissionCard({
   const reviewLabel = useComplete ? taskStrings.actions.completeTask : taskStrings.actions.submitReview
   const reviewIcon = useComplete ? taskStrings.icons.actions.completeTask : taskStrings.icons.actions.submitReview
   const reviewHandler = useComplete ? onComplete : onReview
+  const [dragValues, setDragValues] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    if (!editing) {
+      setDragValues({})
+    }
+  }, [editing, task.id])
+
+  const handleDrag = (id: string, value: number) => {
+    setDragValues((prev) => ({ ...prev, [id]: value }))
+  }
+
+  const handleDragCommit = (id: string, value: number, total: number) => {
+    const snapped = snapSubtaskValue(value, total)
+    setDragValues((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    onChangeSubtask?.(id, snapped)
+  }
 
   return (
     <View
@@ -355,13 +380,17 @@ function MissionCard({
                   onTouchMove={(e) => e.stopPropagation()}
                 >
                   {subtasks.map((s) => {
-                    const percent = calcPercent(s.current, s.total)
+                    const dragValue = dragValues[s.id]
+                    const rawValue = typeof dragValue === 'number' ? dragValue : s.current
+                    const displayCurrent =
+                      typeof dragValue === 'number' ? snapSubtaskValue(dragValue, s.total) : s.current
+                    const percent = calcPercent(displayCurrent, s.total)
                     return (
                       <View className='subtask-item' key={s.id}>
                         <View className='subtask-row'>
                           <Text className='subtask-title'>{s.title}</Text>
                           <Text className='subtask-count'>
-                            {s.current}/{s.total}
+                            {displayCurrent}/{s.total}
                           </Text>
                         </View>
                         {editing ? (
@@ -375,11 +404,12 @@ function MissionCard({
                               className='subtask-slider'
                               min={0}
                               max={s.total}
-                              step={1}
-                              value={s.current}
+                              step={0.01}
+                              value={rawValue}
                               activeColor='#7c3aed'
                               backgroundColor='#e5e7eb'
-                              onChange={(e) => onChangeSubtask?.(s.id, Number(e.detail.value))}
+                              onChanging={(e) => handleDrag(s.id, Number(e.detail.value))}
+                              onChange={(e) => handleDragCommit(s.id, Number(e.detail.value), s.total)}
                             />
                           </View>
                         ) : (
@@ -426,31 +456,34 @@ function MissionCard({
   )
 }
 
-function CollabCard({
-  task,
-  expanded,
-  onToggleExpand,
-  onEdit,
-  onClose,
-  onRestart,
-  onHistory,
-  onCancelRework,
-  onDelete,
-}: {
-  task: CollabTask
-  expanded: boolean
-  onToggleExpand?: (taskId: string) => void
-  onEdit?: () => void
-  onClose?: () => void
-  onRestart?: () => void
-  onHistory?: (taskId?: string | null) => void
-  onCancelRework?: () => void
-  onDelete?: () => void
-}) {
-  const tone = attrTone[task.attr]
-  const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
-  const isClosed = task.status === 'closed'
-  const progress = task.progress || summarizeSubtasksProgress(task.subtasks || [])
+  function CollabCard({
+    task,
+    expanded,
+    onToggleExpand,
+    onEdit,
+    onClose,
+    onRestart,
+    onHistory,
+    onCancelRework,
+    onDelete,
+    onRefresh,
+  }: {
+    task: CollabTask
+    expanded: boolean
+    onToggleExpand?: (taskId: string) => void
+    onEdit?: () => void
+    onClose?: () => void
+    onRestart?: () => void
+    onHistory?: (taskId?: string | null) => void
+    onCancelRework?: () => void
+    onDelete?: () => void
+    onRefresh?: () => void
+  }) {
+    const tone = attrTone[task.attr]
+    const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
+    const isClosed = task.status === 'closed'
+    const isOverdue = Boolean(task.dueAt && new Date(task.dueAt).getTime() < Date.now())
+    const progress = task.progress || summarizeSubtasksProgress(task.subtasks || [])
   const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain || ''
   const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel || ''
   const startIso = isClosed ? task.closedAt || task.startAt || task.createdAt : task.startAt || task.createdAt
@@ -561,18 +594,24 @@ function CollabCard({
               <ActionButton icon={taskStrings.icons.actions.delete} label={metaText.delete} ghost onClick={onDelete} />
               <ActionButton icon={taskStrings.icons.actions.restart} label={metaText.restart} onClick={onRestart} />
             </>
-          ) : (
-            <>
-              <ActionButton icon={taskStrings.icons.actions.edit} label={metaText.edit} onClick={onEdit} />
-              {task.assigneeId ? null : (
-                <ActionButton
-                  icon={taskStrings.icons.actions.assign}
-                  label={metaText.assign}
-                  openType='share'
-                  taskId={task.id}
-                  taskTitle={task.title}
-                />
-              )}
+            ) : (
+              <>
+                <ActionButton icon={taskStrings.icons.actions.edit} label={metaText.edit} onClick={onEdit} />
+                {task.assigneeId ? null : isOverdue ? (
+                  <ActionButton
+                    icon={taskStrings.icons.actions.refreshTask}
+                    label={metaText.refresh}
+                    onClick={onRefresh}
+                  />
+                ) : (
+                  <ActionButton
+                    icon={taskStrings.icons.actions.assign}
+                    label={metaText.assign}
+                    openType='share'
+                    taskId={task.id}
+                    taskTitle={task.title}
+                  />
+                )}
               <ActionButton icon={taskStrings.icons.actions.close} label={metaText.close} ghost onClick={onClose} />
             </>
           )
@@ -595,10 +634,9 @@ function ArchivedCard({ task, onDelete }: { task: ArchivedTask; onDelete?: () =>
       </View>
       <Text className='task-desc'>{task.detail}</Text>
       <View className='card-meta'>
-        <Text className='meta-item'>
-          ✅ {taskStrings.labels.completedAt}
-          {task.finishedAgo}
-        </Text>
+          <Text className='meta-item'>
+            {taskStrings.icons.actions.completeTask} {taskStrings.labels.completedAt}: {task.finishedAgo}
+          </Text>
       </View>
       {task.deleteRemain ? (
         <View className='card-meta'>
@@ -965,7 +1003,7 @@ export default function TasksPane({
         }
       }
     } finally {
-      if (!shouldCancel?.()) setLoadingRemote(false)
+      setLoadingRemote(false)
     }
   }
 
@@ -1066,6 +1104,19 @@ export default function TasksPane({
     } catch (err: any) {
       console.error('restart task error', err)
       Taro.showToast({ title: err?.message || taskStrings.toast.restartFail, icon: 'none' })
+    }
+  }
+
+  const handleRefreshCollabTask = async (taskId: string) => {
+    try {
+      const updated = await refreshTaskSchedule(taskId)
+      updateCollabTaskInState(taskId, updated)
+      Taro.showToast({ title: taskStrings.toast.refreshTaskOk, icon: 'success' })
+      await refreshTasks()
+    } catch (err: any) {
+      console.error('refresh task error', err)
+      Taro.showToast({ title: taskStrings.toast.refreshTaskFail, icon: 'none' })
+      await refreshTasksWithNotice()
     }
   }
 
@@ -1365,7 +1416,7 @@ export default function TasksPane({
       status: task.status,
       creatorId: task.creatorId,
       assigneeId: task.assigneeId ?? null,
-      icon: task.icon || '?',
+      icon: task.icon || '✨',
       finishedAgo: formatAgo(finishedAt),
       deleteAt: deleteAt || undefined,
       deleteRemain: deleteAt ? humanizeRemain(deleteAt) : undefined,
@@ -1748,6 +1799,7 @@ export default function TasksPane({
                         onHistory={handleOpenHistory}
                         onCancelRework={() => void handleCancelRework(task.id)}
                         onDelete={() => void handleDeleteCollabTask(task.id)}
+                        onRefresh={() => void handleRefreshCollabTask(task.id)}
                       />
                     )
                   })}

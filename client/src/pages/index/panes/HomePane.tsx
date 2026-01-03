@@ -100,6 +100,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
   const [dialogEditing, setDialogEditing] = useState(false)
   const [dialogDraft, setDialogDraft] = useState<Subtask[]>([])
   const [shareOnly, setShareOnly] = useState(false)
+  const [dialogDragValues, setDialogDragValues] = useState<Record<string, number>>({})
   const handledShareIdRef = useRef<string | null>(null)
   const taskDebug = TASK_DEBUG
 
@@ -170,6 +171,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
     setModalTask(null)
     setDialogEditing(false)
     setDialogDraft([])
+    setDialogDragValues({})
     setShareOnly(false)
   }
 
@@ -178,10 +180,28 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
     if (!modalTask?.subtasks?.length) return
     setDialogEditing(true)
     setDialogDraft(modalTask.subtasks.map((s) => ({ ...s })))
+    setDialogDragValues({})
   }
 
   const handleDialogDraftChange = (id: string, val: number) => {
     setDialogDraft((prev) => prev.map((s) => (s.id === id ? { ...s, current: val } : s)))
+  }
+
+  const clampValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+  const snapSubtaskValue = (value: number, total: number) => clampValue(Math.round(value), 0, total)
+
+  const handleDialogDrag = (id: string, value: number) => {
+    setDialogDragValues((prev) => ({ ...prev, [id]: value }))
+  }
+
+  const handleDialogDragCommit = (id: string, value: number, total: number) => {
+    const snapped = snapSubtaskValue(value, total)
+    setDialogDragValues((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    handleDialogDraftChange(id, snapped)
   }
 
   const handleDialogSubmit = async () => {
@@ -269,18 +289,35 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
       await refreshHomeTasks()
     } catch (err) {
       console.error('accept task error', err)
+      const errData = (err as any)?.data
+      const errMessage = (err as any)?.message
+      const isExpired = errMessage === 'task expired' || errData?.error === 'task expired'
+      if (isExpired) {
+        Taro.showToast({ title: taskStrings.toast.taskExpired, icon: 'none' })
+        await refreshHomeTasks()
+        return
+      }
       await refreshHomeTasks(true)
     }
   }
 
   const dialogSubtasks = dialogEditing && dialogDraft.length > 0 ? dialogDraft : modalTask?.subtasks
-  const dialogProgress =
+  const dialogSubtasksDisplay =
     dialogEditing && dialogSubtasks
-      ? summarizeSubtasksProgress(dialogSubtasks)
+      ? dialogSubtasks.map((s) => {
+          const dragValue = dialogDragValues[s.id]
+          if (typeof dragValue !== 'number') return s
+          return { ...s, current: snapSubtaskValue(dragValue, s.total) }
+        })
+      : dialogSubtasks
+  const dialogProgress =
+    dialogEditing && dialogSubtasksDisplay
+      ? summarizeSubtasksProgress(dialogSubtasksDisplay)
       : modalTask?.progress
   const dialogRemain = modalTask?.dueAt ? humanizeRemain(modalTask.dueAt) : modalTask?.remain
   const dialogDueLabel = modalTask?.dueAt ? formatDueLabel(modalTask.dueAt) : modalTask?.due
   const dialogStartLabel = modalTask?.createdAt ? formatStartDate(modalTask.createdAt) : undefined
+  const dialogCreatorLabel = modalTask?.creatorId || ''
   const dialogUseComplete = Boolean(
     modalTask?.isChallenge ||
       (modalTask?.creatorId && modalTask?.assigneeId && modalTask.creatorId === modalTask.assigneeId)
@@ -551,9 +588,9 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
 
               <View className='dialog-meta'>
                 {dialogRemain && <Text>{homeStrings.dialogRemainPrefix} {dialogRemain}</Text>}
-                {modalTask?.creatorId && (
+                {dialogCreatorLabel && (
                   <Text>
-                    {taskStrings.icons.meta.creator} {taskStrings.metaText.creator} {modalTask.creatorId}
+                    {taskStrings.icons.meta.creator} {taskStrings.metaText.creator} {dialogCreatorLabel}
                   </Text>
                 )}
                 {dialogDueLabel && <Text>{homeStrings.dialogDuePrefix} {dialogDueLabel}</Text>}
@@ -579,7 +616,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
                 </View>
               )}
 
-              {dialogSubtasks && dialogSubtasks.length > 0 && (
+              {dialogSubtasksDisplay && dialogSubtasksDisplay.length > 0 && (
                 <View className='dialog-steps'>
                   <View className='dialog-steps-head'>
                     <Text className='dialog-step-label'>{homeStrings.dialogStepLabel}</Text>
@@ -587,14 +624,18 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
                       {dialogEditing ? homeStrings.dialogStepHintEdit : homeStrings.dialogStepHintView}
                     </Text>
                   </View>
-                  {dialogSubtasks.map((s) => {
-                    const percent = calcPercent(s.current, s.total)
+                  {dialogSubtasksDisplay.map((s) => {
+                    const dragValue = dialogDragValues[s.id]
+                    const rawValue = typeof dragValue === 'number' ? dragValue : s.current
+                    const displayCurrent =
+                      typeof dragValue === 'number' ? snapSubtaskValue(dragValue, s.total) : s.current
+                    const percent = calcPercent(displayCurrent, s.total)
                     return (
                       <View className='dialog-step' key={s.id}>
                         <View className='dialog-step-row'>
                           <Text className='dialog-step-title'>{s.title}</Text>
                           <Text className='dialog-step-count'>
-                            {s.current}/{s.total}
+                            {displayCurrent}/{s.total}
                           </Text>
                         </View>
                         {dialogEditing ? (
@@ -602,11 +643,14 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
                             className='dialog-step-slider'
                             min={0}
                             max={s.total}
-                            step={1}
-                            value={s.current}
+                            step={0.01}
+                            value={rawValue}
                             activeColor='#7c3aed'
                             backgroundColor='#e5e7eb'
-                            onChange={(e) => handleDialogDraftChange(s.id, Number(e.detail.value))}
+                            onChanging={(e) => handleDialogDrag(s.id, Number(e.detail.value))}
+                            onChange={(e) =>
+                              handleDialogDragCommit(s.id, Number(e.detail.value), s.total)
+                            }
                           />
                         ) : (
                           <View className='dialog-step-track'>
