@@ -1116,7 +1116,7 @@ export default function TasksPane({
     } catch (err: any) {
       console.error('refresh task error', err)
       Taro.showToast({ title: taskStrings.toast.refreshTaskFail, icon: 'none' })
-      await refreshTasksWithNotice()
+      await refreshTasks()
     }
   }
 

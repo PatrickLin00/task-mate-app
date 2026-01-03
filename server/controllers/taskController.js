@@ -383,7 +383,8 @@ exports.closeTask = async (req, res) => {
     const now = new Date()
     const deleteAt = new Date(now.getTime() + CLOSE_RETENTION_DAYS * 24 * 60 * 60 * 1000)
 
-    const originalStatus = task.originalStatus || task.status
+    const hadAssignee = Boolean(task.assigneeId)
+    const originalStatus = task.originalStatus || (hadAssignee ? 'pending' : task.status)
     const originalStartAt = task.originalStartAt || task.startAt || task.createdAt
     const originalDueAt = task.originalDueAt || task.dueAt
 
@@ -396,7 +397,7 @@ exports.closeTask = async (req, res) => {
       startAt: now,
       dueAt: deleteAt,
       status: 'closed',
-      assigneeId: task.assigneeId ? null : task.assigneeId,
+      assigneeId: null,
       updatedAt: now,
     }
 
