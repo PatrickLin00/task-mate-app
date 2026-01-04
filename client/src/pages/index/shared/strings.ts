@@ -94,6 +94,7 @@
     edit: '重构奇遇',
     assign: '指派任务',
     acceptTask: '接受任务',
+    shareTakenClose: '任务已被接取,点击关闭',
     close: '关闭任务',
     cancelRework: '撤销修改',
     refreshTask: '更新任务',

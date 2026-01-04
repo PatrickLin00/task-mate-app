@@ -390,6 +390,11 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
   const dialogReviewHandler = dialogUseComplete
     ? handleDialogComplete
     : handleDialogSubmitReview
+  const dialogShareTaken = Boolean(
+    shareOnly &&
+      modalTask &&
+      (modalTask.status !== 'pending' || (modalTask.assigneeId && modalTask.assigneeId !== ''))
+  )
 
   const refreshHomeTasks = async (showNotice = false, shouldCancel?: () => boolean) => {
     try {
@@ -757,10 +762,12 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
                     hoverStartTime={0}
                     hoverStayTime={120}
                     hoverStopPropagation
-                    onClick={handleDialogAccept}
+                    onClick={dialogShareTaken ? handleCloseModal : handleDialogAccept}
                   >
                     <Text className='action-icon'>{taskStrings.icons.actions.acceptTask}</Text>
-                    <Text>{taskStrings.actions.acceptTask}</Text>
+                    <Text>
+                      {dialogShareTaken ? taskStrings.actions.shareTakenClose : taskStrings.actions.acceptTask}
+                    </Text>
                   </View>
                 ) : (
                   <>
