@@ -36,81 +36,81 @@ const systemCreatorIdForUser = (userId) => `sys:${String(userId || '').trim()}`
 const challengeTemplates = [
   {
     id: 't1',
-    title: '【星旅】风行速练',
-    detail: '跑步 4km, 配速 6-7, 结束拉伸 10min',
+    title: '[星旅] 风行速练',
+    detail: '跑步4km, 配速6-7, 结束拉伸10min',
     icon: '🏃',
     reward: { type: 'strength', value: 12 },
     subtasks: [{ title: '完成训练', total: 1 }],
   },
   {
     id: 't2',
-    title: '【星旅】静心冥想',
-    detail: '冥想 20min, 写下 3 个观察',
+    title: '[星旅] 静心冥想',
+    detail: '冥想20min, 写下3个感受',
     icon: '🧘',
     reward: { type: 'wisdom', value: 10 },
     subtasks: [{ title: '完成冥想', total: 1 }],
   },
   {
     id: 't3',
-    title: '【星旅】晨光整理',
-    detail: '整理桌面 15min, 清空回收站',
+    title: '[星旅] 晨光整理',
+    detail: '整理桌面15min, 清空回收站',
     icon: '🧹',
     reward: { type: 'wisdom', value: 8 },
     subtasks: [{ title: '完成整理', total: 1 }],
   },
   {
     id: 't4',
-    title: '【星旅】轻跑热身',
-    detail: '慢跑 3km, 结束拉伸 8min',
+    title: '[星旅] 轻跑热身',
+    detail: '慢跑3km, 结束拉伸8min',
     icon: '🏃',
     reward: { type: 'strength', value: 10 },
     subtasks: [{ title: '完成热身', total: 1 }],
   },
   {
     id: 't5',
-    title: '【星旅】专注阅读',
-    detail: '阅读 30 页, 写下 3 个收获',
+    title: '[星旅] 专注阅读',
+    detail: '阅读30页, 写下3个收获',
     icon: '📚',
     reward: { type: 'wisdom', value: 10 },
     subtasks: [{ title: '完成阅读', total: 1 }],
   },
   {
     id: 't6',
-    title: '【星旅】灵敏训练',
-    detail: '跳绳 600 次, 分 3 组完成',
+    title: '[星旅] 灵敏训练',
+    detail: '跳绳600次, 分3组完成',
     icon: '🐾',
     reward: { type: 'agility', value: 12 },
     subtasks: [{ title: '完成训练', total: 1 }],
   },
   {
     id: 't7',
-    title: '【星旅】补水计划',
-    detail: '全天喝水 8 杯, 每杯 250ml',
+    title: '[星旅] 补水计划',
+    detail: '全天喝水8杯, 每杯250ml',
     icon: '🚰',
     reward: { type: 'strength', value: 6 },
     subtasks: [{ title: '记录补水', total: 8 }],
   },
   {
     id: 't8',
-    title: '【星旅】呼吸训练',
-    detail: '深呼吸 5min, 记录一次感受',
+    title: '[星旅] 呼吸训练',
+    detail: '深呼吸5min, 记录一次感受',
     icon: '🫁',
     reward: { type: 'agility', value: 8 },
     subtasks: [{ title: '完成训练', total: 1 }],
   },
   {
     id: 't9',
-    title: '【星旅】星光散步',
-    detail: '散步 30min, 不带耳机, 留意周围声音',
+    title: '[星旅] 星光散步',
+    detail: '散步30min, 不带耳机, 留意周围声音',
     icon: '🚶',
     reward: { type: 'agility', value: 8 },
     subtasks: [{ title: '完成散步', total: 1 }],
   },
   {
     id: 't10',
-    title: '【星旅】静默收尾',
-    detail: '整理待办, 选 1 件最重要的事写在明日第一行',
-    icon: '✅',
+    title: '[星旅] 静默收尾',
+    detail: '整理待办, 选1件最重要的事写在明天第一行',
+    icon: '📝',
     reward: { type: 'wisdom', value: 8 },
     subtasks: [{ title: '完成收尾', total: 1 }],
   },
@@ -149,62 +149,47 @@ const pickDailyTemplates = (userId, dayKey, count) => {
   return picked
 }
 
-async function ensureUserChallengeTasks(userId, count = 5) {
-  const now = new Date()
-  const start = startOfDay(now)
-  const end = endOfDay(now)
+const buildChallengeSeedKey = (userId, dayKey, templateId) =>
+  `challenge_${dayKey}_${templateId}_${hashSeed(userId)}`
+
+const buildChallengeTaskSeed = ({ template, seedKey, creatorId, start, end, assigneeId, status, includeDeleteAt }) => ({
+  seedKey,
+  title: template.title,
+  detail: template.detail,
+  icon: template.icon,
+  creatorId,
+  assigneeId: assigneeId ?? null,
+  status,
+  createdAt: start,
+  startAt: start,
+  dueAt: end,
+  deleteAt: includeDeleteAt ? end : null,
+  subtasks: template.subtasks.map((s) => ({ title: s.title, current: 0, total: s.total })),
+  attributeReward: { type: template.reward.type, value: template.reward.value },
+})
+
+const buildChallengeVirtualTask = ({ template, seedKey, creatorId, start, end }) => ({
+  _id: seedKey,
+  ...buildChallengeTaskSeed({
+    template,
+    seedKey,
+    creatorId,
+    start,
+    end,
+    assigneeId: null,
+    status: 'pending',
+    includeDeleteAt: false,
+  }),
+})
+
+const getDailyChallengeSeeds = (userId, now = new Date(), count = 5) => {
   const dayKey = ymd(now)
   const creatorId = systemCreatorIdForUser(userId)
-
-  await Task.deleteMany({
-    creatorId,
-    $or: [{ dueAt: { $lt: start } }, { dueAt: { $gt: end } }],
-  })
-
-  await Task.updateMany(
-    { creatorId, dueAt: { $gte: start, $lte: end }, seedKey: { $regex: '^challenge_' }, deleteAt: null },
-    { $set: { deleteAt: end } }
-  )
-
-  const existing = await Task.find({
-    creatorId,
-    dueAt: { $gte: start, $lte: end },
-  }).select('seedKey').lean()
-  if (existing.length >= count) return { inserted: 0 }
-
-  const existingSeeds = new Set(existing.map((t) => t.seedKey).filter(Boolean))
+  const start = startOfDay(now)
+  const end = endOfDay(now)
   const templates = pickDailyTemplates(userId, dayKey, count)
-  const seeds = templates
-    .map((t) => ({
-      seedKey: `challenge_${dayKey}_${t.id}_${hashSeed(userId)}`,
-      title: t.title,
-      detail: t.detail,
-      icon: t.icon,
-      creatorId,
-      assigneeId: null,
-      status: 'pending',
-      createdAt: start,
-      startAt: start,
-      dueAt: end,
-      deleteAt: end,
-      subtasks: t.subtasks.map((s) => ({ title: s.title, current: 0, total: s.total })),
-      attributeReward: { type: t.reward.type, value: t.reward.value },
-    }))
-    .filter((seed) => !existingSeeds.has(seed.seedKey))
-
-  if (seeds.length === 0) return { inserted: 0 }
-
-  const ops = seeds.map((seed) => ({
-    updateOne: {
-      filter: { seedKey: seed.seedKey },
-      update: { $setOnInsert: seed },
-      upsert: true,
-    },
-  }))
-
-  const res = await Task.bulkWrite(ops, { ordered: false })
-  const inserted = res.upsertedCount || 0
-  return { inserted }
+  const seeds = templates.map((t) => ({ seedKey: buildChallengeSeedKey(userId, dayKey, t.id), template: t }))
+  return { dayKey, creatorId, start, end, templates, seeds }
 }
 
 const buildDevScenarioSeeds = () => {
@@ -246,7 +231,7 @@ const buildDevScenarioSeeds = () => {
     {
       seedKey: 'scenario_v1_3',
       title: testPrefix('星图整理'),
-      detail: '整理今日笔记, 归档链接, 提取 3 个要点',
+      detail: '整理今日笔记, 归档链接, 提取3个要点',
       icon: '🗂',
       creatorId: 'dev:alice',
       assigneeId: null,
@@ -261,7 +246,7 @@ const buildDevScenarioSeeds = () => {
       seedKey: 'scenario_v1_4',
       title: testPrefix('静默收尾'),
       detail: '把未完成事项列出, 明天再处理',
-      icon: '✅',
+      icon: '📝',
       creatorId: SYSTEM_USER_ID,
       assigneeId: 'dev:alice',
       status: 'completed',
@@ -294,5 +279,9 @@ async function ensureDevScenarioTasks() {
 
 module.exports = {
   ensureDevScenarioTasks,
-  ensureUserChallengeTasks,
+  getDailyChallengeSeeds,
+  buildChallengeTaskSeed,
+  buildChallengeVirtualTask,
+  buildChallengeSeedKey,
+  systemCreatorIdForUser,
 }

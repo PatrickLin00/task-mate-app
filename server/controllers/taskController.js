@@ -1,7 +1,11 @@
 const Task = require('../models/Task')
 const CompletedTask = require('../models/CompletedTask')
 const mongoose = require('mongoose')
-const { ensureUserChallengeTasks } = require('../utils/seedTasks')
+const {
+  getDailyChallengeSeeds,
+  buildChallengeTaskSeed,
+  buildChallengeVirtualTask,
+} = require('../utils/seedTasks')
 
 const TASK_STATUS = [
   'pending',
@@ -1064,24 +1068,25 @@ exports.getChallengeTasks = async (req, res) => {
     const userId = ensureAuthorized(req, res)
     if (!userId) return
 
-    try {
-      await ensureUserChallengeTasks(userId, 5)
-    } catch (err) {
-      console.error('ensureUserChallengeTasks error:', err)
-    }
-
     const now = new Date()
-    const start = startOfDay(now)
-    const end = endOfDay(now)
+    const { creatorId, start, end, seeds } = getDailyChallengeSeeds(userId, now, 5)
+    const seedKeys = seeds.map((s) => s.seedKey)
+    const existing = await Task.find({ creatorId, seedKey: { $in: seedKeys } }).sort({ createdAt: 1 })
+    const existingMap = new Map(existing.map((t) => [t.seedKey, t]))
+    const result = []
 
-    const tasks = await Task.find({
-      creatorId: `sys:${userId}`,
-      status: 'pending',
-      assigneeId: null,
-      dueAt: { $gte: start, $lte: end },
-    }).sort({ createdAt: 1 })
+    seeds.forEach(({ seedKey, template }) => {
+      const task = existingMap.get(seedKey)
+      if (task) {
+        if (task.status === 'pending' && !task.assigneeId) {
+          result.push(buildResponse(task))
+        }
+        return
+      }
+      result.push(buildChallengeVirtualTask({ template, seedKey, creatorId, start, end }))
+    })
 
-    return res.json(tasks.map((t) => buildResponse(t)))
+    return res.json(result)
   } catch (error) {
     console.error('getChallengeTasks error:', error)
     return res.status(500).json({ error: 'get challenge tasks failed' })
@@ -1095,46 +1100,79 @@ exports.acceptChallengeTask = async (req, res) => {
 
     taskDebugLog('acceptChallengeTask start', { userId, taskId: req.params?.id })
     const { id } = req.params
-    if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
-
-    const task = await Task.findById(id)
-    if (!task) return res.status(404).json({ error: 'task not found' })
-
-    const expectedCreator = `sys:${userId}`
-    if (task.creatorId !== expectedCreator) return res.status(403).json({ error: 'forbidden' })
-    if (task.assigneeId) return res.status(400).json({ error: 'task already assigned' })
-    if (task.status !== 'pending') return res.status(400).json({ error: 'task is not pending' })
+    const isObjectId = isValidObjectId(id)
 
     const now = new Date()
-    const updated = await Task.findOneAndUpdate(
-      {
-        _id: task._id,
-        creatorId: expectedCreator,
-        status: 'pending',
-        assigneeId: null,
-        updatedAt: task.updatedAt,
-      },
-      { $set: { assigneeId: userId, status: 'in_progress', updatedAt: now } },
-      { new: true, runValidators: true }
-    )
+    const { creatorId, start, end, seeds } = getDailyChallengeSeeds(userId, now, 5)
+    const seedKeys = new Set(seeds.map((s) => s.seedKey))
 
-    if (!updated) return conflict(res)
-    taskDebugLog('acceptChallengeTask ok', {
-      userId,
-      taskId: updated._id?.toString?.() || updated._id,
-      status: updated.status,
-      assigneeId: updated.assigneeId,
-    })
+    if (!isObjectId && !seedKeys.has(id)) return res.status(404).json({ error: 'task not found' })
 
-    if (!updated.deleteAt && updated.dueAt) {
-      await Task.updateOne(
-        { _id: updated._id, deleteAt: null },
-        { $set: { deleteAt: updated.dueAt, updatedAt: now } }
-      )
-      updated.deleteAt = updated.dueAt
+    let task = null
+    if (isObjectId) {
+      task = await Task.findById(id)
+    } else {
+      task = await Task.findOne({ creatorId, seedKey: id })
     }
 
-    return res.json(buildResponse(updated))
+    if (task) {
+      if (task.creatorId !== creatorId) return res.status(403).json({ error: 'forbidden' })
+      if (task.assigneeId) return res.status(400).json({ error: 'task already assigned' })
+      if (task.status !== 'pending') return res.status(400).json({ error: 'task is not pending' })
+
+      const updated = await Task.findOneAndUpdate(
+        {
+          _id: task._id,
+          creatorId,
+          status: 'pending',
+          assigneeId: null,
+          updatedAt: task.updatedAt,
+        },
+        { $set: { assigneeId: userId, status: 'in_progress', updatedAt: now } },
+        { new: true, runValidators: true }
+      )
+
+      if (!updated) return conflict(res)
+      taskDebugLog('acceptChallengeTask ok', {
+        userId,
+        taskId: updated._id?.toString?.() || updated._id,
+        status: updated.status,
+        assigneeId: updated.assigneeId,
+      })
+
+      if (!updated.deleteAt && updated.dueAt) {
+        await Task.updateOne(
+          { _id: updated._id, deleteAt: null },
+          { $set: { deleteAt: updated.dueAt, updatedAt: now } }
+        )
+        updated.deleteAt = updated.dueAt
+      }
+
+      return res.json(buildResponse(updated))
+    }
+
+    const picked = seeds.find((s) => s.seedKey === id)
+    if (!picked) return res.status(404).json({ error: 'task not found' })
+
+    const seed = buildChallengeTaskSeed({
+      template: picked.template,
+      seedKey: picked.seedKey,
+      creatorId,
+      start,
+      end,
+      assigneeId: userId,
+      status: 'in_progress',
+      includeDeleteAt: true,
+    })
+    const created = await Task.create(seed)
+    taskDebugLog('acceptChallengeTask ok', {
+      userId,
+      taskId: created._id?.toString?.() || created._id,
+      status: created.status,
+      assigneeId: created.assigneeId,
+    })
+
+    return res.json(buildResponse(created))
   } catch (error) {
     console.error('acceptChallengeTask error:', error)
     return res.status(500).json({ error: 'accept challenge failed' })
