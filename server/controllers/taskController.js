@@ -85,26 +85,26 @@ const getCompletionDeleteAt = (taskDoc, now) => {
 }
 
 const buildCompletionRecords = (taskDoc, completedAt, deleteAt) => {
-  const owners = new Set()
-  if (taskDoc.creatorId) owners.add(taskDoc.creatorId)
-  if (taskDoc.assigneeId) owners.add(taskDoc.assigneeId)
-  return Array.from(owners).map((ownerId) => ({
-    title: taskDoc.title,
-    icon: taskDoc.icon,
-    detail: taskDoc.detail,
-    dueAt: taskDoc.dueAt,
-    startAt: taskDoc.startAt,
-    completedAt,
-    deleteAt,
-    status: 'completed',
-    creatorId: taskDoc.creatorId,
-    assigneeId: taskDoc.assigneeId,
-    ownerId,
-    sourceTaskId: taskDoc._id,
-    subtasks: Array.isArray(taskDoc.subtasks) ? taskDoc.subtasks : [],
-    attributeReward: taskDoc.attributeReward,
-    seedKey: taskDoc.seedKey || null,
-  }))
+  if (!taskDoc.assigneeId) return []
+  return [
+    {
+      title: taskDoc.title,
+      icon: taskDoc.icon,
+      detail: taskDoc.detail,
+      dueAt: taskDoc.dueAt,
+      startAt: taskDoc.startAt,
+      completedAt,
+      deleteAt,
+      status: 'completed',
+      creatorId: taskDoc.creatorId,
+      assigneeId: taskDoc.assigneeId,
+      ownerId: taskDoc.assigneeId,
+      sourceTaskId: taskDoc._id,
+      subtasks: Array.isArray(taskDoc.subtasks) ? taskDoc.subtasks : [],
+      attributeReward: taskDoc.attributeReward,
+      seedKey: taskDoc.seedKey || null,
+    },
+  ]
 }
 
 const buildReviewRecord = (taskDoc, submittedAt) => {
@@ -354,8 +354,23 @@ exports.getCollabTasks = async (req, res) => {
     const reworkedIds = await fetchReworkedIds()
     const query = {
       creatorId: userId,
-      status: { $nin: ['completed', 'refactored'] },
-      $or: [{ status: { $ne: 'closed' } }, { dueAt: { $gte: now } }],
+      status: { $ne: 'refactored' },
+      $and: [
+        { assigneeId: { $ne: userId } },
+        {
+          $or: [
+            { status: { $ne: 'completed' } },
+            {
+              $and: [
+                { status: 'completed' },
+                { assigneeId: { $ne: userId } },
+                { assigneeId: { $ne: null } },
+              ],
+            },
+          ],
+        },
+        { $or: [{ status: { $ne: 'closed' } }, { dueAt: { $gte: now } }] },
+      ],
     }
     if (reworkedIds.length > 0) {
       query._id = { $nin: reworkedIds }

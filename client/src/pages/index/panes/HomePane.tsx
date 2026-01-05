@@ -66,6 +66,15 @@ const UI = {
 const homeStrings = taskStrings.home
 
 const FRAME_DURATION = 240
+const POLL_INTERVAL = 30 * 1000
+
+const mergeById = <T extends { id: string }>(prev: T[], next: T[]) => {
+  const nextMap = new Map(next.map((item) => [item.id, item]))
+  const prevIds = new Set(prev.map((item) => item.id))
+  const kept = prev.map((item) => nextMap.get(item.id)).filter(Boolean) as T[]
+  const appended = next.filter((item) => !prevIds.has(item.id))
+  return [...kept, ...appended]
+}
 
 const calcPercent = (current: number, total: number) =>
   Math.min(100, Math.round((current / Math.max(1, total || 1)) * 100))
@@ -88,6 +97,7 @@ type HomePaneProps = {
 export default function HomePane({ isActive = true, authVersion = 0, openTaskId }: HomePaneProps) {
   const [todayTasks, setTodayTasks] = useState<RoadTask[]>([])
   const [dueTodayCount, setDueTodayCount] = useState(0)
+  const pollingBusyRef = useRef(false)
   const [feedTasks, setFeedTasks] = useState<RoadTask[]>([])
   const visibleTasks = useMemo(() => feedTasks, [feedTasks])
   const quietLine = useMemo(
@@ -220,7 +230,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
       Taro.showToast({ title: taskStrings.toast.submitted, icon: 'success' })
     } catch (err) {
       console.error('update progress error', err)
-      await refreshHomeTasks(true)
+      await refreshAfterNotice()
     } finally {
       setDialogEditing(false)
       setDialogDraft([])
@@ -239,7 +249,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
       await refreshHomeTasks()
     } catch (err) {
       console.error('accept challenge error', err)
-      await refreshHomeTasks(true)
+      await refreshAfterNotice()
     }
   }
 
@@ -261,7 +271,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
       await refreshHomeTasks()
     } catch (err) {
       console.error('abandon task error', err)
-      await refreshHomeTasks(true)
+      await refreshAfterNotice()
     }
   }
 
@@ -276,7 +286,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
       await refreshHomeTasks()
     } catch (err) {
       console.error('complete task error', err)
-      await refreshHomeTasks(true)
+      await refreshAfterNotice()
     }
   }
 
@@ -300,7 +310,9 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
         await refreshHomeTasks()
         return
       }
-      await refreshHomeTasks(true)
+      const refreshed = await refreshModalTask(modalTask.id)
+      if (refreshed) return
+      await refreshAfterNotice()
     }
   }
 
@@ -325,7 +337,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
       await refreshHomeTasks()
     } catch (err) {
       console.error('submit review error', err)
-      await refreshHomeTasks(true)
+      await refreshAfterNotice()
     }
   }
 
@@ -341,7 +353,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
       await refreshHomeTasks()
     } catch (err) {
       console.error('accept rework error', err)
-      await refreshHomeTasks(true)
+      await refreshAfterNotice()
     }
   }
 
@@ -357,7 +369,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
       await refreshHomeTasks()
     } catch (err) {
       console.error('reject rework error', err)
-      await refreshHomeTasks(true)
+      await refreshAfterNotice()
     }
   }
 
@@ -418,6 +430,60 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
     }
   }
 
+  const refreshModalTask = async (taskId: string) => {
+    try {
+      const updated = await getTask(taskId)
+      const mapped = mapApiTaskToRoad(updated)
+      setModalTask(mapped)
+      setTodayTasks((prev) => mergeById(prev, [mapped]))
+      setFeedTasks((prev) => mergeById(prev, [mapped]))
+      return mapped
+    } catch (err) {
+      const status = (err as any)?.status || (err as any)?.response?.status
+      if (status === 404) {
+        setModalTask(null)
+        setShareOnly(false)
+      }
+      if (taskDebug) {
+        console.log('refreshModalTask failed', { taskId, status })
+      }
+      return null
+    }
+  }
+
+  const refreshAfterNotice = async () => {
+    if (modalTask) {
+      await refreshModalTask(modalTask.id)
+      Taro.showToast({ title: taskStrings.toast.dataRefreshed, icon: 'none' })
+      return
+    }
+    await refreshHomeTasks(true)
+  }
+
+  const refreshHomeTasksSilent = async (shouldCancel?: () => boolean) => {
+    if (pollingBusyRef.current) return
+    pollingBusyRef.current = true
+    try {
+      const [todayRes, challenge] = await Promise.all([fetchTodayTasks(), fetchChallengeTasks()])
+      if (shouldCancel?.()) return
+      const nextToday = (todayRes.tasks || []).map((t) => mapApiTaskToRoad(t))
+      const nextFeed = (challenge || []).map((t) => mapApiTaskToRoad(t))
+      setDueTodayCount(todayRes.dueTodayCount || 0)
+      setTodayTasks((prev) => mergeById(prev, nextToday))
+      setFeedTasks((prev) => mergeById(prev, nextFeed))
+      if (taskDebug) {
+        console.log('refreshHomeTasks diff', {
+          todayCount: nextToday.length,
+          feedCount: nextFeed.length,
+        })
+      }
+    } catch (err) {
+      console.error('load home tasks error', err)
+    } finally {
+      pollingBusyRef.current = false
+    }
+  }
+
   useEffect(() => {
     if (!isActive && modalTask) {
       setModalTask(null)
@@ -435,6 +501,34 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
       cancelled = true
     }
   }, [authVersion, isActive])
+
+  useEffect(() => {
+    if (!isActive) return
+    if (dialogEditing) return
+    let cancelled = false
+    const cancelCheck = () => cancelled
+    const timer = setInterval(() => {
+      void refreshHomeTasksSilent(cancelCheck)
+    }, POLL_INTERVAL)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [isActive, dialogEditing, shareOnly, modalTask])
+
+  useEffect(() => {
+    if (!isActive || !modalTask || dialogEditing) return
+    let cancelled = false
+    const taskId = modalTask.id
+    const timer = setInterval(() => {
+      if (cancelled) return
+      void refreshModalTask(taskId)
+    }, POLL_INTERVAL)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [isActive, modalTask?.id, dialogEditing])
 
   useEffect(() => {
     if (taskDebug) {

@@ -85,6 +85,7 @@ const metaText = taskStrings.metaText
 type SubtaskInput = { title: string; total: number }
 
 const DAY = 24 * 60 * 60 * 1000
+const POLL_INTERVAL = 30 * 1000
 const pad2 = (num: number) => (num < 10 ? `0${num}` : `${num}`)
 const taskDebug = TASK_DEBUG
 const taskMemReport = TASK_MEM_REPORT
@@ -116,6 +117,14 @@ function AttributeTag({ attr, points }: { attr: Attr; points: number }) {
 
 const historyIcon =
   'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAyNCAyNCcgZmlsbD0nbm9uZSc+PHBhdGggZD0nTTMgMTJhOSA5IDAgMSAwIDMtNi43JyBzdHJva2U9JyM0YzFkOTUnIHN0cm9rZS13aWR0aD0nMi44JyBzdHJva2UtbGluZWNhcD0ncm91bmQnIHN0cm9rZS1saW5lam9pbj0ncm91bmQnLz48cGF0aCBkPSdNMyA1djRoNCcgc3Ryb2tlPScjNGMxZDk1JyBzdHJva2Utd2lkdGg9JzIuOCcgc3Ryb2tlLWxpbmVjYXA9J3JvdW5kJyBzdHJva2UtbGluZWpvaW49J3JvdW5kJy8+PHBhdGggZD0nTTEyIDd2NWwzIDInIHN0cm9rZT0nIzRjMWQ5NScgc3Ryb2tlLXdpZHRoPScyLjgnIHN0cm9rZS1saW5lY2FwPSdyb3VuZCcgc3Ryb2tlLWxpbmVqb2luPSdyb3VuZCcvPjwvc3ZnPg=='
+
+const mergeById = <T extends { id: string }>(prev: T[], next: T[]) => {
+  const nextMap = new Map(next.map((item) => [item.id, item]))
+  const prevIds = new Set(prev.map((item) => item.id))
+  const kept = prev.map((item) => nextMap.get(item.id)).filter(Boolean) as T[]
+  const appended = next.filter((item) => !prevIds.has(item.id))
+  return [...kept, ...appended]
+}
 
 function HistoryButton({ onClick }: { onClick?: () => void }) {
   return (
@@ -489,15 +498,18 @@ function MissionCard({
     const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
     const isClosed = task.status === 'closed'
     const isReviewPending = task.status === 'review_pending'
+    const isCompleted = task.status === 'completed'
     const isOverdue = Boolean(task.dueAt && new Date(task.dueAt).getTime() < Date.now())
     const progress = task.progress || summarizeSubtasksProgress(task.subtasks || [])
-  const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain || ''
-  const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel || ''
-  const startIso = isClosed ? task.closedAt || task.startAt || task.createdAt : task.startAt || task.createdAt
-  const startLabel = formatStartDate(startIso)
-  const submittedLabel = formatStartDate(task.submittedAt || task.updatedAt || task.createdAt)
-  const assigneeLabel = task.assigneeId || metaText.unassigned
-  const creatorLabel = task.creatorId || ''
+    const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain || ''
+    const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel || ''
+    const startIso = isClosed ? task.closedAt || task.startAt || task.createdAt : task.startAt || task.createdAt
+    const startLabel = formatStartDate(startIso)
+    const submittedLabel = formatStartDate(task.submittedAt || task.updatedAt || task.createdAt)
+    const completedLabel = formatStartDate(task.completedAt || task.updatedAt || task.createdAt)
+    const deleteRemainLabel = task.deleteAt ? humanizeRemain(task.deleteAt) : task.deleteRemain || ''
+    const assigneeLabel = task.assigneeId || metaText.unassigned
+    const creatorLabel = task.creatorId || ''
 
   return (
     <View className={`task-card tone-${tone} ${hasSubtasks && expanded ? 'expanded' : ''}`}>
@@ -516,32 +528,49 @@ function MissionCard({
           <AttributeTag attr={task.attr} points={task.points} />
         </View>
       </View>
-      <Text className='task-desc'>{task.detail}</Text>
-      <ProgressBar current={progress.current} total={progress.total} />
-      <View className='card-meta'>
-        <View className='meta-item'>
-          <Text>{metaIcon.remain}</Text>
-          <Text>{isReviewPending ? metaText.submitted : isClosed ? metaText.deleteRemain : metaText.remain}</Text>
-          <Text>{isReviewPending ? submittedLabel : remainLabel}</Text>
+        <Text className='task-desc'>{task.detail}</Text>
+        {isCompleted ? null : <ProgressBar current={progress.current} total={progress.total} />}
+        <View className='card-meta'>
+          {isCompleted ? (
+            <>
+              <View className='meta-item'>
+                <Text>{metaIcon.remain}</Text>
+                <Text>{metaText.deleteRemain}</Text>
+                <Text>{deleteRemainLabel}</Text>
+              </View>
+              <View className='meta-item'>
+                <Text>{taskStrings.icons.actions.completeTask}</Text>
+                <Text>{taskStrings.labels.completedAt}</Text>
+                <Text>{completedLabel}</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View className='meta-item'>
+                <Text>{metaIcon.remain}</Text>
+                <Text>{isReviewPending ? metaText.submitted : isClosed ? metaText.deleteRemain : metaText.remain}</Text>
+                <Text>{isReviewPending ? submittedLabel : remainLabel}</Text>
+              </View>
+              <View className='meta-item'>
+                <Text>{metaIcon.due}</Text>
+                <Text>{isClosed ? metaText.deleteDue : metaText.due}</Text>
+                <Text>{dueLabel}</Text>
+              </View>
+              <View className='meta-item meta-start'>
+                <Text>{metaIcon.start}</Text>
+                <Text>{isClosed ? metaText.closed : metaText.start}</Text>
+                <Text>{startLabel}</Text>
+              </View>
+            </>
+          )}
+          <View className='meta-item'>
+            <Text>{metaIcon.assignee}</Text>
+            <Text>{metaText.assignee}</Text>
+            <Text>{assigneeLabel}</Text>
+            <Text>{metaText.creator}</Text>
+            <Text>{creatorLabel}</Text>
+          </View>
         </View>
-        <View className='meta-item'>
-          <Text>{metaIcon.due}</Text>
-          <Text>{isClosed ? metaText.deleteDue : metaText.due}</Text>
-          <Text>{dueLabel}</Text>
-        </View>
-        <View className='meta-item meta-start'>
-          <Text>{metaIcon.start}</Text>
-          <Text>{isClosed ? metaText.closed : metaText.start}</Text>
-          <Text>{startLabel}</Text>
-        </View>
-        <View className='meta-item'>
-          <Text>{metaIcon.assignee}</Text>
-          <Text>{metaText.assignee}</Text>
-          <Text>{assigneeLabel}</Text>
-          <Text>{metaText.creator}</Text>
-          <Text>{creatorLabel}</Text>
-        </View>
-      </View>
       {hasSubtasks && (
         <>
           <View
@@ -567,22 +596,24 @@ function MissionCard({
           </View>
           <View className={`subtask-group ${expanded ? 'open' : ''}`}>
             <View className='subtask-group-inner' onTouchMove={(e) => e.stopPropagation()}>
-              {task.subtasks?.map((s) => {
-                const percent = calcPercent(s.current, s.total)
-                return (
-                  <View className='subtask-item' key={s.id}>
-                    <View className='subtask-row'>
-                      <Text className='subtask-title'>{s.title}</Text>
-                      <Text className='subtask-count'>
-                        {s.current}/{s.total}
-                      </Text>
+                {task.subtasks?.map((s) => {
+                  const percent = calcPercent(s.current, s.total)
+                  return (
+                    <View className='subtask-item' key={s.id}>
+                      <View className='subtask-row'>
+                        <Text className='subtask-title'>{s.title}</Text>
+                        <Text className='subtask-count'>
+                          {s.current}/{s.total}
+                        </Text>
+                      </View>
+                      {isCompleted ? null : (
+                        <View className='subtask-track'>
+                          <View className='subtask-fill' style={{ width: percent + '%' }} />
+                        </View>
+                      )}
                     </View>
-                    <View className='subtask-track'>
-                      <View className='subtask-fill' style={{ width: percent + '%' }} />
-                    </View>
-                  </View>
-                )
-              })}
+                  )
+                })}
             </View>
           </View>
         </>
@@ -594,28 +625,30 @@ function MissionCard({
         onTouchStart={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
       >
-        {task.status === 'pending_confirmation' ? (
-          <ActionButton icon={taskStrings.icons.actions.cancelRework} label={metaText.reworkCancel} onClick={onCancelRework} />
-        ) : isReviewPending ? (
-          <>
-            <ActionButton
-              icon={taskStrings.icons.actions.completeTask}
-              label={taskStrings.actions.confirmReview}
-              onClick={onConfirmReview}
-            />
-            <ActionButton
-              icon={taskStrings.icons.actions.updateProgress}
-              label={taskStrings.actions.keepGoing}
-              ghost
-              onClick={onKeepGoing}
-            />
-          </>
-        ) : (
-          isClosed ? (
+          {task.status === 'pending_confirmation' ? (
+            <ActionButton icon={taskStrings.icons.actions.cancelRework} label={metaText.reworkCancel} onClick={onCancelRework} />
+          ) : isReviewPending ? (
             <>
-              <ActionButton icon={taskStrings.icons.actions.delete} label={metaText.delete} ghost onClick={onDelete} />
-              <ActionButton icon={taskStrings.icons.actions.restart} label={metaText.restart} onClick={onRestart} />
+              <ActionButton
+                icon={taskStrings.icons.actions.completeTask}
+                label={taskStrings.actions.confirmReview}
+                onClick={onConfirmReview}
+              />
+              <ActionButton
+                icon={taskStrings.icons.actions.updateProgress}
+                label={taskStrings.actions.keepGoing}
+                ghost
+                onClick={onKeepGoing}
+              />
             </>
+          ) : isCompleted ? (
+            <ActionButton icon={taskStrings.icons.actions.delete} label={metaText.delete} ghost onClick={onDelete} />
+          ) : (
+            isClosed ? (
+              <>
+                <ActionButton icon={taskStrings.icons.actions.delete} label={metaText.delete} ghost onClick={onDelete} />
+                <ActionButton icon={taskStrings.icons.actions.restart} label={metaText.restart} onClick={onRestart} />
+              </>
             ) : (
               <>
                 <ActionButton icon={taskStrings.icons.actions.edit} label={metaText.edit} onClick={onEdit} />
@@ -643,12 +676,14 @@ function MissionCard({
   )
 }
 
-function ArchivedCard({ task, onDelete }: { task: ArchivedTask; onDelete?: () => void }) {
-  const tone = attrTone[task.attr]
-  const isReviewPending = task.status === 'review_pending'
-  const statusBadge = isReviewPending ? 'review_pending' : 'archived'
-  return (
-    <View className={`task-card tone-${tone}`}>
+  function ArchivedCard({ task, onDelete }: { task: ArchivedTask; onDelete?: () => void }) {
+    const tone = attrTone[task.attr]
+    const isReviewPending = task.status === 'review_pending'
+    const statusBadge = isReviewPending ? 'review_pending' : 'archived'
+    const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
+    const [expanded, setExpanded] = useState(false)
+    return (
+      <View className={`task-card tone-${tone} ${hasSubtasks && expanded ? 'expanded' : ''}`}>
       <View className='card-head'>
         <View className='title-wrap'>
           <Text className='task-icon'>{task.icon}</Text>
@@ -663,13 +698,13 @@ function ArchivedCard({ task, onDelete }: { task: ArchivedTask; onDelete?: () =>
             {isReviewPending ? taskStrings.labels.submittedAt : taskStrings.labels.completedAt}: {task.finishedAgo}
           </Text>
       </View>
-      {isReviewPending ? (
-        <View className='card-meta'>
-          <Text className='meta-item'>
-            {metaIcon.remain} {taskStrings.labels.reviewWaiting}
-          </Text>
-        </View>
-      ) : task.deleteRemain ? (
+        {isReviewPending ? (
+          <View className='card-meta'>
+            <Text className='meta-item'>
+              {metaIcon.remain} {taskStrings.labels.reviewWaiting}
+            </Text>
+          </View>
+        ) : task.deleteRemain ? (
         <View className='card-meta'>
           <Text className='meta-item'>
             {metaIcon.remain} {metaText.deleteRemain}
@@ -677,9 +712,48 @@ function ArchivedCard({ task, onDelete }: { task: ArchivedTask; onDelete?: () =>
           </Text>
         </View>
       ) : null}
-      <View className='archive-foot'>
-        <AttributeTag attr={task.attr} points={task.points} />
-      </View>
+        {hasSubtasks ? (
+          <>
+            <View
+              className={`subtask-toggle ${expanded ? 'expanded' : ''}`}
+              hoverClass='toggle-pressing'
+              onClick={(e) => {
+                e.stopPropagation?.()
+                if (!hasSubtasks) return
+                setExpanded((prev) => !prev)
+              }}
+            >
+              <View className='toggle-arrow'>
+                <Text className={`toggle-icon ${!expanded ? 'is-on' : ''}`}>
+                  {taskStrings.icons.toggle.expand}
+                </Text>
+                <Text className={`toggle-icon ${expanded ? 'is-on' : ''}`}>
+                  {taskStrings.icons.toggle.collapse}
+                </Text>
+              </View>
+              <Text className='toggle-text'>
+                {expanded ? taskStrings.subtasks.toggleCollapse : taskStrings.subtasks.toggleExpand}
+              </Text>
+            </View>
+            <View className={`subtask-group ${expanded ? 'open' : ''}`}>
+              <View className='subtask-group-inner' onTouchMove={(e) => e.stopPropagation()}>
+                {task.subtasks?.map((s) => (
+                  <View className='subtask-item' key={s.id}>
+                    <View className='subtask-row'>
+                      <Text className='subtask-title'>{s.title}</Text>
+                      <Text className='subtask-count'>
+                        {s.current}/{s.total}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </>
+        ) : null}
+        <View className='archive-foot'>
+          <AttributeTag attr={task.attr} points={task.points} />
+        </View>
       {!isReviewPending ? (
         <View
           className='action-row'
@@ -785,6 +859,7 @@ export default function TasksPane({
   const [collabTasks, setCollabTasks] = useState<CollabTask[]>([])
   const [expandedCollabId, setExpandedCollabId] = useState<string | null>(null)
   const [archivedTasks, setArchivedTasks] = useState<ArchivedTask[]>([])
+  const pollingBusyRef = useRef(false)
   const [loadingRemote, setLoadingRemote] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [reworkTaskId, setReworkTaskId] = useState<string | null>(null)
@@ -988,22 +1063,24 @@ export default function TasksPane({
     }
   }
 
+  const buildTaskLists = (mission: Task[], collab: Task[], archived: Task[]) => {
+    const missionList = mission
+      .map((t) => mapApiTaskToMission(t))
+      .filter((t) => t.status !== 'refactored')
+    const collabList = collab
+      .map((t) => mapApiTaskToCollab(t))
+      .filter((t) => t.status !== 'refactored' && !(t.assigneeId && t.creatorId === t.assigneeId))
+    const archivedList = archived
+      .map((t) => mapApiTaskToArchived(t))
+      .filter((t) => t.status !== 'refactored')
+    return { missionList, collabList, archivedList }
+  }
+
   const applyTaskLists = (mission: Task[], collab: Task[], archived: Task[]) => {
-    setMissionTasks(
-      mission
-        .map((t) => mapApiTaskToMission(t))
-        .filter((t) => t.status !== 'refactored')
-    )
-    setCollabTasks(
-      collab
-        .map((t) => mapApiTaskToCollab(t))
-        .filter((t) => t.status !== 'refactored')
-    )
-    setArchivedTasks(
-      archived
-        .map((t) => mapApiTaskToArchived(t))
-        .filter((t) => t.status !== 'refactored')
-    )
+    const { missionList, collabList, archivedList } = buildTaskLists(mission, collab, archived)
+    setMissionTasks(missionList)
+    setCollabTasks(collabList)
+    setArchivedTasks(archivedList)
   }
 
   const refreshTasks = async (shouldCancel?: () => boolean) => {
@@ -1037,6 +1114,34 @@ export default function TasksPane({
       }
     } finally {
       setLoadingRemote(false)
+    }
+  }
+
+  const refreshTasksSilent = async (shouldCancel?: () => boolean) => {
+    if (loadingRemote || pollingBusyRef.current) return
+    pollingBusyRef.current = true
+    try {
+      const [mission, collab, archived] = await Promise.all([
+        fetchMissionTasks(),
+        fetchCollabTasks(),
+        fetchArchivedTasks(),
+      ])
+      if (shouldCancel?.()) return
+      const { missionList, collabList, archivedList } = buildTaskLists(mission, collab, archived)
+      setMissionTasks((prev) => mergeById(prev, missionList))
+      setCollabTasks((prev) => mergeById(prev, collabList))
+      setArchivedTasks((prev) => mergeById(prev, archivedList))
+      if (taskDebug) {
+        console.log('refreshTasks diff', {
+          missionCount: missionList.length,
+          collabCount: collabList.length,
+          archivedCount: archivedList.length,
+        })
+      }
+    } catch (err: any) {
+      console.error('load tasks error', err)
+    } finally {
+      pollingBusyRef.current = false
     }
   }
 
@@ -1078,6 +1183,20 @@ export default function TasksPane({
       cancelled = true
     }
   }, [isActive])
+
+  useEffect(() => {
+    if (!isActive) return
+    if (editingTaskId || showCreate || historyLoading || confirmReworkOpen || creating || generating) return
+    let cancelled = false
+    const cancelCheck = () => cancelled
+    const timer = setInterval(() => {
+      void refreshTasksSilent(cancelCheck)
+    }, POLL_INTERVAL)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [isActive, editingTaskId, showCreate, historyLoading, confirmReworkOpen, creating, generating])
 
   useEffect(() => {
     const enabled = taskMemReport
@@ -1246,13 +1365,31 @@ export default function TasksPane({
     }
   }
 
-  const handleCompleteTask = async (taskId: string) => {
+  const handleCompleteMissionTask = async (task: MissionTask) => {
     try {
-      const updated = await completeTask(taskId)
+      const updated = await completeTask(task.id)
       const archivedMapped = mapApiTaskToArchived(updated)
-      setMissionTasks((prev) => prev.filter((t) => t.id !== taskId))
-      setCollabTasks((prev) => prev.filter((t) => t.id !== taskId))
-      setArchivedTasks((prev) => [archivedMapped, ...prev.filter((t) => t.id !== taskId)])
+      setMissionTasks((prev) => prev.filter((t) => t.id !== task.id))
+      setCollabTasks((prev) => prev.filter((t) => t.id !== task.id))
+      setArchivedTasks((prev) => [archivedMapped, ...prev.filter((t) => t.id !== task.id)])
+      Taro.showToast({ title: taskStrings.toast.completed, icon: 'success' })
+    } catch (err: any) {
+      console.error('complete task error', err)
+      await refreshTasksWithNotice()
+    }
+  }
+
+  const handleConfirmReview = async (task: CollabTask) => {
+    try {
+      const updated = await completeTask(task.id)
+      const mapped = mapApiTaskToCollab(updated)
+      if (mapped.assigneeId && mapped.creatorId === mapped.assigneeId) {
+        const archivedMapped = mapApiTaskToArchived(updated)
+        setCollabTasks((prev) => prev.filter((t) => t.id !== task.id))
+        setArchivedTasks((prev) => [archivedMapped, ...prev.filter((t) => t.id !== task.id)])
+      } else {
+        setCollabTasks((prev) => prev.map((t) => (t.id === task.id ? mapped : t)))
+      }
       Taro.showToast({ title: taskStrings.toast.completed, icon: 'success' })
     } catch (err: any) {
       console.error('complete task error', err)
@@ -1444,6 +1581,8 @@ export default function TasksPane({
     const progress = task.computedProgress || summarizeSubtasksProgress(subtasks)
     const dueIso = task.dueAt || task.updatedAt || task.createdAt || new Date(Date.now() + DAY).toISOString()
     const dueMeta = computeDueMeta(dueIso)
+    const deleteAt = task.deleteAt || null
+    const deleteRemain = deleteAt ? humanizeRemain(deleteAt) : undefined
 
     return {
       id: task._id || Math.random().toString(36).slice(2),
@@ -1462,6 +1601,9 @@ export default function TasksPane({
       creatorId: task.creatorId,
       assigneeId: task.assigneeId ?? null,
       submittedAt: task.submittedAt ?? null,
+      completedAt: task.completedAt ?? null,
+      deleteAt,
+      deleteRemain,
       icon: task.icon || '?',
       progress: { current: progress.current, total: progress.total || 1 },
       subtasks,
@@ -1472,6 +1614,16 @@ export default function TasksPane({
   const mapApiTaskToArchived = (task: Task): ArchivedTask => {
     const attr = mapRewardToAttr(task.attributeReward.type)
     const createdAt = task.createdAt || defaultCreatedAt
+    const baseId = task._id || 'task'
+    const subtasks =
+      task.subtasks && task.subtasks.length > 0
+        ? task.subtasks.map((s, idx) => ({
+            id: s._id || baseId + '-sub-' + (idx + 1),
+            title: s.title || `${taskStrings.labels.subtaskFallback} ${idx + 1}`,
+            current: s.current ?? 0,
+            total: s.total || 1,
+          }))
+        : []
     const isReviewPending = task.status === 'review_pending'
     const finishedAt = isReviewPending
       ? task.submittedAt || task.updatedAt || task.createdAt
@@ -1493,6 +1645,7 @@ export default function TasksPane({
       submittedAt: task.submittedAt ?? null,
       deleteAt: deleteAt || undefined,
       deleteRemain: deleteAt ? humanizeRemain(deleteAt) : undefined,
+      subtasks,
     }
   }
 
@@ -1844,7 +1997,7 @@ export default function TasksPane({
                       onCollect={() => void handleAbandonTask(task.id)}
                       onAccept={() => handleAcceptRework(task.id)}
                       onReject={() => handleRejectRework(task.id)}
-                      onComplete={() => void handleCompleteTask(task.id)}
+                      onComplete={() => void handleCompleteMissionTask(task)}
                       onHistory={handleOpenHistory}
                     />
                   )
@@ -1873,7 +2026,7 @@ export default function TasksPane({
                         onCancelRework={() => void handleCancelRework(task.id)}
                         onDelete={() => void handleDeleteCollabTask(task.id)}
                         onRefresh={() => void handleRefreshCollabTask(task.id)}
-                        onConfirmReview={() => void handleCompleteTask(task.id)}
+                        onConfirmReview={() => void handleConfirmReview(task)}
                         onKeepGoing={() => void handleContinueReview(task.id)}
                       />
                     )

@@ -10,7 +10,6 @@ $surface: #ffffff;
   border: 1px solid rgba(139, 92, 246, 0.15);
   background: rgba(255, 255, 255, 0.92);
   padding: 26px 32px;
-  backdrop-filter: blur(8px);
 }
 
 .home-pane {
@@ -606,7 +605,7 @@ $surface: #ffffff;
 .mini-dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.18);
   backdrop-filter: blur(10px) saturate(120%);
   display: flex;
   align-items: center;
