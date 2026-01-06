@@ -38,7 +38,12 @@ export default function ProfilePane({ onAuthChanged }: { onAuthChanged?: () => v
   }
 
   const handleSubscribeSettings = async () => {
-    await requestTaskSubscribeAuth({ force: true })
+    await requestTaskSubscribeAuth({
+      force: true,
+      onSkipped: () => {
+        Taro.showToast({ title: taskStrings.profile.subscribeHint, icon: 'none' })
+      },
+    })
   }
 
   return (
