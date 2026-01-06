@@ -17,6 +17,7 @@ import {
   type ArchivedTask,
 } from '../shared/mocks'
 import { taskStrings } from '../shared/strings'
+import { requestTaskSubscribeAuth } from '@/services/subscribe'
 import {
   acceptReworkTask,
   cancelReworkTask,
@@ -1409,6 +1410,7 @@ export default function TasksPane({
       if (!result.confirm) return
     }
     try {
+      await requestTaskSubscribeAuth()
       const updated = await submitReview(task.id)
       const archivedMapped = mapApiTaskToArchived(updated)
       setMissionTasks((prev) => prev.filter((t) => t.id !== task.id))
@@ -1700,6 +1702,7 @@ export default function TasksPane({
 
   const handleAcceptRework = async (taskId: string) => {
     try {
+      await requestTaskSubscribeAuth()
       await acceptReworkTask(taskId)
       Taro.showToast({ title: taskStrings.toast.accepted, icon: 'success' })
       await refreshTasks()

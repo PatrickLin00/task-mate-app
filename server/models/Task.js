@@ -43,6 +43,9 @@ const taskSchema = new mongoose.Schema(
       value: { type: Number, required: true, min: 0 },
     },
     seedKey: { type: String, default: null, index: true },
+    dueSoonNotifiedAt: { type: Date, default: null },
+    overdueNotifiedAt: { type: Date, default: null },
+    challengeExpiredNotifiedAt: { type: Date, default: null },
   },
   { timestamps: true }
 )

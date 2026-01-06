@@ -29,6 +29,7 @@ import {
   type Task,
 } from '@/services/api'
 import { ensureWeappLogin } from '@/services/auth'
+import { requestTaskSubscribeAuth } from '@/services/subscribe'
 import { taskStrings } from '../shared/strings'
 
 const attrList: Attr[] = [
@@ -244,6 +245,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
 
   const handleAcceptChallenge = async (taskId: string) => {
     try {
+      await requestTaskSubscribeAuth()
       await acceptChallengeTask(taskId)
       Taro.showToast({ title: taskStrings.toast.createAccepted, icon: 'success' })
       await refreshHomeTasks()
@@ -293,6 +295,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
   const handleDialogAccept = async () => {
     if (!modalTask) return
     try {
+      await requestTaskSubscribeAuth()
       await acceptTask(modalTask.id)
       Taro.showToast({ title: taskStrings.toast.accepted, icon: 'success' })
       setModalTask(null)
@@ -329,6 +332,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
       if (!result.confirm) return
     }
     try {
+      await requestTaskSubscribeAuth()
       await submitReview(modalTask.id)
       Taro.showToast({ title: taskStrings.toast.submitted, icon: 'success' })
       setModalTask(null)
@@ -344,6 +348,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
   const handleDialogReworkAccept = async () => {
     if (!modalTask) return
     try {
+      await requestTaskSubscribeAuth()
       await acceptReworkTask(modalTask.id)
       Taro.showToast({ title: taskStrings.toast.accepted, icon: 'success' })
       setModalTask(null)

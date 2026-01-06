@@ -1,0 +1,45 @@
+const LABELS = {
+  cardName: '卡片名称',
+  changeDetail: '修改详情',
+  changeTime: '修改时间',
+  reviewType: '审核类型',
+  reviewResult: '审核结果',
+  notifyTime: '通知时间',
+  note: '备注',
+  rejectReason: '拒绝理由',
+  taskName: '任务名称',
+  assignee: '执行人',
+  startTime: '开始时间',
+  dueTime: '截止时间',
+  taskStatus: '任务状态',
+  itemName: '事项名称',
+  remainTime: '剩余时间',
+  remindTime: '提醒时间',
+  noteMessage: '备注消息',
+}
+
+const VALUES = {
+  taskClosed: '任务已关闭',
+  taskReworkedPending: '任务已重构请确认变更',
+  reworkAccepted: '已接受',
+  reworkRejected: '已拒绝',
+  reworkCanceled: '重构已撤销',
+  acceptTaskStatus: '已接受',
+  reviewTypeTaskChange: '任务变更',
+  reviewTypeSubmit: '提交检视',
+  reviewResultPending: '待确认',
+  rejectReasonAssignee: '接取者拒绝变更',
+  taskReminder: '任务提醒',
+  taskDueSoon: '任务临近截止',
+  taskOverdue: '任务已超时',
+  challengeExpired: '星旅任务已过期系统已清理',
+  expired: '已过期',
+  unitDay: '天',
+  unitHour: '小时',
+  unitMinute: '分钟',
+}
+
+module.exports = {
+  LABELS,
+  VALUES,
+}

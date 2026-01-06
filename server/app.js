@@ -11,6 +11,7 @@ const { ensureDevScenarioTasks } = require('./utils/seedTasks')
 const { migrateUserIds } = require('./utils/migrateLegacyIds')
 const { migrateTaskIds } = require('./utils/migrateLegacyTaskIds')
 const { cleanupLegacyTestTasks } = require('./utils/cleanupDevData')
+const { startSubscribeScheduler } = require('./utils/subscribeScheduler')
 
 const app = express()
 
@@ -95,6 +96,8 @@ const start = async () => {
     } catch (err) {
       console.error('Seed tasks error:', err)
     }
+
+    startSubscribeScheduler()
 
     const PORT = process.env.PORT || 3000
     app.listen(PORT, () => {

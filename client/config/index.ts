@@ -41,6 +41,10 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
     String(getEnvValue('TARO_APP_TASK_DEBUG') || '').toLowerCase() === 'true'
   const taskMemReport =
     String(getEnvValue('TARO_APP_TASK_MEM_REPORT') || '').toLowerCase() === 'true'
+  const subscribeTplTodo = getEnvValue('TARO_APP_SUBSCRIBE_TPL_TODO') || ''
+  const subscribeTplTaskUpdate = getEnvValue('TARO_APP_SUBSCRIBE_TPL_TASK_UPDATE') || ''
+  const subscribeTplReview = getEnvValue('TARO_APP_SUBSCRIBE_TPL_REVIEW') || ''
+  const subscribeTplWork = getEnvValue('TARO_APP_SUBSCRIBE_TPL_WORK') || ''
   const devAuth = process.env.NODE_ENV === 'production' ? false : devAuthEnabled
   const apiBaseUrl =
     getEnvValue('TASKMATE_API_BASE_URL') ||
@@ -70,6 +74,10 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
       DEV_AUTH_ENABLED: JSON.stringify(devAuth),
       TASK_DEBUG: JSON.stringify(taskDebug),
       TASK_MEM_REPORT: JSON.stringify(taskMemReport),
+      SUBSCRIBE_TPL_TODO: JSON.stringify(subscribeTplTodo),
+      SUBSCRIBE_TPL_TASK_UPDATE: JSON.stringify(subscribeTplTaskUpdate),
+      SUBSCRIBE_TPL_REVIEW: JSON.stringify(subscribeTplReview),
+      SUBSCRIBE_TPL_WORK: JSON.stringify(subscribeTplWork),
     },
     copy: {
       patterns: [
