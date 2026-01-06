@@ -301,7 +301,7 @@
     heroDesc: '勇敢的探索者,继续你的星旅吧!',
     avatarIcon: '🐱',
     subscribeLabel: '订阅设置',
-    subscribeHint: '已设置为不再提示,如需修改请到微信-设置-订阅消息',
+    subscribeHint: '请至微信-设置-订阅消息修改',
     devTitle: 'Dev',
     devCurrentPrefix: 'Current userId: ',
     devCurrentEmpty: '(empty)',
