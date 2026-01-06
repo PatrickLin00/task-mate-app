@@ -3,6 +3,7 @@ import Taro from '@tarojs/taro'
 import { useState } from 'react'
 import '../home.scss'
 import { devLoginWeapp, getDevUserId, getUserId } from '@/services/auth'
+import { requestTaskSubscribeAuth } from '@/services/subscribe'
 import { taskStrings } from '../shared/strings'
 
 declare const DEV_AUTH_ENABLED: boolean
@@ -36,6 +37,10 @@ export default function ProfilePane({ onAuthChanged }: { onAuthChanged?: () => v
     }
   }
 
+  const handleSubscribeSettings = async () => {
+    await requestTaskSubscribeAuth({ force: true })
+  }
+
   return (
     <View className='profile-page'>
       <View className='section'>
@@ -51,6 +56,11 @@ export default function ProfilePane({ onAuthChanged }: { onAuthChanged?: () => v
             </View>
             <Text className='feed-desc'>{taskStrings.profile.heroDesc}</Text>
           </View>
+        </View>
+        <View className='one-line-row'>
+          <Button className='ai-btn' onClick={() => void handleSubscribeSettings()}>
+            {taskStrings.profile.subscribeLabel}
+          </Button>
         </View>
       </View>
 

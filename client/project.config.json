@@ -4,12 +4,17 @@
   "description": "一个任务清单小程序，支持自我管理与协作任务",
   "appid": "touristappid",
   "setting": {
-    "urlCheck": false,
-    "es6": false,
+    "urlCheck": true,
+    "es6": true,
     "enhance": false,
     "compileHotReLoad": false,
     "postcss": false,
-    "minified": false
+    "minified": true,
+    "minifyJS": true,
+    "minifyWXML": true,
+    "minifyWXSS": true,
+    "ignoreUploadUnusedFiles": true,
+    "useMultiProcess": true
   },
   "compileType": "miniprogram"
 }

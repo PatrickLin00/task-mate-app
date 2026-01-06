@@ -300,6 +300,7 @@
     title: '我的',
     heroDesc: '勇敢的探索者,继续你的星旅吧!',
     avatarIcon: '🐱',
+    subscribeLabel: '订阅设置',
     devTitle: 'Dev',
     devCurrentPrefix: 'Current userId: ',
     devCurrentEmpty: '(empty)',
