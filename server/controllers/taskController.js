@@ -506,8 +506,6 @@ exports.deleteTask = async (req, res) => {
     let response = null
     let reviewNotify = null
     let cancelNotify = null
-    let reviewNotify = null
-    let reviewNotify = null
     let reworkNotify = null
 
     try {
