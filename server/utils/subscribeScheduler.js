@@ -6,6 +6,10 @@ const HOUR_MS = 60 * 60 * 1000
 const TZ_OFFSET_MS = 8 * 60 * 60 * 1000
 
 const pad2 = (value) => String(value).padStart(2, '0')
+const isDebug = () => String(process.env.SUBSCRIBE_DEBUG || '').toLowerCase() === 'true'
+const debugLog = (...args) => {
+  if (isDebug()) console.log(...args)
+}
 
 const formatDateTime = (date) => {
   if (!date) return ''
@@ -69,12 +73,14 @@ const runHourly = async () => {
   const soonEnd = new Date(now.getTime() + HOUR_MS)
   const baseQuery = { status: 'in_progress', assigneeId: { $ne: null } }
 
+  debugLog('subscribe scheduler hourly start', { now: now.toISOString() })
   const dueSoon = await Task.find({
     ...baseQuery,
     dueAt: { $gte: now, $lte: soonEnd },
     dueSoonNotifiedAt: null,
   }).limit(200)
 
+  debugLog('subscribe scheduler hourly dueSoon', { count: dueSoon.length })
   for (const task of dueSoon) {
     const remainText = formatRemain(task.dueAt.getTime() - now.getTime())
     await markAndNotify(task, 'dueSoonNotifiedAt', now, VALUES.taskDueSoon, remainText)
@@ -86,6 +92,7 @@ const runHourly = async () => {
     overdueNotifiedAt: null,
   }).limit(200)
 
+  debugLog('subscribe scheduler hourly overdue', { count: overdue.length })
   for (const task of overdue) {
     await markAndNotify(task, 'overdueNotifiedAt', now, VALUES.taskOverdue, VALUES.expired)
   }
@@ -94,6 +101,7 @@ const runHourly = async () => {
 const runDaily = async () => {
   if (!isEnabled()) return
   const now = new Date()
+  debugLog('subscribe scheduler daily start', { now: now.toISOString() })
   const expired = await Task.find({
     seedKey: { $regex: /^challenge_/ },
     assigneeId: { $ne: null },
@@ -101,6 +109,7 @@ const runDaily = async () => {
     challengeExpiredNotifiedAt: null,
   }).limit(500)
 
+  debugLog('subscribe scheduler daily challengeExpired', { count: expired.length })
   for (const task of expired) {
     await markAndNotify(task, 'challengeExpiredNotifiedAt', now, VALUES.challengeExpired, VALUES.expired)
   }
@@ -108,6 +117,7 @@ const runDaily = async () => {
 
 const startSubscribeScheduler = () => {
   if (!isEnabled()) return
+  debugLog('subscribe scheduler start')
   let lastCnDay = null
   const tick = async () => {
     try {

@@ -2,6 +2,7 @@ const axios = require('axios')
 
 const accessTokenCache = { value: null, expireAt: 0 }
 const templateCache = new Map()
+const isDebug = () => String(process.env.SUBSCRIBE_DEBUG || '').toLowerCase() === 'true'
 
 const normalizeLabel = (value) => String(value || '').trim().replace(/[\p{P}\p{S}]+$/u, '').trim()
 
@@ -30,12 +31,25 @@ const getAccessToken = async () => {
   const secret = process.env.WEAPP_SECRET
   if (!appid || !secret) return null
 
-  const response = await axios.get('https://api.weixin.qq.com/cgi-bin/token', {
-    params: { grant_type: 'client_credential', appid, secret },
-  })
-  const token = response.data?.access_token
-  const expiresIn = Number(response.data?.expires_in || 0)
-  if (!token || !expiresIn) return null
+  let response = null
+  try {
+    response = await axios.get('https://api.weixin.qq.com/cgi-bin/token', {
+      params: { grant_type: 'client_credential', appid, secret },
+    })
+  } catch (err) {
+    if (isDebug()) {
+      console.log('subscribe token request failed', err?.message || err)
+    }
+    return null
+  }
+  const token = response?.data?.access_token
+  const expiresIn = Number(response?.data?.expires_in || 0)
+  if (!token || !expiresIn) {
+    if (isDebug()) {
+      console.log('subscribe token missing', response?.data)
+    }
+    return null
+  }
 
   accessTokenCache.value = token
   accessTokenCache.expireAt = now + Math.max(0, expiresIn - 120) * 1000
@@ -49,11 +63,19 @@ const getTemplateKeywordMap = async (templateId) => {
   const token = await getAccessToken()
   if (!token) return null
 
-  const response = await axios.post(
-    'https://api.weixin.qq.com/wxaapi/newtmpl/gettemplate',
-    {},
-    { params: { access_token: token } }
-  )
+  let response = null
+  try {
+    response = await axios.post(
+      'https://api.weixin.qq.com/wxaapi/newtmpl/gettemplate',
+      {},
+      { params: { access_token: token } }
+    )
+  } catch (err) {
+    if (isDebug()) {
+      console.log('subscribe template fetch failed', err?.message || err)
+    }
+    return null
+  }
   const list = response.data?.data || response.data?.list || []
   const template = list.find((item) => item.priTmplId === templateId || item.template_id === templateId)
   const map = parseTemplateContent(template?.content || '')
@@ -93,17 +115,34 @@ const sendSubscribeMessage = async ({ toUserId, templateId, page, dataByLabel })
     data,
   }
 
-  const response = await axios.post(
-    'https://api.weixin.qq.com/cgi-bin/message/subscribe/send',
-    payload,
-    { params: { access_token: token } }
-  )
+  if (isDebug()) {
+    console.log('subscribe send start', { templateId, openid, page: payload.page, labels: Object.keys(dataByLabel || {}) })
+  }
+  let response = null
+  try {
+    response = await axios.post(
+      'https://api.weixin.qq.com/cgi-bin/message/subscribe/send',
+      payload,
+      { params: { access_token: token } }
+    )
+  } catch (err) {
+    if (isDebug()) {
+      console.log('subscribe send failed', err?.message || err)
+    }
+    return { ok: false, reason: 'request failed' }
+  }
 
   const errcode = response.data?.errcode
   if (errcode && errcode !== 0) {
+    if (isDebug()) {
+      console.log('subscribe send error', { errcode, errmsg: response.data?.errmsg })
+    }
     return { ok: false, reason: response.data?.errmsg || 'send failed', errcode }
   }
 
+  if (isDebug()) {
+    console.log('subscribe send ok', { templateId, openid })
+  }
   return { ok: true }
 }
 
