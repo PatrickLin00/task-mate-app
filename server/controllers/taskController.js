@@ -1,6 +1,8 @@
 const Task = require('../models/Task')
 const CompletedTask = require('../models/CompletedTask')
 const mongoose = require('mongoose')
+const { sendSubscribeMessage } = require('../utils/subscribeMessage')
+const { LABELS, VALUES } = require('../utils/subscribeLabels')
 const {
   getDailyChallengeSeeds,
   buildChallengeTaskSeed,
@@ -21,6 +23,17 @@ const ACTIVE_ASSIGNEE_STATUS = ['in_progress', 'pending_confirmation']
 const CLOSE_RETENTION_DAYS = 7
 
 const clamp = (value, min, max) => Math.max(min, Math.min(value, max))
+const pad2 = (value) => String(value).padStart(2, '0')
+const formatDateTime = (date) => {
+  if (!date) return ''
+  const d = new Date(date)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(
+    d.getMinutes()
+  )}`
+}
+
+const isWechatUserId = (value) => typeof value === 'string' && value.startsWith('wx:')
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id)
 let taskDebugEnabled = String(process.env.TASK_DEBUG_LOGS || '').toLowerCase() === 'true'
@@ -423,6 +436,7 @@ exports.closeTask = async (req, res) => {
     const deleteAt = new Date(now.getTime() + CLOSE_RETENTION_DAYS * 24 * 60 * 60 * 1000)
 
     const hadAssignee = Boolean(task.assigneeId)
+    const previousAssigneeId = task.assigneeId
     const originalStatus = task.originalStatus || (hadAssignee ? 'pending' : task.status)
     const originalStartAt = task.originalStartAt || task.startAt || task.createdAt
     const originalDueAt = task.originalDueAt || task.dueAt
@@ -453,13 +467,33 @@ exports.closeTask = async (req, res) => {
     )
 
     if (!updated) return conflict(res)
+    const templateId = process.env.SUBSCRIBE_TPL_WORK
+    if (templateId && isWechatUserId(previousAssigneeId)) {
+      await sendSubscribeMessage({
+        toUserId: previousAssigneeId,
+        templateId,
+        page: 'pages/index/index',
+        dataByLabel: {
+          [LABELS.taskName]: updated.title || VALUES.taskReminder,
+          [LABELS.assignee]: previousAssigneeId,
+          [LABELS.startTime]: formatDateTime(originalStartAt),
+          [LABELS.dueTime]: formatDateTime(originalDueAt),
+          [LABELS.taskStatus]: VALUES.taskClosed,
+          [LABELS.note]: VALUES.taskClosed,
+        },
+        context: {
+          event: 'task_closed',
+          actorId: userId,
+          taskId: updated._id?.toString?.() || updated._id,
+        },
+      })
+    }
     return res.json(buildResponse(updated))
   } catch (error) {
     console.error('closeTask error:', error)
     return res.status(500).json({ error: 'close task failed' })
   }
 }
-
 exports.deleteTask = async (req, res) => {
   try {
     const userId = ensureAuthorized(req, res)
@@ -470,6 +504,11 @@ exports.deleteTask = async (req, res) => {
 
     const session = await mongoose.startSession()
     let response = null
+    let reviewNotify = null
+    let cancelNotify = null
+    let reviewNotify = null
+    let reviewNotify = null
+    let reworkNotify = null
 
     try {
       await session.withTransaction(async () => {
@@ -516,12 +555,41 @@ exports.deleteTask = async (req, res) => {
         }
 
         response = { status: 200, body: { ok: true } }
+        reviewNotify = {
+          creatorId: task.creatorId,
+          taskId: task._id,
+          title: task.title,
+        }
       })
     } finally {
       session.endSession()
     }
 
     if (response) {
+      const templateId = process.env.SUBSCRIBE_TPL_REVIEW
+      if (reviewNotify && templateId && isWechatUserId(reviewNotify.creatorId)) {
+        try {
+          await sendSubscribeMessage({
+            toUserId: reviewNotify.creatorId,
+            templateId,
+            page: 'pages/index/index',
+            dataByLabel: {
+              [LABELS.reviewType]: VALUES.reviewTypeTaskChange,
+              [LABELS.reviewResult]: VALUES.reworkRejected,
+              [LABELS.notifyTime]: formatDateTime(new Date()),
+              [LABELS.rejectReason]: VALUES.rejectReasonAssignee,
+              [LABELS.note]: reviewNotify.title || VALUES.taskReminder,
+            },
+            context: {
+              event: 'task_rework_rejected',
+              actorId: userId,
+              taskId: reviewNotify.taskId?.toString?.() || reviewNotify.taskId,
+            },
+          })
+        } catch (error) {
+          console.error('rejectReworkTask subscribe error:', error)
+        }
+      }
       return res.status(response.status).json(response.body)
     }
 
@@ -654,12 +722,41 @@ exports.reworkTask = async (req, res) => {
         )
 
         response = { status: 201, body: buildResponse(newTask) }
+        if (newTask.assigneeId && newTask.status === 'pending_confirmation') {
+          reworkNotify = {
+            assigneeId: newTask.assigneeId,
+            taskId: newTask._id,
+            title: newTask.title,
+          }
+        }
       })
     } finally {
       session.endSession()
     }
 
     if (response) {
+      const templateId = process.env.SUBSCRIBE_TPL_TASK_UPDATE
+      if (reworkNotify && templateId && isWechatUserId(reworkNotify.assigneeId)) {
+        try {
+          await sendSubscribeMessage({
+            toUserId: reworkNotify.assigneeId,
+            templateId,
+            page: 'pages/index/index',
+            dataByLabel: {
+              [LABELS.cardName]: reworkNotify.title || VALUES.taskReminder,
+              [LABELS.changeDetail]: VALUES.taskReworkedPending,
+              [LABELS.changeTime]: formatDateTime(new Date()),
+            },
+            context: {
+              event: 'task_rework_pending',
+              actorId: userId,
+              taskId: reworkNotify.taskId?.toString?.() || reworkNotify.taskId,
+            },
+          })
+        } catch (error) {
+          console.error('reworkTask subscribe error:', error)
+        }
+      }
       return res.status(response.status).json(response.body)
     }
 
@@ -744,12 +841,40 @@ exports.acceptReworkTask = async (req, res) => {
         }
 
         response = { status: 200, body: buildResponse(updatedTask) }
+        reviewNotify = {
+          creatorId: updatedTask.creatorId,
+          taskId: updatedTask._id,
+          title: updatedTask.title,
+        }
       })
     } finally {
       session.endSession()
     }
 
     if (response) {
+      const templateId = process.env.SUBSCRIBE_TPL_REVIEW
+      if (reviewNotify && templateId && isWechatUserId(reviewNotify.creatorId)) {
+        try {
+          await sendSubscribeMessage({
+            toUserId: reviewNotify.creatorId,
+            templateId,
+            page: 'pages/index/index',
+            dataByLabel: {
+              [LABELS.reviewType]: VALUES.reviewTypeTaskChange,
+              [LABELS.reviewResult]: VALUES.reworkAccepted,
+              [LABELS.notifyTime]: formatDateTime(new Date()),
+              [LABELS.note]: reviewNotify.title || VALUES.taskReminder,
+            },
+            context: {
+              event: 'task_rework_accepted',
+              actorId: userId,
+              taskId: reviewNotify.taskId?.toString?.() || reviewNotify.taskId,
+            },
+          })
+        } catch (error) {
+          console.error('acceptReworkTask subscribe error:', error)
+        }
+      }
       return res.status(response.status).json(response.body)
     }
 
@@ -851,12 +976,41 @@ exports.rejectReworkTask = async (req, res) => {
         }
 
         response = { status: 200, body: { ok: true } }
+        if (task.assigneeId) {
+          cancelNotify = {
+            assigneeId: task.assigneeId,
+            taskId: task._id,
+            title: task.title,
+          }
+        }
       })
     } finally {
       session.endSession()
     }
 
     if (response) {
+      const templateId = process.env.SUBSCRIBE_TPL_TASK_UPDATE
+      if (cancelNotify && templateId && isWechatUserId(cancelNotify.assigneeId)) {
+        try {
+          await sendSubscribeMessage({
+            toUserId: cancelNotify.assigneeId,
+            templateId,
+            page: 'pages/index/index',
+            dataByLabel: {
+              [LABELS.cardName]: cancelNotify.title || VALUES.taskReminder,
+              [LABELS.changeDetail]: VALUES.reworkCanceled,
+              [LABELS.changeTime]: formatDateTime(new Date()),
+            },
+            context: {
+              event: 'task_rework_canceled',
+              actorId: userId,
+              taskId: cancelNotify.taskId?.toString?.() || cancelNotify.taskId,
+            },
+          })
+        } catch (error) {
+          console.error('cancelReworkTask subscribe error:', error)
+        }
+      }
       return res.status(response.status).json(response.body)
     }
 
@@ -1188,21 +1342,23 @@ exports.acceptTask = async (req, res) => {
     if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
 
     const task = await Task.findById(id)
-      if (!task) return res.status(404).json({ error: 'task not found' })
-      if (isChallengeTask(task)) return res.status(400).json({ error: 'challenge task must be accepted via challenge flow' })
-      if (task.assigneeId) return res.status(400).json({ error: 'task already assigned' })
-      if (task.status !== 'pending') return conflict(res)
+    if (!task) return res.status(404).json({ error: 'task not found' })
+    if (isChallengeTask(task)) {
+      return res.status(400).json({ error: 'challenge task must be accepted via challenge flow' })
+    }
+    if (task.assigneeId) return res.status(400).json({ error: 'task already assigned' })
+    if (task.status !== 'pending') return conflict(res)
 
-      const now = new Date()
-      if (task.dueAt && task.dueAt.getTime() < now.getTime()) {
-        return res.status(409).json({ error: 'task expired' })
-      }
-      const updated = await Task.findOneAndUpdate(
-        {
-          _id: task._id,
-          status: 'pending',
-          assigneeId: null,
-          updatedAt: task.updatedAt,
+    const now = new Date()
+    if (task.dueAt && task.dueAt.getTime() < now.getTime()) {
+      return res.status(409).json({ error: 'task expired' })
+    }
+    const updated = await Task.findOneAndUpdate(
+      {
+        _id: task._id,
+        status: 'pending',
+        assigneeId: null,
+        updatedAt: task.updatedAt,
       },
       { $set: { assigneeId: userId, status: 'in_progress', updatedAt: now } },
       { new: true, runValidators: true }
@@ -1217,6 +1373,31 @@ exports.acceptTask = async (req, res) => {
       assigneeId: updated.assigneeId,
     })
 
+    const templateId = process.env.SUBSCRIBE_TPL_WORK
+    if (templateId && isWechatUserId(updated.creatorId)) {
+      try {
+        await sendSubscribeMessage({
+          toUserId: updated.creatorId,
+          templateId,
+          page: 'pages/index/index',
+          dataByLabel: {
+            [LABELS.taskName]: updated.title || VALUES.taskReminder,
+            [LABELS.assignee]: updated.assigneeId || '',
+            [LABELS.startTime]: formatDateTime(updated.startAt),
+            [LABELS.dueTime]: formatDateTime(updated.dueAt),
+            [LABELS.taskStatus]: VALUES.taskAssigned,
+          },
+          context: {
+            event: 'task_assigned',
+            actorId: userId,
+            taskId: updated._id?.toString?.() || updated._id,
+          },
+        })
+      } catch (error) {
+        console.error('acceptTask subscribe error:', error)
+      }
+    }
+
     return res.json(buildResponse(updated))
   } catch (error) {
     console.error('acceptTask error:', error)
@@ -1224,7 +1405,7 @@ exports.acceptTask = async (req, res) => {
   }
 }
 
-  exports.getTodayTasks = async (req, res) => {
+exports.getTodayTasks = async (req, res) => {
   try {
     const userId = ensureAuthorized(req, res)
     if (!userId) return
@@ -1329,6 +1510,7 @@ exports.submitReview = async (req, res) => {
 
     const session = await mongoose.startSession()
     let response = null
+    let reviewNotify = null
     try {
       await session.withTransaction(async () => {
         const updated = await Task.findOneAndUpdate(
@@ -1356,13 +1538,42 @@ exports.submitReview = async (req, res) => {
         }
 
         response = { status: 200, body: buildResponse(updated) }
+        reviewNotify = {
+          creatorId: updated.creatorId,
+          taskId: updated._id,
+          title: updated.title,
+        }
       })
     } finally {
       session.endSession()
     }
 
-    if (response) return res.status(response.status).json(response.body)
-    return res.status(500).json({ error: 'submit review failed' })
+    if (!response) return res.status(500).json({ error: 'submit review failed' })
+
+    const templateId = process.env.SUBSCRIBE_TPL_REVIEW
+    if (reviewNotify && templateId && isWechatUserId(reviewNotify.creatorId)) {
+      try {
+        await sendSubscribeMessage({
+          toUserId: reviewNotify.creatorId,
+          templateId,
+          page: 'pages/index/index',
+          dataByLabel: {
+            [LABELS.reviewType]: VALUES.reviewTypeSubmit,
+            [LABELS.reviewResult]: VALUES.reviewResultPending,
+            [LABELS.notifyTime]: formatDateTime(new Date()),
+            [LABELS.note]: reviewNotify.title || VALUES.taskReminder,
+          },
+          context: {
+            event: 'task_review_submitted',
+            actorId: userId,
+            taskId: reviewNotify.taskId?.toString?.() || reviewNotify.taskId,
+          },
+        })
+      } catch (error) {
+        console.error('submitReview subscribe error:', error)
+      }
+    }
+    return res.status(response.status).json(response.body)
   } catch (error) {
     console.error('submitReview error:', error)
     return res.status(500).json({ error: 'submit review failed' })
@@ -1507,6 +1718,33 @@ exports.abandonTask = async (req, res) => {
     )
 
     if (!updated) return conflict(res)
+
+    const templateId = process.env.SUBSCRIBE_TPL_WORK
+    if (templateId && isWechatUserId(updated.creatorId)) {
+      try {
+        await sendSubscribeMessage({
+          toUserId: updated.creatorId,
+          templateId,
+          page: 'pages/index/index',
+          dataByLabel: {
+            [LABELS.taskName]: updated.title || VALUES.taskReminder,
+            [LABELS.assignee]: userId,
+            [LABELS.startTime]: formatDateTime(updated.startAt || updated.createdAt),
+            [LABELS.dueTime]: formatDateTime(updated.dueAt),
+            [LABELS.taskStatus]: '待接取',
+            [LABELS.noteMessage]: VALUES.taskAbandoned,
+          },
+          context: {
+            event: 'task_abandoned',
+            actorId: userId,
+            taskId: updated._id?.toString?.() || updated._id,
+          },
+        })
+      } catch (error) {
+        console.error('abandonTask subscribe error:', error)
+      }
+    }
+
     return res.json(buildResponse(updated))
   } catch (error) {
     console.error('abandonTask error:', error)

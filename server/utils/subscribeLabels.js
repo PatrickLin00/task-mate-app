@@ -20,6 +20,7 @@ const LABELS = {
 
 const VALUES = {
   taskClosed: '任务已关闭',
+  taskAbandoned: '接取者已放弃任务',
   taskReworkedPending: '任务已重构请确认变更',
   reworkAccepted: '已接受',
   reworkRejected: '已拒绝',
@@ -37,6 +38,10 @@ const VALUES = {
   unitDay: '天',
   unitHour: '小时',
   unitMinute: '分钟',
+  taskReworkAccepted: '任务变更已接受',
+  taskReworkRejected: '任务变更已拒绝',
+  taskReviewRequired: '任务需检视',
+  taskAssigned: '任务已被接取',
 }
 
 module.exports = {

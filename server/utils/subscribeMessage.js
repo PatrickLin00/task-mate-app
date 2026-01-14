@@ -96,13 +96,18 @@ const buildMessageData = (keywordMap, dataByLabel) => {
   return data
 }
 
-const sendSubscribeMessage = async ({ toUserId, templateId, page, dataByLabel }) => {
+const sendSubscribeMessage = async ({ toUserId, templateId, page, dataByLabel, context }) => {
   if (!templateId || !toUserId) return { ok: false, reason: 'missing params' }
   const openid = String(toUserId).startsWith('wx:') ? String(toUserId).slice(3) : String(toUserId)
   if (!openid) return { ok: false, reason: 'missing openid' }
 
   const token = await getAccessToken()
-  if (!token) return { ok: false, reason: 'missing access token' }
+  if (!token) {
+    if (isDebug()) {
+      console.log('subscribe token missing for send', { templateId, openid, context })
+    }
+    return { ok: false, reason: 'missing access token' }
+  }
 
   const keywordMap = await getTemplateKeywordMap(templateId)
   const data = buildMessageData(keywordMap, dataByLabel)
@@ -116,7 +121,13 @@ const sendSubscribeMessage = async ({ toUserId, templateId, page, dataByLabel })
   }
 
   if (isDebug()) {
-    console.log('subscribe send start', { templateId, openid, page: payload.page, labels: Object.keys(dataByLabel || {}) })
+    console.log('subscribe send start', {
+      templateId,
+      openid,
+      page: payload.page,
+      labels: Object.keys(dataByLabel || {}),
+      context,
+    })
   }
   let response = null
   try {
@@ -127,7 +138,7 @@ const sendSubscribeMessage = async ({ toUserId, templateId, page, dataByLabel })
     )
   } catch (err) {
     if (isDebug()) {
-      console.log('subscribe send failed', err?.message || err)
+      console.log('subscribe send failed', { message: err?.message || err, context })
     }
     return { ok: false, reason: 'request failed' }
   }
@@ -135,13 +146,13 @@ const sendSubscribeMessage = async ({ toUserId, templateId, page, dataByLabel })
   const errcode = response.data?.errcode
   if (errcode && errcode !== 0) {
     if (isDebug()) {
-      console.log('subscribe send error', { errcode, errmsg: response.data?.errmsg })
+      console.log('subscribe send error', { errcode, errmsg: response.data?.errmsg, context })
     }
     return { ok: false, reason: response.data?.errmsg || 'send failed', errcode }
   }
 
   if (isDebug()) {
-    console.log('subscribe send ok', { templateId, openid })
+    console.log('subscribe send ok', { templateId, openid, context })
   }
   return { ok: true }
 }

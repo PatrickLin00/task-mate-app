@@ -40,7 +40,7 @@ const isEnabled = () => {
   return flag === 'true'
 }
 
-const notifyTodo = async (task, now, remark, remainText) => {
+const notifyTodo = async (task, now, remark, remainText, context) => {
   const templateId = process.env.SUBSCRIBE_TPL_TODO
   if (!templateId || !task?.assigneeId) return
   await sendSubscribeMessage({
@@ -54,17 +54,18 @@ const notifyTodo = async (task, now, remark, remainText) => {
       [LABELS.remindTime]: formatDateTime(now),
       [LABELS.noteMessage]: remark,
     },
+    context,
   })
 }
 
-const markAndNotify = async (task, field, now, remark, remainText) => {
+const markAndNotify = async (task, field, now, remark, remainText, context) => {
   const updated = await Task.findOneAndUpdate(
     { _id: task._id, [field]: null },
     { $set: { [field]: now } },
     { new: true }
   )
   if (!updated) return
-  await notifyTodo(updated, now, remark, remainText)
+  await notifyTodo(updated, now, remark, remainText, context)
 }
 
 const runHourly = async () => {
@@ -83,7 +84,10 @@ const runHourly = async () => {
   debugLog('subscribe scheduler hourly dueSoon', { count: dueSoon.length })
   for (const task of dueSoon) {
     const remainText = formatRemain(task.dueAt.getTime() - now.getTime())
-    await markAndNotify(task, 'dueSoonNotifiedAt', now, VALUES.taskDueSoon, remainText)
+    await markAndNotify(task, 'dueSoonNotifiedAt', now, VALUES.taskDueSoon, remainText, {
+      event: 'task_due_soon',
+      taskId: task._id?.toString?.() || task._id,
+    })
   }
 
   const overdue = await Task.find({
@@ -94,7 +98,10 @@ const runHourly = async () => {
 
   debugLog('subscribe scheduler hourly overdue', { count: overdue.length })
   for (const task of overdue) {
-    await markAndNotify(task, 'overdueNotifiedAt', now, VALUES.taskOverdue, VALUES.expired)
+    await markAndNotify(task, 'overdueNotifiedAt', now, VALUES.taskOverdue, VALUES.expired, {
+      event: 'task_overdue',
+      taskId: task._id?.toString?.() || task._id,
+    })
   }
 }
 
@@ -111,7 +118,10 @@ const runDaily = async () => {
 
   debugLog('subscribe scheduler daily challengeExpired', { count: expired.length })
   for (const task of expired) {
-    await markAndNotify(task, 'challengeExpiredNotifiedAt', now, VALUES.challengeExpired, VALUES.expired)
+    await markAndNotify(task, 'challengeExpiredNotifiedAt', now, VALUES.challengeExpired, VALUES.expired, {
+      event: 'challenge_expired',
+      taskId: task._id?.toString?.() || task._id,
+    })
   }
 }
 
