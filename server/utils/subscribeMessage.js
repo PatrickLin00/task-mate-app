@@ -1,10 +1,18 @@
 const axios = require('axios')
+const https = require('https')
 
 const accessTokenCache = { value: null, expireAt: 0 }
 const templateCache = new Map()
 const isDebug = () => String(process.env.SUBSCRIBE_DEBUG || '').toLowerCase() === 'true'
 
 const normalizeLabel = (value) => String(value || '').trim().replace(/[\p{P}\p{S}]+$/u, '').trim()
+
+const buildWechatRequestOptions = () => {
+  const insecure = String(process.env.WEAPP_TLS_INSECURE || '').toLowerCase() === 'true'
+  const base = { proxy: false }
+  if (!insecure) return base
+  return { ...base, httpsAgent: new https.Agent({ rejectUnauthorized: false }) }
+}
 
 const parseTemplateContent = (content) => {
   if (!content) return {}
@@ -33,9 +41,10 @@ const getAccessToken = async () => {
 
   let response = null
   try {
-    response = await axios.get('https://api.weixin.qq.com/cgi-bin/token', {
-      params: { grant_type: 'client_credential', appid, secret },
-    })
+    response = await axios.get(
+      'https://api.weixin.qq.com/cgi-bin/token',
+      { params: { grant_type: 'client_credential', appid, secret }, ...buildWechatRequestOptions() }
+    )
   } catch (err) {
     if (isDebug()) {
       console.log('subscribe token request failed', err?.message || err)
@@ -68,7 +77,7 @@ const getTemplateKeywordMap = async (templateId) => {
     response = await axios.post(
       'https://api.weixin.qq.com/wxaapi/newtmpl/gettemplate',
       {},
-      { params: { access_token: token } }
+      { params: { access_token: token }, ...buildWechatRequestOptions() }
     )
   } catch (err) {
     if (isDebug()) {
@@ -134,7 +143,7 @@ const sendSubscribeMessage = async ({ toUserId, templateId, page, dataByLabel, c
     response = await axios.post(
       'https://api.weixin.qq.com/cgi-bin/message/subscribe/send',
       payload,
-      { params: { access_token: token } }
+      { params: { access_token: token }, ...buildWechatRequestOptions() }
     )
   } catch (err) {
     if (isDebug()) {
