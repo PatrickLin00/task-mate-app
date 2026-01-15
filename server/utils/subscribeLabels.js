@@ -42,6 +42,8 @@ const VALUES = {
   taskReworkRejected: '任务变更已拒绝',
   taskReviewRequired: '任务需检视',
   taskAssigned: '任务已被接取',
+  taskPending: '待接取',
+  assigneeTaken: '接取者',
 }
 
 module.exports = {

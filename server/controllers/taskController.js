@@ -475,9 +475,9 @@ exports.closeTask = async (req, res) => {
         page: 'pages/index/index',
         dataByLabel: {
           [LABELS.taskName]: updated.title || VALUES.taskReminder,
-          [LABELS.assignee]: previousAssigneeId,
-          [LABELS.startTime]: formatDateTime(originalStartAt),
-          [LABELS.dueTime]: formatDateTime(originalDueAt),
+          [LABELS.assignee]: VALUES.assigneeTaken,
+          [LABELS.startTime]: formatDateTime(originalStartAt || updated.createdAt || now),
+          [LABELS.dueTime]: formatDateTime(originalDueAt || updated.dueAt || updated.createdAt || now),
           [LABELS.taskStatus]: VALUES.taskClosed,
           [LABELS.note]: VALUES.taskClosed,
         },
@@ -1374,15 +1374,17 @@ exports.acceptTask = async (req, res) => {
     const templateId = process.env.SUBSCRIBE_TPL_WORK
     if (templateId && isWechatUserId(updated.creatorId)) {
       try {
+        const startTime = updated.startAt || updated.createdAt || now
+        const dueTime = updated.dueAt || updated.startAt || updated.createdAt || now
         await sendSubscribeMessage({
           toUserId: updated.creatorId,
           templateId,
           page: 'pages/index/index',
           dataByLabel: {
             [LABELS.taskName]: updated.title || VALUES.taskReminder,
-            [LABELS.assignee]: updated.assigneeId || '',
-            [LABELS.startTime]: formatDateTime(updated.startAt),
-            [LABELS.dueTime]: formatDateTime(updated.dueAt),
+            [LABELS.assignee]: VALUES.assigneeTaken,
+            [LABELS.startTime]: formatDateTime(startTime),
+            [LABELS.dueTime]: formatDateTime(dueTime),
             [LABELS.taskStatus]: VALUES.taskAssigned,
           },
           context: {
@@ -1726,10 +1728,10 @@ exports.abandonTask = async (req, res) => {
           page: 'pages/index/index',
           dataByLabel: {
             [LABELS.taskName]: updated.title || VALUES.taskReminder,
-            [LABELS.assignee]: userId,
+            [LABELS.assignee]: VALUES.assigneeTaken,
             [LABELS.startTime]: formatDateTime(updated.startAt || updated.createdAt),
-            [LABELS.dueTime]: formatDateTime(updated.dueAt),
-            [LABELS.taskStatus]: '待接取',
+            [LABELS.dueTime]: formatDateTime(updated.dueAt || updated.createdAt),
+            [LABELS.taskStatus]: VALUES.taskPending,
             [LABELS.noteMessage]: VALUES.taskAbandoned,
           },
           context: {
