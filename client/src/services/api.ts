@@ -40,6 +40,8 @@ export type Task = {
   status: TaskStatus
   creatorId: string
   assigneeId?: string | null
+  creatorName?: string
+  assigneeName?: string
   previousTaskId?: string | null
   ownerId?: string | null
   sourceTaskId?: string | null

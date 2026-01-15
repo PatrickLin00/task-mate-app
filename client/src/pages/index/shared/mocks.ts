@@ -36,7 +36,10 @@ type TaskBase = {
   status: TaskStatus
   creatorId: string
   assigneeId?: string | null
+  creatorName?: string
+  assigneeName?: string
   previousTaskId?: string | null
+  seedKey?: string | null
 }
 
 export type RoadTask = TaskBase & {

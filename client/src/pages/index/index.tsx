@@ -156,7 +156,11 @@ export default function Index() {
               </Button>
             </View>
             <Text className='name-gate-hint'>{taskStrings.naming.skipHint}</Text>
-            <Button className='name-gate-submit' loading={savingName} onClick={() => void handleSubmitName()}>
+            <Button
+              className='task-action name-gate-submit'
+              loading={savingName}
+              onClick={() => void handleSubmitName()}
+            >
               {taskStrings.naming.submit}
             </Button>
           </View>

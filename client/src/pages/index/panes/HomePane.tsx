@@ -157,8 +157,11 @@ export default function HomePane({
       points: task.attributeReward.value,
       createdAt: task.createdAt || defaultCreatedAt,
       status: task.status,
-      creatorId: isChallenge ? taskStrings.labels.creatorSystem : task.creatorId,
+      creatorId: task.creatorId,
       assigneeId: task.assigneeId ?? null,
+      creatorName: isChallenge ? taskStrings.labels.creatorSystem : task.creatorName || task.creatorId,
+      assigneeName: task.assigneeName || task.assigneeId || '',
+      seedKey: task.seedKey ?? null,
       dueAt,
       due: formatDueLabel(dueAt),
       remain: humanizeRemain(dueAt),
@@ -402,7 +405,7 @@ export default function HomePane({
   const dialogRemain = modalTask?.dueAt ? humanizeRemain(modalTask.dueAt) : modalTask?.remain
   const dialogDueLabel = modalTask?.dueAt ? formatDueLabel(modalTask.dueAt) : modalTask?.due
   const dialogStartLabel = modalTask?.createdAt ? formatStartDate(modalTask.createdAt) : undefined
-  const dialogCreatorLabel = modalTask?.creatorId || ''
+  const dialogCreatorLabel = modalTask?.creatorName || modalTask?.creatorId || ''
   const dialogPendingConfirm = modalTask?.status === 'pending_confirmation'
   const dialogUseComplete = Boolean(
     modalTask?.isChallenge ||

@@ -276,9 +276,9 @@ function MissionCard({
   const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain
   const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel
   const startLabel = formatStartDate(task.startAt || task.createdAt)
-  const assigneeLabel = task.assigneeId || metaText.unassigned
-  const creatorLabel = task.creatorId || ''
-  const isChallengeTask = task.creatorId === taskStrings.labels.creatorSystem
+  const assigneeLabel = task.assigneeName || task.assigneeId || metaText.unassigned
+  const creatorLabel = task.creatorName || task.creatorId || ''
+  const isChallengeTask = Boolean(task.seedKey?.startsWith('challenge_'))
   const isSelfAssigned = !!task.assigneeId && task.assigneeId === task.creatorId
   const useComplete = isChallengeTask || isSelfAssigned
   const reviewLabel = useComplete ? taskStrings.actions.completeTask : taskStrings.actions.submitReview
@@ -509,8 +509,8 @@ function MissionCard({
     const submittedLabel = formatStartDate(task.submittedAt || task.updatedAt || task.createdAt)
     const completedLabel = formatStartDate(task.completedAt || task.updatedAt || task.createdAt)
     const deleteRemainLabel = task.deleteAt ? humanizeRemain(task.deleteAt) : task.deleteRemain || ''
-    const assigneeLabel = task.assigneeId || metaText.unassigned
-    const creatorLabel = task.creatorId || ''
+    const assigneeLabel = task.assigneeName || task.assigneeId || metaText.unassigned
+    const creatorLabel = task.creatorName || task.creatorId || ''
 
   return (
     <View className={`task-card tone-${tone} ${hasSubtasks && expanded ? 'expanded' : ''}`}>
@@ -778,8 +778,8 @@ function HistoryCard({ task }: { task: CollabTask }) {
   const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel || ''
   const startIso = task.startAt || task.createdAt
   const startLabel = formatStartDate(startIso)
-  const assigneeLabel = task.assigneeId || metaText.unassigned
-  const creatorLabel = task.creatorId || ''
+  const assigneeLabel = task.assigneeName || task.assigneeId || metaText.unassigned
+  const creatorLabel = task.creatorName || task.creatorId || ''
 
   return (
     <View className={`task-card tone-${tone}`}>
@@ -1545,6 +1545,7 @@ export default function TasksPane({
       task.attributeReward.value >= 20
         ? taskStrings.labels.difficultyMid
         : taskStrings.labels.difficultyEasy
+    const isChallenge = task.seedKey?.startsWith('challenge_')
     return {
       id: task._id || Math.random().toString(36).slice(2),
       title: task.title,
@@ -1553,11 +1554,12 @@ export default function TasksPane({
       points: task.attributeReward.value,
       createdAt,
       previousTaskId: task.previousTaskId ?? null,
+      seedKey: task.seedKey ?? null,
       status: task.status,
-      creatorId: task.seedKey?.startsWith('challenge_')
-        ? taskStrings.labels.creatorSystem
-        : task.creatorId,
+      creatorId: task.creatorId,
       assigneeId: task.assigneeId ?? null,
+      creatorName: isChallenge ? taskStrings.labels.creatorSystem : task.creatorName || task.creatorId,
+      assigneeName: task.assigneeName || task.assigneeId || '',
       icon: task.icon || '?',
       progress: { current: progress.current, total: progress.total || 1 },
       subtasks,
@@ -1602,6 +1604,9 @@ export default function TasksPane({
       status: task.status,
       creatorId: task.creatorId,
       assigneeId: task.assigneeId ?? null,
+      creatorName: task.creatorName || task.creatorId,
+      assigneeName: task.assigneeName || task.assigneeId || '',
+      seedKey: task.seedKey ?? null,
       submittedAt: task.submittedAt ?? null,
       completedAt: task.completedAt ?? null,
       deleteAt,
@@ -1642,6 +1647,9 @@ export default function TasksPane({
       status: task.status,
       creatorId: task.creatorId,
       assigneeId: task.assigneeId ?? null,
+      creatorName: task.creatorName || task.creatorId,
+      assigneeName: task.assigneeName || task.assigneeId || '',
+      seedKey: task.seedKey ?? null,
       icon: task.icon || '?',
       finishedAgo: formatAgo(finishedAt),
       submittedAt: task.submittedAt ?? null,

@@ -20,16 +20,16 @@ const LABELS = {
 
 const VALUES = {
   taskClosed: '任务已关闭',
-  taskAbandoned: '接取者已放弃任务',
+  taskAbandoned: '接取人已放弃任务',
   taskReworkedPending: '任务已重构请确认变更',
   reworkAccepted: '已接受',
   reworkRejected: '已拒绝',
   reworkCanceled: '重构已撤销',
-  acceptTaskStatus: '已接受',
+  acceptTaskStatus: '已接取',
   reviewTypeTaskChange: '任务变更',
   reviewTypeSubmit: '提交检视',
   reviewResultPending: '待确认',
-  rejectReasonAssignee: '接取者拒绝变更',
+  rejectReasonAssignee: '对方拒绝变更',
   taskReminder: '任务提醒',
   taskDueSoon: '任务临近截止',
   taskOverdue: '任务已超时',
@@ -43,7 +43,7 @@ const VALUES = {
   taskReviewRequired: '任务需检视',
   taskAssigned: '任务已被接取',
   taskPending: '待接取',
-  assigneeTaken: '接取者',
+  assigneeTaken: '接取人',
 }
 
 module.exports = {

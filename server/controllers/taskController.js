@@ -1,6 +1,7 @@
 const Task = require('../models/Task')
 const CompletedTask = require('../models/CompletedTask')
 const mongoose = require('mongoose')
+const User = require('../models/User')
 const { sendSubscribeMessage } = require('../utils/subscribeMessage')
 const { LABELS, VALUES } = require('../utils/subscribeLabels')
 const {
@@ -34,6 +35,7 @@ const formatDateTime = (date) => {
 }
 
 const isWechatUserId = (value) => typeof value === 'string' && value.startsWith('wx:')
+const SYSTEM_USER_PREFIX = 'sys:'
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id)
 let taskDebugEnabled = String(process.env.TASK_DEBUG_LOGS || '').toLowerCase() === 'true'
@@ -76,16 +78,71 @@ const computeProgress = (taskDoc) => {
   return { current, total }
 }
 
+const normalizeDisplayName = (userId, nameMap) => {
+  if (!userId) return ''
+  const id = String(userId)
+  if (id.startsWith(SYSTEM_USER_PREFIX)) return '星旅'
+  const mapped = nameMap?.get(id)
+  return mapped || id
+}
+
+const buildUserNameMap = async (userIds) => {
+  const rawIds = Array.isArray(userIds) ? userIds : []
+  const ids = Array.from(new Set(rawIds.map((id) => String(id || '')).filter(Boolean))).filter(
+    (id) => !id.startsWith(SYSTEM_USER_PREFIX)
+  )
+  if (ids.length === 0) return new Map()
+  const users = await User.find({ userId: { $in: ids } }, { userId: 1, nickname: 1 }).lean()
+  const map = new Map()
+  users.forEach((user) => {
+    const nickname = typeof user.nickname === 'string' ? user.nickname.trim() : ''
+    if (nickname) map.set(user.userId, nickname)
+  })
+  return map
+}
+
+const buildNameMapForTasks = async (tasks) => {
+  const ids = []
+  tasks.forEach((task) => {
+    if (task?.creatorId) ids.push(task.creatorId)
+    if (task?.assigneeId) ids.push(task.assigneeId)
+  })
+  return buildUserNameMap(ids)
+}
+
+const resolveUserName = async (userId) => {
+  if (!userId) return ''
+  const id = String(userId)
+  if (id.startsWith(SYSTEM_USER_PREFIX)) return '星旅'
+  const user = await User.findOne({ userId: id }, { nickname: 1 }).lean()
+  const nickname = typeof user?.nickname === 'string' ? user.nickname.trim() : ''
+  return nickname || id
+}
+
 const buildResponse = (taskDoc) => {
-  const doc = taskDoc.toObject()
+  const doc = typeof taskDoc?.toObject === 'function' ? taskDoc.toObject() : { ...taskDoc }
   doc.computedProgress = computeProgress(taskDoc)
   return doc
 }
 
-const buildArchiveResponse = (taskDoc) => {
-  const doc = taskDoc.toObject()
-  doc.computedProgress = computeProgress(taskDoc)
+const buildArchiveResponse = (taskDoc) => buildResponse(taskDoc)
+
+const buildResponseWithNames = async (taskDoc, nameMap) => {
+  const resolvedMap = nameMap || (await buildUserNameMap([taskDoc?.creatorId, taskDoc?.assigneeId]))
+  const doc = buildResponse(taskDoc)
+  doc.creatorName = normalizeDisplayName(taskDoc?.creatorId, resolvedMap)
+  doc.assigneeName = taskDoc?.assigneeId ? normalizeDisplayName(taskDoc?.assigneeId, resolvedMap) : ''
   return doc
+}
+
+const buildResponsesWithNames = async (tasks) => {
+  const nameMap = await buildNameMapForTasks(tasks)
+  return tasks.map((taskDoc) => {
+    const doc = buildResponse(taskDoc)
+    doc.creatorName = normalizeDisplayName(taskDoc?.creatorId, nameMap)
+    doc.assigneeName = taskDoc?.assigneeId ? normalizeDisplayName(taskDoc?.assigneeId, nameMap) : ''
+    return doc
+  })
 }
 
 const isChallengeTask = (taskDoc) => String(taskDoc?.seedKey || '').startsWith('challenge_')
@@ -280,7 +337,7 @@ exports.createTask = async (req, res) => {
       status: task.status,
     })
 
-    return res.status(201).json(buildResponse(task))
+    return res.status(201).json(await buildResponseWithNames(task))
   } catch (error) {
     console.error('createTask error:', error)
     return res.status(500).json({ error: 'create task failed' })
@@ -303,7 +360,7 @@ exports.getAllTasks = async (req, res) => {
     }
 
     const tasks = await Task.find(query).sort({ dueAt: 1, createdAt: -1 })
-    return res.json(tasks.map((t) => buildResponse(t)))
+    return res.json(await buildResponsesWithNames(tasks))
   } catch (error) {
     console.error('getAllTasks error:', error)
     return res.status(500).json({ error: 'get tasks failed' })
@@ -331,7 +388,7 @@ exports.getTask = async (req, res) => {
       }
     }
 
-    return res.json(buildResponse(task))
+    return res.json(await buildResponseWithNames(task))
   } catch (error) {
     console.error('getTask error:', error)
     return res.status(500).json({ error: 'get task failed' })
@@ -355,7 +412,7 @@ exports.getMissionTasks = async (req, res) => {
     const tasks = await Task.find(query).sort({ dueAt: 1, createdAt: -1 })
     taskDebugLog('getMissionTasks ok', { userId, count: tasks.length })
 
-    return res.json(tasks.map((t) => buildResponse(t)))
+    return res.json(await buildResponsesWithNames(tasks))
   } catch (error) {
     console.error('getMissionTasks error:', error)
     return res.status(500).json({ error: 'get mission tasks failed' })
@@ -395,7 +452,7 @@ exports.getCollabTasks = async (req, res) => {
     const tasks = await Task.find(query).sort({ dueAt: 1, createdAt: -1 })
 
     taskDebugLog('getCollabTasks ok', { userId, count: tasks.length })
-    return res.json(tasks.map((t) => buildResponse(t)))
+    return res.json(await buildResponsesWithNames(tasks))
   } catch (error) {
     console.error('getCollabTasks error:', error)
     return res.status(500).json({ error: 'get collab tasks failed' })
@@ -430,7 +487,7 @@ exports.closeTask = async (req, res) => {
     if (!task) return res.status(404).json({ error: 'task not found' })
 
     if (task.creatorId !== userId) return res.status(403).json({ error: 'forbidden' })
-    if (task.status === 'closed') return res.json(buildResponse(task))
+    if (task.status === 'closed') return res.json(await buildResponseWithNames(task))
 
     const now = new Date()
     const deleteAt = new Date(now.getTime() + CLOSE_RETENTION_DAYS * 24 * 60 * 60 * 1000)
@@ -469,13 +526,14 @@ exports.closeTask = async (req, res) => {
     if (!updated) return conflict(res)
     const templateId = process.env.SUBSCRIBE_TPL_WORK
     if (templateId && isWechatUserId(previousAssigneeId)) {
+      const assigneeName = await resolveUserName(previousAssigneeId)
       await sendSubscribeMessage({
         toUserId: previousAssigneeId,
         templateId,
         page: 'pages/index/index',
         dataByLabel: {
           [LABELS.taskName]: updated.title || VALUES.taskReminder,
-          [LABELS.assignee]: VALUES.assigneeTaken,
+          [LABELS.assignee]: assigneeName,
           [LABELS.startTime]: formatDateTime(originalStartAt || updated.createdAt || now),
           [LABELS.dueTime]: formatDateTime(originalDueAt || updated.dueAt || updated.createdAt || now),
           [LABELS.taskStatus]: VALUES.taskClosed,
@@ -488,7 +546,7 @@ exports.closeTask = async (req, res) => {
         },
       })
     }
-    return res.json(buildResponse(updated))
+    return res.json(await buildResponseWithNames(updated))
   } catch (error) {
     console.error('closeTask error:', error)
     return res.status(500).json({ error: 'close task failed' })
@@ -552,12 +610,13 @@ exports.deleteTask = async (req, res) => {
           await deleteRefactoredChain(task.previousTaskId, userId, session)
         }
 
-        response = { status: 200, body: { ok: true } }
-        reviewNotify = {
-          creatorId: task.creatorId,
-          taskId: task._id,
-          title: task.title,
-        }
+          response = { status: 200, body: { ok: true } }
+          reviewNotify = {
+            creatorId: task.creatorId,
+            taskId: task._id,
+            title: task.title,
+            assigneeId: task.assigneeId,
+          }
       })
     } finally {
       session.endSession()
@@ -567,6 +626,8 @@ exports.deleteTask = async (req, res) => {
       const templateId = process.env.SUBSCRIBE_TPL_REVIEW
       if (reviewNotify && templateId && isWechatUserId(reviewNotify.creatorId)) {
         try {
+          const assigneeName = reviewNotify.assigneeId ? await resolveUserName(reviewNotify.assigneeId) : ''
+          const rejectReason = assigneeName ? `${assigneeName}拒绝变更` : VALUES.rejectReasonAssignee
           await sendSubscribeMessage({
             toUserId: reviewNotify.creatorId,
             templateId,
@@ -575,7 +636,7 @@ exports.deleteTask = async (req, res) => {
               [LABELS.reviewType]: VALUES.reviewTypeTaskChange,
               [LABELS.reviewResult]: VALUES.reworkRejected,
               [LABELS.notifyTime]: formatDateTime(new Date()),
-              [LABELS.rejectReason]: VALUES.rejectReasonAssignee,
+              [LABELS.rejectReason]: rejectReason,
               [LABELS.note]: reviewNotify.title || VALUES.taskReminder,
             },
             context: {
@@ -662,7 +723,7 @@ exports.reworkTask = async (req, res) => {
           )
 
         if (isSame) {
-          response = { status: 200, body: { message: 'no changes', task: buildResponse(original) } }
+          response = { status: 200, body: { message: 'no changes', task: await buildResponseWithNames(original) } }
           return
         }
 
@@ -719,7 +780,7 @@ exports.reworkTask = async (req, res) => {
           { session }
         )
 
-        response = { status: 201, body: buildResponse(newTask) }
+        response = { status: 201, body: await buildResponseWithNames(newTask) }
         if (newTask.assigneeId && newTask.status === 'pending_confirmation') {
           reworkNotify = {
             assigneeId: newTask.assigneeId,
@@ -838,11 +899,12 @@ exports.acceptReworkTask = async (req, res) => {
           }
         }
 
-        response = { status: 200, body: buildResponse(updatedTask) }
+        response = { status: 200, body: await buildResponseWithNames(updatedTask) }
         reviewNotify = {
           creatorId: updatedTask.creatorId,
           taskId: updatedTask._id,
           title: updatedTask.title,
+          assigneeId: updatedTask.assigneeId,
         }
       })
     } finally {
@@ -1147,7 +1209,7 @@ exports.restartTask = async (req, res) => {
     )
 
     if (!updated) return conflict(res)
-    return res.json(buildResponse(updated))
+    return res.json(await buildResponseWithNames(updated))
   } catch (error) {
     console.error('restartTask error:', error)
     return res.status(500).json({ error: 'restart task failed' })
@@ -1189,7 +1251,7 @@ exports.refreshTaskSchedule = async (req, res) => {
 
     if (!updated) return conflict(res)
 
-    return res.json(buildResponse(updated))
+    return res.json(await buildResponseWithNames(updated))
   } catch (error) {
     console.error('refreshTaskSchedule error:', error)
     return res.status(500).json({ error: 'refresh task failed' })
@@ -1208,7 +1270,7 @@ exports.getArchivedTasks = async (req, res) => {
       return new Date(bTime).getTime() - new Date(aTime).getTime()
     })
 
-    return res.json(sorted.map((t) => buildArchiveResponse(t)))
+    return res.json(await buildResponsesWithNames(sorted))
   } catch (error) {
     console.error('getArchivedTasks error:', error)
     return res.status(500).json({ error: 'get archived tasks failed' })
@@ -1231,14 +1293,14 @@ exports.getChallengeTasks = async (req, res) => {
       const task = existingMap.get(seedKey)
       if (task) {
         if (task.status === 'pending' && !task.assigneeId) {
-          result.push(buildResponse(task))
+          result.push(task)
         }
         return
       }
       result.push(buildChallengeVirtualTask({ template, seedKey, creatorId, start, end }))
     })
 
-    return res.json(result)
+      return res.json(await buildResponsesWithNames(result))
   } catch (error) {
     console.error('getChallengeTasks error:', error)
     return res.status(500).json({ error: 'get challenge tasks failed' })
@@ -1300,7 +1362,7 @@ exports.acceptChallengeTask = async (req, res) => {
         updated.deleteAt = updated.dueAt
       }
 
-      return res.json(buildResponse(updated))
+      return res.json(await buildResponseWithNames(updated))
     }
 
     const picked = seeds.find((s) => s.seedKey === id)
@@ -1324,7 +1386,7 @@ exports.acceptChallengeTask = async (req, res) => {
       assigneeId: created.assigneeId,
     })
 
-    return res.json(buildResponse(created))
+    return res.json(await buildResponseWithNames(created))
   } catch (error) {
     console.error('acceptChallengeTask error:', error)
     return res.status(500).json({ error: 'accept challenge failed' })
@@ -1376,13 +1438,14 @@ exports.acceptTask = async (req, res) => {
       try {
         const startTime = updated.startAt || updated.createdAt || now
         const dueTime = updated.dueAt || updated.startAt || updated.createdAt || now
+        const assigneeName = await resolveUserName(updated.assigneeId)
         await sendSubscribeMessage({
           toUserId: updated.creatorId,
           templateId,
           page: 'pages/index/index',
           dataByLabel: {
             [LABELS.taskName]: updated.title || VALUES.taskReminder,
-            [LABELS.assignee]: VALUES.assigneeTaken,
+            [LABELS.assignee]: assigneeName,
             [LABELS.startTime]: formatDateTime(startTime),
             [LABELS.dueTime]: formatDateTime(dueTime),
             [LABELS.taskStatus]: VALUES.taskAssigned,
@@ -1398,7 +1461,7 @@ exports.acceptTask = async (req, res) => {
       }
     }
 
-    return res.json(buildResponse(updated))
+    return res.json(await buildResponseWithNames(updated))
   } catch (error) {
     console.error('acceptTask error:', error)
     return res.status(500).json({ error: 'accept task failed' })
@@ -1435,7 +1498,7 @@ exports.getTodayTasks = async (req, res) => {
     taskDebugLog('getTodayTasks ok', { userId, dueToday: dueToday.length, picked: picked.length })
     return res.json({
       dueTodayCount: dueToday.length,
-      tasks: picked.map((t) => buildResponse(t)),
+      tasks: await buildResponsesWithNames(picked),
     })
   } catch (error) {
     console.error('getTodayTasks error:', error)
@@ -1484,7 +1547,7 @@ exports.updateProgress = async (req, res) => {
 
     if (!updated) return conflict(res)
 
-    return res.json(buildResponse(updated))
+    return res.json(await buildResponseWithNames(updated))
   } catch (error) {
     console.error('updateProgress error:', error)
     return res.status(500).json({ error: 'update progress failed' })
@@ -1537,7 +1600,7 @@ exports.submitReview = async (req, res) => {
           await CompletedTask.create([reviewRecord], { session })
         }
 
-        response = { status: 200, body: buildResponse(updated) }
+        response = { status: 200, body: await buildResponseWithNames(updated) }
         reviewNotify = {
           creatorId: updated.creatorId,
           taskId: updated._id,
@@ -1618,7 +1681,7 @@ exports.continueReview = async (req, res) => {
           status: 'review_pending',
         }).session(session)
 
-        response = { status: 200, body: buildResponse(updated) }
+        response = { status: 200, body: await buildResponseWithNames(updated) }
       })
     } finally {
       session.endSession()
@@ -1675,7 +1738,7 @@ exports.completeTask = async (req, res) => {
           await CompletedTask.insertMany(records, { session })
         }
 
-        response = { status: 200, body: buildResponse(updated) }
+        response = { status: 200, body: await buildResponseWithNames(updated) }
       })
     } finally {
       session.endSession()
@@ -1722,17 +1785,19 @@ exports.abandonTask = async (req, res) => {
     const templateId = process.env.SUBSCRIBE_TPL_WORK
     if (templateId && isWechatUserId(updated.creatorId)) {
       try {
+        const assigneeName = await resolveUserName(userId)
+        const abandonNote = assigneeName ? `${assigneeName}已放弃任务` : VALUES.taskAbandoned
         await sendSubscribeMessage({
           toUserId: updated.creatorId,
           templateId,
           page: 'pages/index/index',
           dataByLabel: {
             [LABELS.taskName]: updated.title || VALUES.taskReminder,
-            [LABELS.assignee]: VALUES.assigneeTaken,
+            [LABELS.assignee]: assigneeName,
             [LABELS.startTime]: formatDateTime(updated.startAt || updated.createdAt),
             [LABELS.dueTime]: formatDateTime(updated.dueAt || updated.createdAt),
             [LABELS.taskStatus]: VALUES.taskPending,
-            [LABELS.noteMessage]: VALUES.taskAbandoned,
+            [LABELS.noteMessage]: abandonNote,
           },
           context: {
             event: 'task_abandoned',
@@ -1745,7 +1810,7 @@ exports.abandonTask = async (req, res) => {
       }
     }
 
-    return res.json(buildResponse(updated))
+    return res.json(await buildResponseWithNames(updated))
   } catch (error) {
     console.error('abandonTask error:', error)
     return res.status(500).json({ error: 'abandon task failed' })

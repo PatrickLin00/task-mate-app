@@ -93,7 +93,7 @@
 
   font-weight: 700;
 
-  font-size: 20px;
+  font-size: calc(20px * var(--font-scale));
 
 }
 
@@ -101,7 +101,7 @@
 
 .tab-icon {
 
-  font-size: 24px;
+  font-size: calc(24px * var(--font-scale));
 
 }
 
@@ -109,7 +109,7 @@
 
 .tab-text {
 
-  font-size: 20px;
+  font-size: calc(20px * var(--font-scale));
 
 }
 
@@ -142,3 +142,4 @@
   height: 100%;
 
 }
+
