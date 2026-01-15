@@ -130,12 +130,20 @@ const getTemplateKeywordMap = async (templateId) => {
   return map
 }
 
+const defaultValueForKey = (key, now) => {
+  const lower = String(key || '').toLowerCase()
+  if (lower.startsWith('time') || lower.startsWith('date')) return now
+  if (lower.startsWith('number')) return '1'
+  return '无'
+}
+
 const buildMessageData = (keywordMap, dataByLabel) => {
-  if (!keywordMap || !dataByLabel) return {}
+  if (!keywordMap) return {}
   const data = {}
-  Object.entries(dataByLabel).forEach(([label, value]) => {
-    const key = keywordMap[label]
-    if (!key) return
+  const now = new Date()
+  Object.entries(keywordMap).forEach(([label, key]) => {
+    const raw = dataByLabel ? dataByLabel[label] : undefined
+    const value = raw == null || String(raw).trim() === '' ? defaultValueForKey(key, now) : raw
     const text = normalizeValueByKey(key, value)
     if (!text) return
     data[key] = { value: text }
