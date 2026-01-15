@@ -7,6 +7,44 @@ const isDebug = () => String(process.env.SUBSCRIBE_DEBUG || '').toLowerCase() ==
 
 const normalizeLabel = (value) => String(value || '').trim().replace(/[\p{P}\p{S}]+$/u, '').trim()
 
+const stripEmoji = (value) =>
+  String(value || '')
+    .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
+    .replace(/[\u{2600}-\u{27BF}]/gu, '')
+
+const pad2 = (value) => String(value).padStart(2, '0')
+const formatWxTime = (value) => {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(
+    date.getHours()
+  )}:${pad2(date.getMinutes())}`
+}
+
+const normalizeValueByKey = (key, value) => {
+  const raw = stripEmoji(String(value ?? '')).replace(/\s+/g, ' ').trim()
+  if (!raw) return ''
+
+  const lower = String(key || '').toLowerCase()
+  if (lower.startsWith('time') || lower.startsWith('date')) {
+    const formatted = formatWxTime(raw)
+    return formatted || raw
+  }
+  if (lower.startsWith('number')) {
+    const digits = raw.replace(/[^\d.]/g, '')
+    return digits || raw
+  }
+  if (
+    lower.startsWith('thing') ||
+    lower.startsWith('phrase') ||
+    lower.startsWith('character_string') ||
+    lower.startsWith('name')
+  ) {
+    return raw.length > 20 ? raw.slice(0, 20) : raw
+  }
+  return raw.length > 20 ? raw.slice(0, 20) : raw
+}
+
 const buildWechatRequestOptions = () => {
   const insecure = String(process.env.WEAPP_TLS_INSECURE || '').toLowerCase() === 'true'
   const base = { proxy: false }
@@ -98,7 +136,7 @@ const buildMessageData = (keywordMap, dataByLabel) => {
   Object.entries(dataByLabel).forEach(([label, value]) => {
     const key = keywordMap[label]
     if (!key) return
-    const text = String(value ?? '').trim()
+    const text = normalizeValueByKey(key, value)
     if (!text) return
     data[key] = { value: text }
   })
@@ -135,6 +173,7 @@ const sendSubscribeMessage = async ({ toUserId, templateId, page, dataByLabel, c
       openid,
       page: payload.page,
       labels: Object.keys(dataByLabel || {}),
+      data,
       context,
     })
   }
