@@ -3,7 +3,7 @@ import Taro from '@tarojs/taro'
 import { useState } from 'react'
 import '../home.scss'
 import { devLoginWeapp, getDevUserId, getUserId } from '@/services/auth'
-import { requestTaskSubscribeAuth } from '@/services/subscribe'
+import { requestTaskSubscribeAuth, guideSubscribeSettings } from '@/services/subscribe'
 import { taskStrings } from '../shared/strings'
 
 declare const DEV_AUTH_ENABLED: boolean
@@ -44,6 +44,7 @@ export default function ProfilePane({
   }
 
   const handleSubscribeSettings = async () => {
+    await guideSubscribeSettings()
     await requestTaskSubscribeAuth({
       force: true,
       onSkipped: () => {
