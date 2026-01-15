@@ -50,6 +50,13 @@ export type Task = {
   seedKey?: string | null
 }
 
+export type UserProfile = {
+  userId: string
+  nickname?: string | null
+  avatar?: string | null
+  stars?: number
+}
+
 const authHeader = () => {
   const token = getToken()
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -283,6 +290,23 @@ export async function getTask(id: string) {
     url: `${BASE_URL}/api/tasks/${id}`,
     method: 'GET',
     header: await authHeaderAsync(),
+  })
+}
+
+export async function fetchProfile() {
+  return requestJson<UserProfile>({
+    url: `${BASE_URL}/api/auth/weapp/profile`,
+    method: 'GET',
+    header: await authHeaderAsync(),
+  })
+}
+
+export async function updateProfile(payload: { nickname?: string; avatar?: string }) {
+  return requestJson<UserProfile>({
+    url: `${BASE_URL}/api/auth/weapp/profile`,
+    method: 'POST',
+    data: payload,
+    header: { 'Content-Type': 'application/json', ...(await authHeaderAsync()) },
   })
 }
 

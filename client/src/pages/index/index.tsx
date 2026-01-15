@@ -1,4 +1,4 @@
-import { View, Text, Swiper, SwiperItem } from '@tarojs/components'
+import { View, Text, Swiper, SwiperItem, Input, Button } from '@tarojs/components'
 import Taro, { useDidShow, useShareAppMessage } from '@tarojs/taro'
 import { useState } from 'react'
 import './index.scss'
@@ -8,6 +8,9 @@ import TasksPane from './panes/TasksPane'
 import AchievementsPane from './panes/AchievementsPane'
 import ProfilePane from './panes/ProfilePane'
 import { taskStrings } from './shared/strings'
+import { randomNickname } from './shared/nickname'
+import { fetchProfile, updateProfile } from '@/services/api'
+import { getUserId } from '@/services/auth'
 
 type Tab = 'home' | 'tasks' | 'achievements' | 'profile'
 const tabOrder: Tab[] = ['home', 'tasks', 'achievements', 'profile']
@@ -17,6 +20,20 @@ export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>('home')
   const [authVersion, setAuthVersion] = useState(0)
   const [openTaskId, setOpenTaskId] = useState<string | undefined>(undefined)
+  const [profile, setProfile] = useState<{ userId: string; nickname: string }>(() => ({
+    userId: getUserId() || '',
+    nickname: (() => {
+      try {
+        return Taro.getStorageSync('nickname') || ''
+      } catch {
+        return ''
+      }
+    })(),
+  }))
+  const [nameGateActive, setNameGateActive] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  const [profileLoading, setProfileLoading] = useState(false)
   const taskDebug = TASK_DEBUG
   const readOpenTaskId = () => {
     const routerParams = (Taro.getCurrentInstance()?.router?.params || {}) as Record<string, any>
@@ -34,6 +51,56 @@ export default function Index() {
     return raw ? String(raw) : undefined
   }
 
+  const applyProfile = (next: { userId?: string; nickname?: string | null }) => {
+    const resolvedUserId = next.userId || getUserId() || ''
+    const rawNickname = typeof next.nickname === 'string' ? next.nickname.trim() : ''
+    const resolvedNickname = rawNickname || resolvedUserId
+    setProfile({ userId: resolvedUserId, nickname: resolvedNickname })
+    if (resolvedNickname) {
+      Taro.setStorageSync('nickname', resolvedNickname)
+    }
+    const shouldGate = Boolean(resolvedUserId) && resolvedNickname === resolvedUserId
+    setNameGateActive(shouldGate)
+    setNameDraft(shouldGate ? '' : resolvedNickname)
+  }
+
+  const refreshProfile = async () => {
+    if (profileLoading) return
+    setProfileLoading(true)
+    try {
+      const data = await fetchProfile()
+      applyProfile(data)
+    } catch (err) {
+      console.error('load profile error', err)
+    } finally {
+      setProfileLoading(false)
+    }
+  }
+
+  const handleRandomName = () => {
+    setNameDraft(randomNickname())
+  }
+
+  const handleSubmitName = async () => {
+    const trimmed = String(nameDraft || '').trim()
+    if (!trimmed) {
+      Taro.showToast({ title: taskStrings.naming.emptyHint, icon: 'none' })
+      return
+    }
+    if (savingName) return
+    setSavingName(true)
+    try {
+      const updated = await updateProfile({ nickname: trimmed })
+      applyProfile(updated)
+      Taro.showToast({ title: taskStrings.naming.saved, icon: 'success' })
+    } catch (err: any) {
+      console.error('update nickname error', err)
+      Taro.showToast({ title: err?.message || taskStrings.toast.loadFail, icon: 'none' })
+    } finally {
+      setSavingName(false)
+    }
+  }
+
   useDidShow(() => {
     const next = readOpenTaskId()
     if (taskDebug) {
@@ -41,6 +108,7 @@ export default function Index() {
     }
     setOpenTaskId(next)
     if (next) setActiveTab('home')
+    void refreshProfile()
   })
 
   useShareAppMessage((res) => {
@@ -68,6 +136,33 @@ export default function Index() {
     <View className='home'>
       <View className='bg' />
 
+      {nameGateActive && (
+        <View className='name-gate-overlay' catchMove>
+          <View className='name-gate-card card' onClick={(e) => e.stopPropagation()}>
+            <View className='name-gate-head'>
+              <Text className='name-gate-title'>{taskStrings.naming.title}</Text>
+              <Text className='name-gate-sub'>{taskStrings.naming.sub}</Text>
+            </View>
+            <View className='name-gate-input-row'>
+              <Input
+                className='modal-input'
+                value={nameDraft}
+                onInput={(e) => setNameDraft(e.detail.value)}
+                placeholder={taskStrings.naming.placeholder}
+                maxlength={6}
+              />
+              <Button className='ai-btn' onClick={handleRandomName}>
+                {taskStrings.naming.random}
+              </Button>
+            </View>
+            <Text className='name-gate-hint'>{taskStrings.naming.skipHint}</Text>
+            <Button className='name-gate-submit' loading={savingName} onClick={() => void handleSubmitName()}>
+              {taskStrings.naming.submit}
+            </Button>
+          </View>
+        </View>
+      )}
+
       <View className='tabs'>
         {tabOrder.map((tab) => (
           <View key={tab} className={`tab ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
@@ -85,7 +180,13 @@ export default function Index() {
         duration={220}
       >
         <SwiperItem>
-          <HomePane isActive={activeTab === 'home'} authVersion={authVersion} openTaskId={openTaskId} />
+          <HomePane
+            isActive={activeTab === 'home'}
+            authVersion={authVersion}
+            openTaskId={openTaskId}
+            heroName={profile.nickname}
+            nameGateActive={nameGateActive}
+          />
         </SwiperItem>
         <SwiperItem>
           <TasksPane
@@ -99,7 +200,13 @@ export default function Index() {
           <AchievementsPane />
         </SwiperItem>
         <SwiperItem>
-          <ProfilePane onAuthChanged={() => setAuthVersion(Date.now())} />
+          <ProfilePane
+            nickname={profile.nickname}
+            onAuthChanged={() => {
+              setAuthVersion(Date.now())
+              void refreshProfile()
+            }}
+          />
         </SwiperItem>
       </Swiper>
     </View>

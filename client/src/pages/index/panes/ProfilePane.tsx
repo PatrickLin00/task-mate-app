@@ -8,12 +8,18 @@ import { taskStrings } from '../shared/strings'
 
 declare const DEV_AUTH_ENABLED: boolean
 
-export default function ProfilePane({ onAuthChanged }: { onAuthChanged?: () => void }) {
+export default function ProfilePane({
+  onAuthChanged,
+  nickname,
+}: {
+  onAuthChanged?: () => void
+  nickname?: string
+}) {
   const [currentUserId, setCurrentUserId] = useState(() => getUserId() || '')
   const [devUserId, setDevUserId] = useState(() => getDevUserId() || '')
   const [switching, setSwitching] = useState(false)
 
-  const displayName = currentUserId || taskStrings.home.heroName
+  const displayName = nickname || currentUserId || taskStrings.home.heroName
   const displayStars = 0
 
   const canUseDev = DEV_AUTH_ENABLED

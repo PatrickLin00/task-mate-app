@@ -21,6 +21,21 @@ const normalizeWxUserId = (openid) => {
   return `wx:${v}`
 }
 
+const normalizeNickname = (raw, fallback) => {
+  const trimmed = typeof raw === 'string' ? raw.trim() : ''
+  return trimmed || fallback || ''
+}
+
+const ensureNickname = async (user) => {
+  if (!user) return user
+  const next = normalizeNickname(user.nickname, user.userId)
+  if (next && next !== user.nickname) {
+    user.nickname = next
+    await user.save()
+  }
+  return user
+}
+
 const buildWeappRequestOptions = () => {
   const insecure = String(process.env.WEAPP_TLS_INSECURE || '').toLowerCase() === 'true'
   const base = { proxy: false }
@@ -39,7 +54,8 @@ exports.loginWeapp = async (req, res) => {
       if (process.env.NODE_ENV !== 'production') {
         const userId = normalizeDevUserId('dev-openid')
         let user = await User.findOne({ userId })
-        if (!user) user = await User.create({ userId })
+        if (!user) user = await User.create({ userId, nickname: userId })
+        else await ensureNickname(user)
 
         try {
           await ensureDevScenarioTasks()
@@ -65,7 +81,8 @@ exports.loginWeapp = async (req, res) => {
 
     const userId = normalizeWxUserId(openid)
     let user = await User.findOne({ userId })
-    if (!user) user = await User.create({ userId })
+    if (!user) user = await User.create({ userId, nickname: userId })
+    else await ensureNickname(user)
 
     if (process.env.NODE_ENV !== 'production') {
       try {
@@ -90,15 +107,42 @@ exports.updateProfile = async (req, res) => {
     const userId = req.user?.id
     if (!userId) return res.status(401).json({ error: 'unauthorized' })
     const { nickname, avatar } = req.body || {}
-    const updated = await User.findOneAndUpdate(
-      { userId },
-      { $set: { nickname, avatar } },
-      { new: true }
-    )
-    res.json(updated)
+    const updates = {}
+    if (typeof nickname === 'string') updates.nickname = nickname.trim()
+    if (typeof avatar === 'string') updates.avatar = avatar
+    if (Object.keys(updates).length === 0) {
+      const existing = await User.findOne({ userId })
+      if (existing) return res.json(existing)
+      const created = await User.create({ userId, nickname: userId })
+      return res.json(created)
+    }
+    const updated = await User.findOneAndUpdate({ userId }, { $set: updates }, { new: true })
+    if (updated) return res.json(updated)
+    const created = await User.create({ userId, nickname: updates.nickname || userId, avatar: updates.avatar })
+    res.json(created)
   } catch (err) {
     console.error('updateProfile error:', err)
     res.status(500).json({ error: 'update profile failed' })
+  }
+}
+
+// GET /api/auth/weapp/profile
+exports.getProfile = async (req, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) return res.status(401).json({ error: 'unauthorized' })
+    let user = await User.findOne({ userId })
+    if (!user) user = await User.create({ userId, nickname: userId })
+    else await ensureNickname(user)
+    res.json({
+      userId: user.userId,
+      nickname: user.nickname,
+      avatar: user.avatar,
+      stars: user.stars,
+    })
+  } catch (err) {
+    console.error('getProfile error:', err)
+    res.status(500).json({ error: 'get profile failed' })
   }
 }
 
@@ -120,7 +164,8 @@ exports.devLogin = async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'userId is required' })
 
     let user = await User.findOne({ userId })
-    if (!user) user = await User.create({ userId })
+    if (!user) user = await User.create({ userId, nickname: userId })
+    else await ensureNickname(user)
 
     try {
       await ensureDevScenarioTasks()

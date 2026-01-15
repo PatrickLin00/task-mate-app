@@ -47,7 +47,6 @@ const attrMeta: Record<Attr, { icon: string }> = {
   [taskStrings.rewards.strength.label]: { icon: taskStrings.home.statsIcons.strength },
   [taskStrings.rewards.agility.label]: { icon: taskStrings.home.statsIcons.agility },
 }
-const heroName = taskStrings.home.heroName
 const heroStars = 0
 const heroStats: Record<Attr, number> = attrList.reduce(
   (acc, attr) => {
@@ -93,9 +92,17 @@ type HomePaneProps = {
   isActive?: boolean
   authVersion?: number
   openTaskId?: string
+  heroName?: string
+  nameGateActive?: boolean
 }
 
-export default function HomePane({ isActive = true, authVersion = 0, openTaskId }: HomePaneProps) {
+export default function HomePane({
+  isActive = true,
+  authVersion = 0,
+  openTaskId,
+  heroName,
+  nameGateActive = false,
+}: HomePaneProps) {
   const [todayTasks, setTodayTasks] = useState<RoadTask[]>([])
   const [dueTodayCount, setDueTodayCount] = useState(0)
   const pollingBusyRef = useRef(false)
@@ -176,6 +183,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
   }
 
   const handleMiniCardPress = (task: RoadTask) => {
+    if (nameGateActive) return
     setModalTask(task)
     setDialogEditing(false)
     setDialogDraft([])
@@ -490,6 +498,16 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
   }
 
   useEffect(() => {
+    if (nameGateActive && modalTask) {
+      setModalTask(null)
+      setDialogEditing(false)
+      setDialogDraft([])
+      setDialogDragValues({})
+      setShareOnly(false)
+    }
+  }, [nameGateActive, modalTask])
+
+  useEffect(() => {
     if (!isActive && modalTask) {
       setModalTask(null)
       setDialogEditing(false)
@@ -539,6 +557,10 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
     if (taskDebug) {
       console.log('share effect state', { openTaskId, handledShareId: handledShareIdRef.current })
     }
+    if (nameGateActive) {
+      if (taskDebug) console.log('share load skipped', { reason: 'name gate active' })
+      return
+    }
     if (!openTaskId) {
       if (taskDebug) console.log('share load skipped', { reason: 'missing openTaskId' })
       return
@@ -580,7 +602,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
     return () => {
       active = false
     }
-  }, [openTaskId])
+  }, [openTaskId, nameGateActive])
 
   return (
     <View className='home-pane'>
@@ -599,7 +621,7 @@ export default function HomePane({ isActive = true, authVersion = 0, openTaskId 
               <View className='badge'>{homeStrings.heroBadge}</View>
             </View>
             <View className='hero-info'>
-              <Text className='hero-name'>{heroName}</Text>
+              <Text className='hero-name'>{heroName || taskStrings.home.heroName}</Text>
               <Text className='hero-stars'>{UI.stars.slice(0, heroStars)}</Text>
             </View>
           </View>

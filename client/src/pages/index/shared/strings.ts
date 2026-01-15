@@ -311,6 +311,16 @@
     devSwitchFail: 'Failed',
     devUsers: ['dev:alice', 'dev:bob', 'dev:carol'],
   },
+  naming: {
+    title: '为你取个名吧',
+    sub: '给自己一个独一无二的称呼~',
+    placeholder: '输入昵称',
+    random: '摇个名字',
+    submit: '就叫这个',
+    skipHint: '取好名字才能继续冒险哦',
+    emptyHint: '名字不能为空哦',
+    saved: '昵称已更新',
+  },
   index: {
     navTitle: '首页',
   },
