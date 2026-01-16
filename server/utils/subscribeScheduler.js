@@ -111,7 +111,7 @@ const runHourly = async () => {
       {
         remark: VALUES.taskDueSoon,
         remainText,
-        status: '即将截止',
+        status: VALUES.taskDueSoon,
         tip: '任务即将截止，请尽快完成',
       },
       {
@@ -138,7 +138,7 @@ const runHourly = async () => {
       {
         remark: VALUES.taskOverdue,
         remainText: VALUES.expired,
-        status: '已过期',
+        status: VALUES.taskOverdue,
         tip: '任务已过期，请尽快处理',
       },
       {
@@ -171,7 +171,7 @@ const runDaily = async () => {
       {
         remark: VALUES.challengeExpired,
         remainText: VALUES.expired,
-        status: '已过期',
+        status: VALUES.taskOverdue,
         tip: '星旅任务已过期并被系统清理',
       },
       {

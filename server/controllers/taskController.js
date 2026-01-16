@@ -532,14 +532,14 @@ exports.closeTask = async (req, res) => {
         toUserId: previousAssigneeId,
         templateId,
         page: 'pages/index/index',
-        dataByLabel: buildSubscribeData({
-          taskName: updated.title || VALUES.taskReminder,
-          assignee: assigneeName,
-          startTime: formatDateTime(originalStartAt || updated.createdAt || now),
-          dueTime: formatDateTime(originalDueAt || updated.dueAt || updated.createdAt || now),
-          status: '已关闭',
-          tip: '任务已被发布者关闭',
-        }),
+          dataByLabel: buildSubscribeData({
+            taskName: updated.title || VALUES.taskReminder,
+            assignee: assigneeName,
+            startTime: formatDateTime(originalStartAt || updated.createdAt || now),
+            dueTime: formatDateTime(originalDueAt || updated.dueAt || updated.createdAt || now),
+            status: VALUES.taskClosed,
+            tip: '任务已被发布者关闭',
+          }),
         context: {
           event: 'task_closed',
           actorId: userId,
@@ -633,14 +633,15 @@ exports.deleteTask = async (req, res) => {
             toUserId: reviewNotify.creatorId,
             templateId,
             page: 'pages/index/index',
-            dataByLabel: buildSubscribeData({
-              reviewType: VALUES.reviewTypeTaskChange,
-              reviewResult: VALUES.reworkRejected,
-              notifyTime: formatDateTime(new Date()),
-              rejectReason,
-              status: VALUES.reworkRejected,
-              tip: `${reviewNotify.title || VALUES.taskReminder} · 变更被拒绝`,
-            }),
+          dataByLabel: buildSubscribeData({
+            reviewType: VALUES.reviewTypeTaskChange,
+            reviewResult: VALUES.reworkRejected,
+            notifyTime: formatDateTime(new Date()),
+            rejectReason,
+            reviewer: assigneeName,
+            status: VALUES.reworkRejected,
+            tip: `${reviewNotify.title || VALUES.taskReminder} · 变更被拒绝`,
+          }),
             context: {
               event: 'task_rework_rejected',
               actorId: userId,
@@ -807,7 +808,7 @@ exports.reworkTask = async (req, res) => {
                 taskName: reworkNotify.title || VALUES.taskReminder,
                 changeDetail: VALUES.taskReworkedPending,
                 changeTime: formatDateTime(new Date()),
-                status: '待确认变更',
+                status: VALUES.taskReworkedPending,
                 tip: '任务已重构，请确认变更',
               }),
               context: {
@@ -928,6 +929,7 @@ exports.acceptReworkTask = async (req, res) => {
                 reviewType: VALUES.reviewTypeTaskChange,
                 reviewResult: VALUES.reworkAccepted,
                 notifyTime: formatDateTime(new Date()),
+                reviewer: assigneeName,
                 status: VALUES.reworkAccepted,
                 tip: assigneeName ? `${assigneeName}已接受变更` : '变更已接受',
               }),
@@ -1444,21 +1446,21 @@ exports.acceptTask = async (req, res) => {
     const templateId = process.env.SUBSCRIBE_TPL_WORK
     if (templateId && isWechatUserId(updated.creatorId)) {
       try {
-        const startTime = updated.startAt || updated.createdAt || now
-        const dueTime = updated.dueAt || updated.startAt || updated.createdAt || now
-        const assigneeName = await resolveUserName(updated.assigneeId)
-        await sendSubscribeMessage({
-          toUserId: updated.creatorId,
-          templateId,
-          page: 'pages/index/index',
-          dataByLabel: buildSubscribeData({
-            taskName: updated.title || VALUES.taskReminder,
-            assignee: assigneeName,
-            startTime: formatDateTime(startTime),
-            dueTime: formatDateTime(dueTime),
-            status: VALUES.taskAssigned,
-            tip: assigneeName ? `${assigneeName}接取了任务` : VALUES.taskAssigned,
-          }),
+          const publishTime = updated.createdAt || updated.startAt || now
+          const dueTime = updated.dueAt || updated.startAt || updated.createdAt || now
+          const assigneeName = await resolveUserName(updated.assigneeId)
+          await sendSubscribeMessage({
+            toUserId: updated.creatorId,
+            templateId,
+            page: 'pages/index/index',
+            dataByLabel: buildSubscribeData({
+              taskName: updated.title || VALUES.taskReminder,
+              assignee: assigneeName,
+              startTime: formatDateTime(publishTime),
+              dueTime: formatDateTime(dueTime),
+              status: VALUES.taskAssigned,
+              tip: assigneeName ? `${assigneeName}接取了任务` : VALUES.taskAssigned,
+            }),
           context: {
             event: 'task_assigned',
             actorId: userId,
@@ -1634,6 +1636,7 @@ exports.submitReview = async (req, res) => {
             reviewType: VALUES.reviewTypeSubmit,
             reviewResult: VALUES.reviewResultPending,
             notifyTime: formatDateTime(new Date()),
+            reviewer: assigneeName,
             status: VALUES.taskReviewRequired,
             tip: assigneeName ? `${assigneeName}提交了检视` : VALUES.taskReviewRequired,
           }),
@@ -1807,7 +1810,7 @@ exports.abandonTask = async (req, res) => {
             assignee: assigneeName,
             startTime: formatDateTime(updated.startAt || updated.createdAt),
             dueTime: formatDateTime(updated.dueAt || updated.createdAt),
-            status: '已放弃',
+            status: VALUES.taskAbandoned,
             tip: abandonNote,
           }),
           context: {

@@ -21,11 +21,35 @@ const formatWxTime = (value) => {
   )}:${pad2(date.getMinutes())}`
 }
 
+const normalizePhraseValue = (raw) => {
+  const text = String(raw || '').trim()
+  if (!text) return ''
+  const map = [
+    { match: ['待确认'], value: '待确认' },
+    { match: ['待检视'], value: '待检视' },
+    { match: ['即将截止', '临近'], value: '即将截止' },
+    { match: ['放弃'], value: '已放弃' },
+    { match: ['关闭'], value: '已关闭' },
+    { match: ['过期', '超时'], value: '已过期' },
+    { match: ['完成', '已完成'], value: '已完成' },
+    { match: ['接取', '已接取', '处理中'], value: '已接取' },
+    { match: ['待接取', '未接取'], value: '待接取' },
+  ]
+  for (const item of map) {
+    if (item.match.some((word) => text.includes(word))) return item.value
+  }
+  return '已接取'
+}
+
 const normalizeValueByKey = (key, value) => {
   const raw = stripEmoji(String(value ?? '')).replace(/\s+/g, ' ').trim()
   if (!raw) return ''
 
   const lower = String(key || '').toLowerCase()
+  if (lower.startsWith('phrase')) {
+    const phrase = normalizePhraseValue(raw)
+    return phrase ? phrase : ''
+  }
   if (lower.startsWith('time') || lower.startsWith('date')) {
     const formatted = formatWxTime(raw)
     return formatted || raw

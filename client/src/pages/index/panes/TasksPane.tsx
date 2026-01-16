@@ -1819,14 +1819,14 @@ export default function TasksPane({
       return
     }
 
-    setCreating(true)
-    try {
-      if (reworkTaskId) {
-        const created: any = await reworkTask(reworkTaskId, {
-          title,
-          detail: descInput.trim(),
-          dueAt: selectedDueAt(),
-          subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
+      setCreating(true)
+      try {
+        if (reworkTaskId) {
+          const created: any = await reworkTask(reworkTaskId, {
+            title,
+            detail: descInput.trim(),
+            dueAt: selectedDueAt(),
+            subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
           attributeReward: { type: attrReward, value: rewardValNum },
         })
         if (created?.code === 'REWORK_CONFIRM_REQUIRED') {
@@ -1856,13 +1856,13 @@ export default function TasksPane({
           setActiveTab('collab')
           Taro.showToast({ title: taskStrings.toast.reworked, icon: 'success' })
         }
-      } else {
-        const created = await createTask({
-          title,
-          detail: descInput.trim(),
-          dueAt: selectedDueAt(),
-          subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
-          attributeReward: { type: attrReward, value: rewardValNum },
+        } else {
+          const created = await createTask({
+            title,
+            detail: descInput.trim(),
+            dueAt: selectedDueAt(),
+            subtasks: validSubtasks.map((s) => ({ ...s, current: 0 })),
+            attributeReward: { type: attrReward, value: rewardValNum },
           selfAssign,
         })
         const mapped = mapApiTaskToCollab(created)
