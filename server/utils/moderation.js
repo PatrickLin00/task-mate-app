@@ -65,7 +65,8 @@ const parseDecision = (content) => {
 const buildMessages = (text) => [
   {
     role: 'system',
-    content: '你是内容安全审核，只能输出 ALLOW 或 BLOCK。',
+    content:
+      '你是内容安全审核，只对黄赌毒、涉政、暴力恐怖、辱骂人身攻击判定为 BLOCK，其他一律 ALLOW。只能输出 ALLOW 或 BLOCK。',
   },
   {
     role: 'user',

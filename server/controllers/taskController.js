@@ -318,7 +318,12 @@ exports.createTask = async (req, res) => {
     if (containsSensitiveTask({ title, detail, subtasks })) {
       return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
     }
-    if (await moderateText([title, detail, ...(subtasks || [])].filter(Boolean).join(' '))) {
+    const subtaskTexts = Array.isArray(subtasks)
+      ? subtasks
+          .map((item) => (typeof item === 'string' ? item : item?.title))
+          .filter(Boolean)
+      : []
+    if (await moderateText([title, detail, ...subtaskTexts].filter(Boolean).join(' '))) {
       return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
     }
 
@@ -703,7 +708,12 @@ exports.reworkTask = async (req, res) => {
     if (containsSensitiveTask({ title, detail, subtasks })) {
       return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
     }
-    if (await moderateText([title, detail, ...(subtasks || [])].filter(Boolean).join(' '))) {
+    const subtaskTexts = Array.isArray(subtasks)
+      ? subtasks
+          .map((item) => (typeof item === 'string' ? item : item?.title))
+          .filter(Boolean)
+      : []
+    if (await moderateText([title, detail, ...subtaskTexts].filter(Boolean).join(' '))) {
       return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
     }
     if (!REWARD_TYPE.includes(rewardType)) return res.status(400).json({ error: 'attributeReward.type is invalid' })
