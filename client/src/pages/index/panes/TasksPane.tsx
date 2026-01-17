@@ -883,6 +883,9 @@ export default function TasksPane({
   const [reworkTaskId, setReworkTaskId] = useState<string | null>(null)
   const [historyTask, setHistoryTask] = useState<CollabTask | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [showOneLineTip, setShowOneLineTip] = useState(false)
+  const [oneLineTipStyle, setOneLineTipStyle] = useState({ top: 0, left: 0, width: 0 })
+  const oneLineTipAnchorRef = useRef<{ top: number; bottom: number; left: number } | null>(null)
   const [confirmReworkOpen, setConfirmReworkOpen] = useState(false)
   const [confirmPayload, setConfirmPayload] = useState<{
     taskId: string
@@ -1191,6 +1194,12 @@ export default function TasksPane({
       setShowCreate(false)
     }
   }, [authVersion, isActive])
+
+  useEffect(() => {
+    if (!showCreate) {
+      setShowOneLineTip(false)
+    }
+  }, [showCreate])
 
   useEffect(() => {
     if (!isActive) return
@@ -1908,6 +1917,38 @@ export default function TasksPane({
     await handleSubmitCreate(true)
   }
 
+  const openOneLineTip = () => {
+    const query = Taro.createSelectorQuery()
+    query.select('#one-line-help-anchor').boundingClientRect()
+    query.exec((res) => {
+      const rect = res?.[0]
+      const { windowWidth } = Taro.getSystemInfoSync()
+      const width = Math.min(240, windowWidth - 32)
+      const left = rect
+        ? Math.min(windowWidth - width - 16, Math.max(16, rect.left - 8))
+        : Math.max(16, (windowWidth - width) / 2)
+      const top = rect ? rect.top - 8 : 160
+      oneLineTipAnchorRef.current = rect ? { top: rect.top, bottom: rect.bottom, left: rect.left } : null
+      setOneLineTipStyle({ top, left, width })
+      setShowOneLineTip(true)
+    })
+  }
+
+  useEffect(() => {
+    if (!showOneLineTip) return
+    const anchor = oneLineTipAnchorRef.current
+    if (!anchor) return
+    const query = Taro.createSelectorQuery()
+    query.select('#one-line-tip').boundingClientRect()
+    query.exec((res) => {
+      const rect = res?.[0]
+      if (!rect) return
+      const desiredTop = anchor.top - rect.height - 8
+      const top = Math.max(12, desiredTop)
+      setOneLineTipStyle((prev) => ({ ...prev, top }))
+    })
+  }, [showOneLineTip])
+
   const handleGenerate = async () => {
     if (generating) return
     const prompt = oneLine.trim()
@@ -2104,15 +2145,17 @@ export default function TasksPane({
               e.stopPropagation()
             }}
           >
-            <View className='modal-head'>
-              <View>
-                <Text className='modal-title'>
-                  {reworkTaskId ? taskStrings.modal.titleRework : taskStrings.modal.titleNew}
-                </Text>
-                <Text className='modal-sub'>
-                  {reworkTaskId ? taskStrings.modal.subRework : taskStrings.modal.subNew}
-                </Text>
-              </View>
+              <View className='modal-head'>
+                <View>
+                  <Text className='modal-title'>
+                    {reworkTaskId ? taskStrings.modal.titleRework : taskStrings.modal.titleNew}
+                  </Text>
+                  {(reworkTaskId ? taskStrings.modal.subRework : taskStrings.modal.subNew) ? (
+                    <Text className='modal-sub'>
+                      {reworkTaskId ? taskStrings.modal.subRework : taskStrings.modal.subNew}
+                    </Text>
+                  ) : null}
+                </View>
               <Text
                 className='modal-close'
                 onClick={() => {
@@ -2125,16 +2168,20 @@ export default function TasksPane({
             </View>
 
             <View className='modal-body'>
-              {!reworkTaskId && (
-                <View className='modal-section bubble soft'>
-                  <View className='section-head-row'>
-                    <Text className='modal-label'>{taskStrings.modal.oneLineLabel}</Text>
-                    <Text className='modal-hint'>{taskStrings.modal.oneLineHint}</Text>
-                  </View>
-                  <View className='one-line-col'>
-                    <View className='one-line-row'>
-                      <Input
-                        className='modal-input'
+                {!reworkTaskId && (
+                  <View className='modal-section bubble soft'>
+                    <View className='section-head-row'>
+                      <View className='modal-label-row'>
+                        <Text className='modal-label'>{taskStrings.modal.oneLineLabel}</Text>
+                        <View id='one-line-help-anchor' className='modal-help' onClick={openOneLineTip}>
+                          <Text>?</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View className='one-line-col'>
+                      <View className='one-line-row'>
+                        <Input
+                          className='modal-input'
                         value={oneLine}
                         onInput={(e) => setOneLine(e.detail.value)}
                         placeholder={taskStrings.modal.oneLinePlaceholder}
@@ -2144,15 +2191,38 @@ export default function TasksPane({
                           {taskStrings.modal.aiGenerate}
                         </Button>
                       </View>
+                      </View>
                     </View>
                   </View>
-                </View>
-              )}
+                )}
+                {showOneLineTip && (
+                  <View
+                    className='one-line-tip-mask'
+                    catchMove
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowOneLineTip(false)
+                    }}
+                  >
+                    <View
+                      className='one-line-tip'
+                      id='one-line-tip'
+                      style={{
+                        top: `${oneLineTipStyle.top}px`,
+                        left: `${oneLineTipStyle.left}px`,
+                        width: `${oneLineTipStyle.width}px`,
+                      }}
+                    >
+                      <Text className='guide-text'>{taskStrings.modal.oneLineTip}</Text>
+                      <Text className='one-line-tip-strong'>{taskStrings.modal.oneLineTipStrong}</Text>
+                    </View>
+                  </View>
+                )}
 
-              <View className='modal-section bubble soft'>
-                <Text className='modal-label'>{taskStrings.modal.detailLabel}</Text>
-                <Input
-                  className='modal-input'
+                <View className='modal-section bubble soft'>
+                  <Text className='modal-label'>{taskStrings.modal.detailLabel}</Text>
+                  <Input
+                    className='modal-input'
                   value={titleInput}
                   onInput={(e) => setTitleInput(e.detail.value)}
                   placeholder={taskStrings.modal.titlePlaceholder}

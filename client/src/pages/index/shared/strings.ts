@@ -151,10 +151,11 @@
   modal: {
     titleNew: '发起一场新的奇遇',
     titleRework: '重构奇遇',
-    subNew: '写下你想完成的事,其余交给星辰来编织',
+    subNew: '',
     subRework: '奇遇重塑,命途再启',
     oneLineLabel: '一句话奇遇',
-    oneLineHint: '先随便描述一下,星旅帮你织成完整奇遇',
+    oneLineTip: '先用一句话随便描述一下想做的事。',
+    oneLineTipStrong: '星旅会帮你扩展成完整的奇遇任务。',
     oneLinePlaceholder: '例如:每天睡前冥想 10 分钟,坚持一周',
     aiGenerate: '✨由星旅生成',
     closeIcon: '✕',
