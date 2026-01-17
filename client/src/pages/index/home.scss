@@ -280,10 +280,52 @@ $surface: #ffffff;
   font-size: calc(24px * var(--font-scale));
 }
 
+.today-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.today-help {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 126, 255, 0.35);
+  background: rgba(255, 255, 255, 0.95);
+  color: #7b6cf6;
+  font-size: calc(16px * var(--font-scale));
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 16px rgba(89, 73, 202, 0.12);
+}
+
 .section-meta {
   margin-left: auto;
   color: #9ca3af;
   font-size: calc(18px * var(--font-scale));
+}
+
+.today-tip-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.today-tip {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 150px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(148, 126, 255, 0.25);
+  border-radius: 20px;
+  padding: 16px 18px;
+  color: #5b5f76;
+  font-size: calc(18px * var(--font-scale));
+  line-height: 1.6;
+  box-shadow: 0 18px 30px rgba(92, 78, 204, 0.18);
 }
 
 /* Today mini cards */

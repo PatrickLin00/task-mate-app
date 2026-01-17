@@ -250,6 +250,7 @@
     todayTitle: '星愿待办',
     todayMeta: '今天',
     todayUnit: '项',
+    todayTip: '这里展示的是近期最紧迫的任务: 优先显示已到期和今天到期的任务, 不足 5 条时补充最近即将到期的任务。',
     feedTitle: '星旅挑战',
     difficultyLabel: '难度',
     feedUnit: '个任务',

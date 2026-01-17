@@ -104,7 +104,6 @@ export default function HomePane({
   nameGateActive = false,
 }: HomePaneProps) {
   const [todayTasks, setTodayTasks] = useState<RoadTask[]>([])
-  const [dueTodayCount, setDueTodayCount] = useState(0)
   const pollingBusyRef = useRef(false)
   const [feedTasks, setFeedTasks] = useState<RoadTask[]>([])
   const visibleTasks = useMemo(() => feedTasks, [feedTasks])
@@ -118,6 +117,7 @@ export default function HomePane({
   )
   const [frameIndex, setFrameIndex] = useState(0)
   const [modalTask, setModalTask] = useState<RoadTask | null>(null)
+  const [showTodayTip, setShowTodayTip] = useState(false)
   const [dialogEditing, setDialogEditing] = useState(false)
   const [dialogDraft, setDialogDraft] = useState<Subtask[]>([])
   const [shareOnly, setShareOnly] = useState(false)
@@ -443,7 +443,6 @@ export default function HomePane({
     try {
       const [todayRes, challenge] = await Promise.all([fetchTodayTasks(), fetchChallengeTasks()])
       if (shouldCancel?.()) return
-      setDueTodayCount(todayRes.dueTodayCount || 0)
       setTodayTasks((todayRes.tasks || []).map((t) => mapApiTaskToRoad(t)))
       setFeedTasks((challenge || []).map((t) => mapApiTaskToRoad(t)))
       if (showNotice) {
@@ -452,7 +451,6 @@ export default function HomePane({
     } catch (err) {
       console.error('load home tasks error', err)
       if (shouldCancel?.()) return
-      setDueTodayCount(0)
       setTodayTasks([])
       setFeedTasks([])
       if (showNotice) {
@@ -499,7 +497,6 @@ export default function HomePane({
       if (shouldCancel?.()) return
       const nextToday = (todayRes.tasks || []).map((t) => mapApiTaskToRoad(t))
       const nextFeed = (challenge || []).map((t) => mapApiTaskToRoad(t))
-      setDueTodayCount(todayRes.dueTodayCount || 0)
       setTodayTasks((prev) => mergeById(prev, nextToday))
       setFeedTasks((prev) => mergeById(prev, nextFeed))
       if (taskDebug) {
@@ -669,12 +666,35 @@ export default function HomePane({
         <View className='section-bar'>
           <View className='section-head'>
             <Text className='section-icon'>{UI.timelineIcon}</Text>
-            <Text className='section-title'>{homeStrings.todayTitle}</Text>
+            <View className='today-title'>
+              <Text className='section-title'>{homeStrings.todayTitle}</Text>
+              <View
+                className='today-help'
+                onClick={() => {
+                  setShowTodayTip(true)
+                }}
+              >
+                <Text>?</Text>
+              </View>
+            </View>
           </View>
           <Text className='section-meta'>
-            {homeStrings.todayMeta} - {dueTodayCount} {homeStrings.todayUnit}
+            {homeStrings.todayMeta} - {todayTasks.length} {homeStrings.todayUnit}
           </Text>
         </View>
+        {showTodayTip && (
+          <View
+            className='today-tip-mask'
+            catchMove
+            onClick={() => {
+              setShowTodayTip(false)
+            }}
+          >
+            <View className='today-tip'>
+              <Text>{homeStrings.todayTip}</Text>
+            </View>
+          </View>
+        )}
         {todayTasks.length > 0 ? (
           <ScrollView className='mini-cards' scrollX enableFlex scrollWithAnimation>
             {todayTasks.map((t) => (
