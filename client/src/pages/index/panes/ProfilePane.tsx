@@ -2,7 +2,7 @@
 import Taro from '@tarojs/taro'
 import { useEffect, useState } from 'react'
 import '../home.scss'
-import { devLoginWeapp, getDevUserId, getUserId, logoutWeapp } from '@/services/auth'
+import { devLoginWeapp, getDevUserId, getUserId } from '@/services/auth'
 import { requestTaskSubscribeAuth } from '@/services/subscribe'
 import { updateProfile } from '@/services/api'
 import { taskStrings } from '../shared/strings'
@@ -59,36 +59,8 @@ export default function ProfilePane({
     })
   }
 
-  const handleOpenPrivacy = async () => {
-    const openPrivacy = (Taro as any)?.openPrivacyContract
-    if (typeof openPrivacy !== 'function') {
-      Taro.showToast({ title: taskStrings.profile.privacyHint, icon: 'none' })
-      return
-    }
-    try {
-      await openPrivacy()
-    } catch (err) {
-      console.warn('open privacy failed', err)
-      Taro.showToast({ title: taskStrings.profile.privacyHint, icon: 'none' })
-    }
-  }
-
-  const handleOpenLegal = () => {
-    Taro.navigateTo({ url: '/pages/legal/index' })
-  }
-
-  const handleLogout = async () => {
-    const res = await Taro.showModal({
-      title: taskStrings.profile.logoutTitle,
-      content: taskStrings.profile.logoutContent,
-      confirmText: taskStrings.profile.logoutOk,
-      cancelText: taskStrings.profile.logoutCancel,
-    })
-    if (!res.confirm) return
-    logoutWeapp()
-    setCurrentUserId('')
-    onAuthChanged?.()
-    Taro.showToast({ title: taskStrings.profile.logoutSuccess, icon: 'none' })
+  const handleOpenAbout = () => {
+    Taro.navigateTo({ url: '/pages/about/index' })
   }
 
   const handleSaveNickname = async () => {
@@ -146,18 +118,8 @@ export default function ProfilePane({
           </Button>
         </View>
         <View className='one-line-row'>
-          <Button className='ai-btn' onClick={() => void handleOpenPrivacy()}>
-            {taskStrings.profile.privacyLabel}
-          </Button>
-        </View>
-        <View className='one-line-row'>
-          <Button className='ai-btn' onClick={handleOpenLegal}>
-            {taskStrings.profile.legalLabel}
-          </Button>
-        </View>
-        <View className='one-line-row'>
-          <Button className='ai-btn' onClick={() => void handleLogout()}>
-            {taskStrings.profile.logoutLabel}
+          <Button className='ai-btn' onClick={handleOpenAbout}>
+            {taskStrings.profile.aboutLabel}
           </Button>
         </View>
       </View>

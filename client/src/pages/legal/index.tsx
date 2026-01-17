@@ -48,19 +48,6 @@ export default function LegalPage() {
       </View>
 
       <View className='legal-card'>
-        <Text className='legal-section-title'>{taskStrings.legal.operatorTitle}</Text>
-        <Text className='legal-text'>{operator || taskStrings.legal.missingOperator}</Text>
-      </View>
-
-      <View className='legal-card'>
-        <Text className='legal-section-title'>{taskStrings.legal.contactTitle}</Text>
-        <Text className='legal-text'>{contact || taskStrings.legal.missingContact}</Text>
-        <Button className='legal-button' onClick={() => void handleCopyContact()}>
-          {taskStrings.legal.copyContact}
-        </Button>
-      </View>
-
-      <View className='legal-card'>
         <Text className='legal-section-title'>{taskStrings.legal.termsTitle}</Text>
         <Text className='legal-text'>{terms || taskStrings.legal.missingTerms}</Text>
       </View>
@@ -70,6 +57,18 @@ export default function LegalPage() {
         <Text className='legal-text'>{privacy || taskStrings.legal.missingPrivacy}</Text>
         <Button className='legal-button ghost' onClick={() => void handleOpenPrivacyGuide()}>
           {taskStrings.legal.openPrivacyGuide}
+        </Button>
+      </View>
+
+      <View className='legal-card'>
+        <Text className='legal-section-title'>{taskStrings.legal.operatorTitle}</Text>
+        <Text className='legal-text'>
+          {operator || taskStrings.legal.missingOperator}
+          {'\n'}
+          {contact || taskStrings.legal.missingContact}
+        </Text>
+        <Button className='legal-button ghost' onClick={() => void handleCopyContact()}>
+          {taskStrings.legal.copyContact}
         </Button>
       </View>
     </ScrollView>

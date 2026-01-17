@@ -1,0 +1,57 @@
+.about-page {
+  min-height: 100vh;
+  padding: 24px 24px 48px;
+  background: #f5f6fb;
+  color: #1f2937;
+}
+
+.about-card {
+  margin-bottom: 20px;
+  padding: 20px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(62, 45, 139, 0.08);
+}
+
+.about-title {
+  font-size: calc(22px * var(--font-scale));
+  font-weight: 700;
+}
+
+.about-sub {
+  margin-top: 6px;
+  color: #6b7280;
+  font-size: calc(13px * var(--font-scale));
+}
+
+.about-section {
+  font-size: calc(16px * var(--font-scale));
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.about-desc {
+  color: #6b7280;
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1.6;
+}
+
+.about-button {
+  margin-top: 12px;
+  padding: 0 18px;
+  height: 36px;
+  line-height: 36px;
+  border-radius: 999px;
+  background: #7c3aed;
+  color: #fff;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.about-button.ghost {
+  background: #efe7ff;
+  color: #5b21b6;
+}
+
+.about-button.danger {
+  background: #ef4444;
+}
