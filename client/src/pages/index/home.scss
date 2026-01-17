@@ -128,7 +128,7 @@ $surface: #ffffff;
 .ach-coming-title {
   font-weight: 800;
   color: #1f1745;
-  font-size: calc(18px * var(--font-scale));
+  font-size: calc(20px * var(--font-scale));
 }
 
 /* Feed layout wrapper keeps the challenge section flexible without clipping */
@@ -399,7 +399,7 @@ $surface: #ffffff;
   border: 1px solid rgba(148, 126, 255, 0.35);
   background: rgba(255, 255, 255, 0.95);
   color: #7b6cf6;
-  font-size: calc(16px * var(--font-scale));
+  font-size: calc(18px * var(--font-scale));
   font-weight: 700;
   display: flex;
   align-items: center;

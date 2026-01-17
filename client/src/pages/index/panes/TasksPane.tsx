@@ -1923,10 +1923,11 @@ export default function TasksPane({
     query.exec((res) => {
       const rect = res?.[0]
       const { windowWidth } = Taro.getSystemInfoSync()
-      const width = Math.min(240, windowWidth - 32)
+      const width = Math.min(220, windowWidth - 32)
+      const rightEdge = rect ? rect.right ?? rect.left + rect.width : null
       const left = rect
-        ? Math.min(windowWidth - width - 16, Math.max(16, rect.left - 8))
-        : Math.max(16, (windowWidth - width) / 2)
+        ? Math.min(windowWidth - width - 12, Math.max(12, (rightEdge || rect.left) - width))
+        : Math.max(12, (windowWidth - width) / 2)
       const top = rect ? rect.top - 8 : 160
       oneLineTipAnchorRef.current = rect ? { top: rect.top, bottom: rect.bottom, left: rect.left } : null
       setOneLineTipStyle({ top, left, width })
