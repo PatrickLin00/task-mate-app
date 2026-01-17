@@ -17,7 +17,7 @@ const stripTitlePrefix = (text: string, title: string) => {
   if (!title) return raw
   if (!raw.startsWith(title)) return raw
   let rest = raw.slice(title.length)
-  rest = rest.replace(/^[\s:：-—]+/, '')
+  rest = rest.replace(/^[-—\s:：]+/, '')
   return rest.trim()
 }
 
