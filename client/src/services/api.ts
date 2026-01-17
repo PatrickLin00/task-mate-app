@@ -57,6 +57,9 @@ export type UserProfile = {
   nickname?: string | null
   avatar?: string | null
   stars?: number
+  wisdom?: number
+  strength?: number
+  agility?: number
 }
 
 const authHeader = () => {

@@ -293,17 +293,17 @@
     achievements: { label: '成就', icon: '🏆' },
     profile: { label: '我的', icon: '👤' },
   },
-  achievements: {
-    title: '成就',
-    icon: '🏅',
-    items: [
-      { id: 'a1', title: '晨曦勇士', desc: '连续 7 天早起打卡' },
-      { id: 'a2', title: '疾风行者', desc: '单日步数达 20000' },
-    ],
-  },
+    achievements: {
+      title: '成就',
+      icon: '🏅',
+      comingTitle: '成就系统准备中',
+      comingDesc: '下一次更新会带来完整的成就旅程。',
+    },
   profile: {
-    title: '我的',
-    heroDesc: '勇敢的探索者,继续你的星旅吧!',
+      title: '我的',
+      nicknameTitle: '昵称',
+      actionsTitle: '常用入口',
+      heroDesc: '勇敢的探索者,继续你的星旅吧!',
     avatarIcon: '🐱',
     subscribeLabel: '订阅设置',
     subscribeHint: '请至微信-设置-订阅消息修改',

@@ -48,13 +48,6 @@ const attrMeta: Record<Attr, { icon: string }> = {
   [taskStrings.rewards.agility.label]: { icon: taskStrings.home.statsIcons.agility },
 }
 const heroStars = 0
-const heroStats: Record<Attr, number> = attrList.reduce(
-  (acc, attr) => {
-    acc[attr] = 0
-    return acc
-  },
-  {} as Record<Attr, number>
-)
 
 const UI = {
   stars: taskStrings.home.stars,
@@ -93,6 +86,7 @@ type HomePaneProps = {
   authVersion?: number
   openTaskId?: string
   heroName?: string
+  heroStats?: { wisdom?: number; strength?: number; agility?: number }
   nameGateActive?: boolean
 }
 
@@ -101,8 +95,18 @@ export default function HomePane({
   authVersion = 0,
   openTaskId,
   heroName,
+  heroStats,
   nameGateActive = false,
 }: HomePaneProps) {
+  const normalizeStat = (value?: number) => Math.max(0, Math.round(Number(value || 0)))
+  const heroStatsMap = useMemo(
+    () => ({
+      [taskStrings.rewards.wisdom.label]: normalizeStat(heroStats?.wisdom),
+      [taskStrings.rewards.strength.label]: normalizeStat(heroStats?.strength),
+      [taskStrings.rewards.agility.label]: normalizeStat(heroStats?.agility),
+    }),
+    [heroStats?.wisdom, heroStats?.strength, heroStats?.agility]
+  )
   const [todayTasks, setTodayTasks] = useState<RoadTask[]>([])
   const pollingBusyRef = useRef(false)
   const [feedTasks, setFeedTasks] = useState<RoadTask[]>([])
@@ -687,13 +691,16 @@ export default function HomePane({
                 </View>
                 <Text className='label'>{attr}</Text>
               </View>
-              <View className='track'>
-                <View className={`fill ${attrToneHome[attr]}`} style={{ width: `${heroStats[attr]}%` }} />
+                <View className='track'>
+                  <View
+                    className={`fill ${attrToneHome[attr]}`}
+                    style={{ width: `${Math.min(100, heroStatsMap[attr])}%` }}
+                  />
+                </View>
+                <Text className='val'>{heroStatsMap[attr]}</Text>
               </View>
-              <Text className='val'>{heroStats[attr]}</Text>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
       </View>
 
       <View id='today' className='section card'>

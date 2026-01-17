@@ -12,9 +12,11 @@ declare const DEV_AUTH_ENABLED: boolean
 export default function ProfilePane({
   onAuthChanged,
   nickname,
+  stats,
 }: {
   onAuthChanged?: () => void
   nickname?: string
+  stats?: { wisdom?: number; strength?: number; agility?: number }
 }) {
   const [currentUserId, setCurrentUserId] = useState(() => getUserId() || '')
   const [devUserId, setDevUserId] = useState(() => getDevUserId() || '')
@@ -101,23 +103,58 @@ export default function ProfilePane({
     }
   }
 
+  const statItems = [
+    {
+      key: 'wisdom',
+      label: taskStrings.rewards.wisdom.label,
+      icon: taskStrings.rewards.wisdom.icon,
+      value: Number(stats?.wisdom || 0),
+    },
+    {
+      key: 'strength',
+      label: taskStrings.rewards.strength.label,
+      icon: taskStrings.rewards.strength.icon,
+      value: Number(stats?.strength || 0),
+    },
+    {
+      key: 'agility',
+      label: taskStrings.rewards.agility.label,
+      icon: taskStrings.rewards.agility.icon,
+      value: Number(stats?.agility || 0),
+    },
+  ]
+
   return (
     <View className='profile-page'>
-      <View className='section'>
-        <Text className='section-title'>{taskStrings.profile.title}</Text>
-        <View className='hero'>
-          <View className='avatar-wrap'>
+      <View className='profile-hero card'>
+        <View className='profile-hero-row'>
+          <View className='avatar-wrap profile-avatar'>
             <View className='avatar'>{taskStrings.profile.avatarIcon}</View>
           </View>
-          <View className='hero-main'>
+          <View className='profile-hero-main'>
             <View className='hero-head'>
-              <Text className='hero-name'>{displayName}</Text>
+              <Text className='profile-name'>{displayName}</Text>
               <Text className='hero-stars'>{taskStrings.home.stars.slice(0, displayStars)}</Text>
             </View>
-            <Text className='feed-desc'>{taskStrings.profile.heroDesc}</Text>
+            <Text className='profile-desc'>{taskStrings.profile.heroDesc}</Text>
           </View>
         </View>
-        <View className='one-line-row'>
+        <View className='profile-stats'>
+          {statItems.map((item) => (
+            <View key={item.key} className='profile-stat'>
+              <View className='stat-chip'>
+                <Text className='stat-icon'>{item.icon}</Text>
+                <Text className='stat-label'>{item.label}</Text>
+              </View>
+              <Text className='stat-value'>{item.value}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View className='profile-card card'>
+        <Text className='section-title'>{taskStrings.profile.nicknameTitle}</Text>
+        <View className='profile-nickname-row'>
           <Input
             className='modal-input'
             value={nicknameDraft}
@@ -129,25 +166,28 @@ export default function ProfilePane({
             {taskStrings.naming.submit}
           </Button>
         </View>
-        <View className='one-line-row'>
-          <Button className='ai-btn' onClick={() => void handleSubscribeSettings()}>
-            {taskStrings.profile.subscribeLabel}
+      </View>
+
+      <View className='profile-card card'>
+        <Text className='section-title'>{taskStrings.profile.actionsTitle}</Text>
+        <View className='profile-actions'>
+          <Button className='profile-action' onClick={() => void handleSubscribeSettings()}>
+            <Text className='action-icon'>🔔</Text>
+            <Text className='action-text'>{taskStrings.profile.subscribeLabel}</Text>
           </Button>
-        </View>
-        <View className='one-line-row'>
-          <Button className='ai-btn' onClick={handleOpenAbout}>
-            {taskStrings.profile.aboutLabel}
+          <Button className='profile-action' onClick={handleOpenAbout}>
+            <Text className='action-icon'>🧭</Text>
+            <Text className='action-text'>{taskStrings.profile.aboutLabel}</Text>
           </Button>
-        </View>
-        <View className='one-line-row'>
-          <Button className='ai-btn' onClick={handleOpenGuide}>
-            {taskStrings.profile.guideLabel}
+          <Button className='profile-action' onClick={handleOpenGuide}>
+            <Text className='action-icon'>🪄</Text>
+            <Text className='action-text'>{taskStrings.profile.guideLabel}</Text>
           </Button>
         </View>
       </View>
 
       {canUseDev && (
-        <View className='section'>
+        <View className='profile-card card'>
           <Text className='section-title'>{taskStrings.profile.devTitle}</Text>
           <Text className='feed-desc'>
             {taskStrings.profile.devCurrentPrefix}

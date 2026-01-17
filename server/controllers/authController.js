@@ -28,6 +28,16 @@ const normalizeNickname = (raw, fallback) => {
   return trimmed || fallback || ''
 }
 
+const buildProfilePayload = (user) => ({
+  userId: user.userId,
+  nickname: user.nickname,
+  avatar: user.avatar,
+  stars: Number(user.stars || 0),
+  wisdom: Number(user.wisdom || 0),
+  strength: Number(user.strength || 0),
+  agility: Number(user.agility || 0),
+})
+
 const ensureNickname = async (user) => {
   if (!user) return user
   const next = normalizeNickname(user.nickname, user.userId)
@@ -123,14 +133,14 @@ exports.updateProfile = async (req, res) => {
     if (typeof avatar === 'string') updates.avatar = avatar
     if (Object.keys(updates).length === 0) {
       const existing = await User.findOne({ userId })
-      if (existing) return res.json(existing)
+      if (existing) return res.json(buildProfilePayload(existing))
       const created = await User.create({ userId, nickname: userId })
-      return res.json(created)
+      return res.json(buildProfilePayload(created))
     }
     const updated = await User.findOneAndUpdate({ userId }, { $set: updates }, { new: true })
-    if (updated) return res.json(updated)
+    if (updated) return res.json(buildProfilePayload(updated))
     const created = await User.create({ userId, nickname: updates.nickname || userId, avatar: updates.avatar })
-    res.json(created)
+    res.json(buildProfilePayload(created))
   } catch (err) {
     console.error('updateProfile error:', err)
     res.status(500).json({ error: 'update profile failed' })
@@ -145,12 +155,7 @@ exports.getProfile = async (req, res) => {
     let user = await User.findOne({ userId })
     if (!user) user = await User.create({ userId, nickname: userId })
     else await ensureNickname(user)
-    res.json({
-      userId: user.userId,
-      nickname: user.nickname,
-      avatar: user.avatar,
-      stars: user.stars,
-    })
+    res.json(buildProfilePayload(user))
   } catch (err) {
     console.error('getProfile error:', err)
     res.status(500).json({ error: 'get profile failed' })

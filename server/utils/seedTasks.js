@@ -39,7 +39,7 @@ const challengeTemplates = [
     title: '[星旅] 风行速练',
     detail: '跑步4km, 配速6-7, 结束拉伸10min',
     icon: '🏃',
-    reward: { type: 'strength', value: 12 },
+    reward: { type: 'strength', value: 1 },
     subtasks: [{ title: '完成训练', total: 1 }],
   },
   {
@@ -47,7 +47,7 @@ const challengeTemplates = [
     title: '[星旅] 静心冥想',
     detail: '冥想20min, 写下3个感受',
     icon: '🧘',
-    reward: { type: 'wisdom', value: 10 },
+    reward: { type: 'wisdom', value: 1 },
     subtasks: [{ title: '完成冥想', total: 1 }],
   },
   {
@@ -55,7 +55,7 @@ const challengeTemplates = [
     title: '[星旅] 晨光整理',
     detail: '整理桌面15min, 清空回收站',
     icon: '🧹',
-    reward: { type: 'wisdom', value: 8 },
+    reward: { type: 'wisdom', value: 1 },
     subtasks: [{ title: '完成整理', total: 1 }],
   },
   {
@@ -63,7 +63,7 @@ const challengeTemplates = [
     title: '[星旅] 轻跑热身',
     detail: '慢跑3km, 结束拉伸8min',
     icon: '🏃',
-    reward: { type: 'strength', value: 10 },
+    reward: { type: 'strength', value: 1 },
     subtasks: [{ title: '完成热身', total: 1 }],
   },
   {
@@ -71,7 +71,7 @@ const challengeTemplates = [
     title: '[星旅] 专注阅读',
     detail: '阅读30页, 写下3个收获',
     icon: '📚',
-    reward: { type: 'wisdom', value: 10 },
+    reward: { type: 'wisdom', value: 1 },
     subtasks: [{ title: '完成阅读', total: 1 }],
   },
   {
@@ -79,7 +79,7 @@ const challengeTemplates = [
     title: '[星旅] 灵敏训练',
     detail: '跳绳600次, 分3组完成',
     icon: '🐾',
-    reward: { type: 'agility', value: 12 },
+    reward: { type: 'agility', value: 1 },
     subtasks: [{ title: '完成训练', total: 1 }],
   },
   {
@@ -87,7 +87,7 @@ const challengeTemplates = [
     title: '[星旅] 补水计划',
     detail: '全天喝水8杯, 每杯250ml',
     icon: '🚰',
-    reward: { type: 'strength', value: 6 },
+    reward: { type: 'strength', value: 1 },
     subtasks: [{ title: '记录补水', total: 8 }],
   },
   {
@@ -95,7 +95,7 @@ const challengeTemplates = [
     title: '[星旅] 呼吸训练',
     detail: '深呼吸5min, 记录一次感受',
     icon: '🫁',
-    reward: { type: 'agility', value: 8 },
+    reward: { type: 'agility', value: 1 },
     subtasks: [{ title: '完成训练', total: 1 }],
   },
   {
@@ -103,7 +103,7 @@ const challengeTemplates = [
     title: '[星旅] 星光散步',
     detail: '散步30min, 不带耳机, 留意周围声音',
     icon: '🚶',
-    reward: { type: 'agility', value: 8 },
+    reward: { type: 'agility', value: 1 },
     subtasks: [{ title: '完成散步', total: 1 }],
   },
   {
@@ -111,7 +111,7 @@ const challengeTemplates = [
     title: '[星旅] 静默收尾',
     detail: '整理待办, 选1件最重要的事写在明天第一行',
     icon: '📝',
-    reward: { type: 'wisdom', value: 8 },
+    reward: { type: 'wisdom', value: 1 },
     subtasks: [{ title: '完成收尾', total: 1 }],
   },
 ]

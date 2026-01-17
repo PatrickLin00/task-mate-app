@@ -9,18 +9,14 @@ export default function AchievementsPane() {
     <View className='ach-page'>
       <View className='section'>
         <Text className='section-title'>{achievements.title}</Text>
-        <View className='feed-list'>
-          {achievements.items.map((item) => (
-            <View className='feed-card' key={item.id}>
-              <View className='feed-left'>
-                <Text className='emoji'>{achievements.icon}</Text>
-              </View>
-              <View className='feed-body'>
-                <Text className='feed-title'>{item.title}</Text>
-                <Text className='feed-desc'>{item.desc}</Text>
-              </View>
-            </View>
-          ))}
+        <View className='ach-coming card'>
+          <View className='ach-coming-icon'>
+            <Text>{achievements.icon}</Text>
+          </View>
+          <View className='ach-coming-body'>
+            <Text className='ach-coming-title'>{achievements.comingTitle}</Text>
+            <Text className='feed-desc'>{achievements.comingDesc}</Text>
+          </View>
         </View>
       </View>
     </View>

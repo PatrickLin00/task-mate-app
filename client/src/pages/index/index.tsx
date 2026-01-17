@@ -20,7 +20,13 @@ export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>('home')
   const [authVersion, setAuthVersion] = useState(0)
   const [openTaskId, setOpenTaskId] = useState<string | undefined>(undefined)
-  const [profile, setProfile] = useState<{ userId: string; nickname: string }>(() => ({
+  const [profile, setProfile] = useState<{
+    userId: string
+    nickname: string
+    wisdom: number
+    strength: number
+    agility: number
+  }>(() => ({
     userId: getUserId() || '',
     nickname: (() => {
       try {
@@ -29,6 +35,9 @@ export default function Index() {
         return ''
       }
     })(),
+    wisdom: 0,
+    strength: 0,
+    agility: 0,
   }))
   const [nameGateActive, setNameGateActive] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
@@ -51,11 +60,23 @@ export default function Index() {
     return raw ? String(raw) : undefined
   }
 
-  const applyProfile = (next: { userId?: string; nickname?: string | null }) => {
+  const applyProfile = (next: {
+    userId?: string
+    nickname?: string | null
+    wisdom?: number
+    strength?: number
+    agility?: number
+  }) => {
     const resolvedUserId = next.userId || getUserId() || ''
     const rawNickname = typeof next.nickname === 'string' ? next.nickname.trim() : ''
     const resolvedNickname = rawNickname || resolvedUserId
-    setProfile({ userId: resolvedUserId, nickname: resolvedNickname })
+    setProfile({
+      userId: resolvedUserId,
+      nickname: resolvedNickname,
+      wisdom: Number(next.wisdom || 0),
+      strength: Number(next.strength || 0),
+      agility: Number(next.agility || 0),
+    })
     if (resolvedNickname) {
       Taro.setStorageSync('nickname', resolvedNickname)
     }
@@ -201,6 +222,11 @@ export default function Index() {
             authVersion={authVersion}
             openTaskId={openTaskId}
             heroName={displayName}
+            heroStats={{
+              wisdom: profile.wisdom,
+              strength: profile.strength,
+              agility: profile.agility,
+            }}
             nameGateActive={nameGateActive}
           />
         </SwiperItem>
@@ -218,6 +244,7 @@ export default function Index() {
         <SwiperItem>
           <ProfilePane
             nickname={displayName}
+            stats={{ wisdom: profile.wisdom, strength: profile.strength, agility: profile.agility }}
             onAuthChanged={() => {
               setAuthVersion(Date.now())
               void refreshProfile()

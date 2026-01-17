@@ -40,6 +40,13 @@ const formatDateTime = (date) => {
 const isWechatUserId = (value) => typeof value === 'string' && value.startsWith('wx:')
 const SYSTEM_USER_PREFIX = 'sys:'
 
+const buildAttributeInc = (reward) => {
+  if (!reward || !REWARD_TYPE.includes(reward.type)) return null
+  const value = Number(reward.value || 0)
+  if (!Number.isFinite(value) || value <= 0) return null
+  return { [reward.type]: value }
+}
+
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id)
 let taskDebugEnabled = String(process.env.TASK_DEBUG_LOGS || '').toLowerCase() === 'true'
 
@@ -1775,13 +1782,20 @@ exports.completeTask = async (req, res) => {
           }).session(session)
         }
 
-        const records = buildCompletionRecords(updated, now, deleteAt)
-        if (records.length > 0) {
-          await CompletedTask.insertMany(records, { session })
-        }
+          const records = buildCompletionRecords(updated, now, deleteAt)
+          if (records.length > 0) {
+            await CompletedTask.insertMany(records, { session })
+          }
 
-        response = { status: 200, body: await buildResponseWithNames(updated) }
-      })
+          if (updated.assigneeId) {
+            const inc = buildAttributeInc(updated.attributeReward)
+            if (inc) {
+              await User.updateOne({ userId: updated.assigneeId }, { $inc: inc }, { session })
+            }
+          }
+
+          response = { status: 200, body: await buildResponseWithNames(updated) }
+        })
     } finally {
       session.endSession()
     }
