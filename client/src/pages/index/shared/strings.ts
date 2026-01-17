@@ -291,7 +291,7 @@
     home: { label: '首页', icon: '🏠' },
     tasks: { label: '任务', icon: '📝' },
     achievements: { label: '成就', icon: '🏆' },
-    profile: { label: '我的', icon: '👤' },
+    profile: { label: '设置', icon: '👤' },
   },
     achievements: {
       title: '成就',
@@ -299,10 +299,13 @@
       comingTitle: '成就系统准备中',
       comingDesc: '下一次更新会带来完整的成就旅程。',
     },
-  profile: {
-      title: '我的',
+    profile: {
+      title: '设置',
       nicknameTitle: '昵称',
       actionsTitle: '常用入口',
+      editNickname: '修改昵称',
+      editNicknameTitle: '修改昵称',
+      editNicknameCancel: '取消',
       heroDesc: '勇敢的探索者,继续你的星旅吧!',
     avatarIcon: '🐱',
     subscribeLabel: '订阅设置',

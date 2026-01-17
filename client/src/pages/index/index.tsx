@@ -244,7 +244,6 @@ export default function Index() {
         <SwiperItem>
           <ProfilePane
             nickname={displayName}
-            stats={{ wisdom: profile.wisdom, strength: profile.strength, agility: profile.agility }}
             onAuthChanged={() => {
               setAuthVersion(Date.now())
               void refreshProfile()

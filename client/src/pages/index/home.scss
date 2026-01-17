@@ -106,11 +106,31 @@ $surface: #ffffff;
   gap: 14px;
 }
 
-.profile-nickname-row {
+.profile-nickname-head {
   display: flex;
-  gap: 12px;
   align-items: center;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-nickname-value {
+  font-size: calc(18px * var(--font-scale));
+  font-weight: 700;
+  color: #2b2d42;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(148, 126, 255, 0.2);
+  border-radius: 16px;
+  padding: 10px 14px;
+}
+
+.nickname-edit {
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: rgba(124, 58, 237, 0.12);
+  color: #5b21b6;
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  font-weight: 700;
+  font-size: calc(14px * var(--font-scale));
 }
 
 .profile-actions {
@@ -122,19 +142,55 @@ $surface: #ffffff;
 .profile-action {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 14px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
   border-radius: 18px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(167, 139, 250, 0.08));
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(167, 139, 250, 0.08));
   color: #4b3fb5;
-  border: 1px solid rgba(139, 92, 246, 0.25);
+  border: 1px solid rgba(139, 92, 246, 0.2);
   font-weight: 700;
   font-size: calc(15px * var(--font-scale));
 }
 
 .action-icon {
   font-size: calc(16px * var(--font-scale));
+}
+
+.nickname-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(17, 24, 39, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.nickname-modal {
+  width: min(480px, 90vw);
+  background: #ffffff;
+  border-radius: 24px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  box-shadow: 0 28px 50px rgba(17, 24, 39, 0.2);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.nickname-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nickname-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .ach-coming {
