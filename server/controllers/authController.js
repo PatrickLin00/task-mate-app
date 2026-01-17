@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken')
 const User = require('../models/User')
 const { ensureDevScenarioTasks } = require('../utils/seedTasks')
 const { containsSensitive, SENSITIVE_HINT } = require('../utils/contentFilter')
+const { moderateText } = require('../utils/moderation')
 
 // POST /api/auth/weapp/login
 // body: { code }
@@ -112,6 +113,9 @@ exports.updateProfile = async (req, res) => {
     if (typeof nickname === 'string') {
       const trimmed = nickname.trim()
       if (trimmed && containsSensitive(trimmed)) {
+        return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
+      }
+      if (trimmed && (await moderateText(trimmed))) {
         return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
       }
       updates.nickname = trimmed

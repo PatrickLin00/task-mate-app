@@ -6,6 +6,7 @@ const { sendSubscribeMessage } = require('../utils/subscribeMessage')
 const { VALUES } = require('../utils/subscribeLabels')
 const { buildSubscribeData } = require('../utils/subscribePayload')
 const { containsSensitiveTask, SENSITIVE_HINT } = require('../utils/contentFilter')
+const { moderateText } = require('../utils/moderation')
 const {
   getDailyChallengeSeeds,
   buildChallengeTaskSeed,
@@ -315,6 +316,9 @@ exports.createTask = async (req, res) => {
     if (!dueAt) return res.status(400).json({ error: 'dueAt is required and must be a valid date' })
     if (subtasks.length === 0) return res.status(400).json({ error: 'subtasks must be a non-empty array' })
     if (containsSensitiveTask({ title, detail, subtasks })) {
+      return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
+    }
+    if (await moderateText([title, detail, ...(subtasks || [])].filter(Boolean).join(' '))) {
       return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
     }
 
@@ -697,6 +701,9 @@ exports.reworkTask = async (req, res) => {
     if (!dueAt) return res.status(400).json({ error: 'dueAt is required and must be a valid date' })
     if (subtasks.length === 0) return res.status(400).json({ error: 'subtasks must be a non-empty array' })
     if (containsSensitiveTask({ title, detail, subtasks })) {
+      return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
+    }
+    if (await moderateText([title, detail, ...(subtasks || [])].filter(Boolean).join(' '))) {
       return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
     }
     if (!REWARD_TYPE.includes(rewardType)) return res.status(400).json({ error: 'attributeReward.type is invalid' })
