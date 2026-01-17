@@ -732,7 +732,8 @@ export default function HomePane({
                 width: `${todayTipStyle.width}px`,
               }}
             >
-              <Text>{homeStrings.todayTip}</Text>
+              <Text className='guide-text'>{homeStrings.todayTip}</Text>
+              <Text className='today-tip-strong'>{homeStrings.todayTipStrong}</Text>
             </View>
           </View>
         )}

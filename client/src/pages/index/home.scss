@@ -326,6 +326,14 @@ $surface: #ffffff;
   z-index: 41;
 }
 
+.today-tip-strong {
+  margin-top: 8px;
+  display: block;
+  font-weight: 700;
+  color: #4b3fb5;
+  font-size: calc(16px * var(--font-scale));
+}
+
 /* Today mini cards */
 .mini-cards {
   display: flex;
