@@ -40,6 +40,8 @@ const clipText = (text, limit = 120) => {
   return input.length > limit ? input.slice(0, limit) : input;
 };
 
+const metaAllowlist = new Set(['敏感', '敏感词', '敏感内容', '违规词', '违规内容']);
+
 const parseDecision = (content) => {
   const raw = String(content || '').trim();
   if (!raw) return false;
@@ -50,7 +52,7 @@ const parseDecision = (content) => {
   if (raw.includes('不违规') || raw.includes('未违规') || raw.includes('合规') || raw.includes('安全')) {
     return false;
   }
-  if (raw.includes('违规') || raw.includes('不通过') || raw.includes('禁止') || raw.includes('敏感')) {
+  if (raw.includes('违规') || raw.includes('不通过') || raw.includes('禁止')) {
     return true;
   }
   if (raw.includes('辱骂') || raw.includes('侮辱') || raw.includes('色情') || raw.includes('赌博')) {
@@ -66,7 +68,8 @@ const buildMessages = (text) => [
   {
     role: 'system',
     content:
-      '你是内容安全审核，只对黄赌毒、涉政、暴力恐怖、辱骂人身攻击判定为 BLOCK，其他一律 ALLOW。只能输出 ALLOW 或 BLOCK。',
+      '你是内容安全审核，只对黄赌毒、涉政、暴力恐怖、辱骂人身攻击判定为 BLOCK，其他一律 ALLOW。' +
+      '遇到“敏感/敏感词/敏感内容/违规词”等自指词不要判定 BLOCK。只能输出 ALLOW 或 BLOCK。',
   },
   {
     role: 'user',
@@ -86,6 +89,7 @@ const moderateText = async (text) => {
     return false;
   }
   const input = clipText(text);
+  if (metaAllowlist.has(input)) return false;
   if (!input) return false;
   try {
     const completion = await client.chat.completions.create({
