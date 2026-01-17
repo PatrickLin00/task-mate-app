@@ -305,6 +305,7 @@
       actionsTitle: '常用入口',
       editNickname: '修改昵称',
       editNicknameTitle: '修改昵称',
+      editNicknameHint: '可以试试随机昵称,换个新开场。',
       editNicknameCancel: '取消',
       heroDesc: '勇敢的探索者,继续你的星旅吧!',
     avatarIcon: '🐱',

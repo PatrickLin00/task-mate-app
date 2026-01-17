@@ -6,6 +6,7 @@ import { devLoginWeapp, getDevUserId, getUserId } from '@/services/auth'
 import { requestTaskSubscribeAuth } from '@/services/subscribe'
 import { updateProfile } from '@/services/api'
 import { taskStrings } from '../shared/strings'
+import { randomNickname } from '../shared/nickname'
 
 declare const DEV_AUTH_ENABLED: boolean
 
@@ -69,6 +70,10 @@ export default function ProfilePane({
     })
   }
 
+  const handleRandomName = () => {
+    setNicknameDraft(randomNickname())
+  }
+
   const handleOpenAbout = () => {
     Taro.navigateTo({ url: '/pages/about/index' })
   }
@@ -111,37 +116,32 @@ export default function ProfilePane({
             <View className='avatar'>{taskStrings.profile.avatarIcon}</View>
           </View>
           <View className='profile-hero-main'>
-            <View className='hero-head'>
-              <Text className='profile-name'>{displayName}</Text>
-              <Text className='hero-stars'>{taskStrings.home.stars.slice(0, displayStars)}</Text>
+            <View className='profile-name-row'>
+              <View className='hero-head'>
+                <Text className='profile-name'>{displayName}</Text>
+                <Text className='hero-stars'>{taskStrings.home.stars.slice(0, displayStars)}</Text>
+              </View>
+              <Button className='nickname-edit' onClick={() => setShowNicknameModal(true)}>
+                {taskStrings.profile.editNickname}
+              </Button>
             </View>
             <Text className='profile-desc'>{taskStrings.profile.heroDesc}</Text>
           </View>
         </View>
       </View>
 
-      <View className='profile-card card'>
-        <View className='profile-nickname-head'>
-          <Text className='section-title'>{taskStrings.profile.nicknameTitle}</Text>
-          <Button className='nickname-edit' onClick={() => setShowNicknameModal(true)}>
-            {taskStrings.profile.editNickname}
-          </Button>
-        </View>
-        <Text className='profile-nickname-value'>{displayName}</Text>
-      </View>
-
-      <View className='profile-card card'>
+      <View className='profile-card card profile-actions-card'>
         <Text className='section-title'>{taskStrings.profile.actionsTitle}</Text>
         <View className='profile-actions'>
-          <Button className='profile-action' onClick={() => void handleSubscribeSettings()}>
+          <Button className='task-action profile-action' onClick={() => void handleSubscribeSettings()}>
             <Text className='action-icon'>🔔</Text>
             <Text className='action-text'>{taskStrings.profile.subscribeLabel}</Text>
           </Button>
-          <Button className='profile-action' onClick={handleOpenAbout}>
+          <Button className='task-action profile-action' onClick={handleOpenAbout}>
             <Text className='action-icon'>🧭</Text>
             <Text className='action-text'>{taskStrings.profile.aboutLabel}</Text>
           </Button>
-          <Button className='profile-action' onClick={handleOpenGuide}>
+          <Button className='task-action profile-action' onClick={handleOpenGuide}>
             <Text className='action-icon'>🪄</Text>
             <Text className='action-text'>{taskStrings.profile.guideLabel}</Text>
           </Button>
@@ -209,43 +209,40 @@ export default function ProfilePane({
 
       {showNicknameModal && (
         <View
-          className='nickname-mask'
+          className='name-gate-overlay'
           catchMove
           onClick={() => {
             setShowNicknameModal(false)
           }}
         >
-          <View
-            className='nickname-modal'
-            onClick={(e) => {
-              e.stopPropagation()
-            }}
-          >
-            <View className='nickname-modal-head'>
-              <Text className='section-title'>{taskStrings.profile.editNicknameTitle}</Text>
-              <Text className='modal-close' onClick={() => setShowNicknameModal(false)}>
-                ×
-              </Text>
+          <View className='name-gate-card card' onClick={(e) => e.stopPropagation()}>
+            <View className='name-gate-head'>
+              <Text className='name-gate-title'>{taskStrings.naming.title}</Text>
+              <Text className='name-gate-sub'>{taskStrings.naming.sub}</Text>
             </View>
-            <Input
-              className='modal-input'
-              value={nicknameDraft}
-              onInput={(e) => setNicknameDraft(e.detail.value)}
-              placeholder={taskStrings.naming.placeholder}
-              maxlength={6}
-            />
-            <View className='nickname-actions'>
-              <Button className='modal-cancel' onClick={() => setShowNicknameModal(false)}>
-                {taskStrings.profile.editNicknameCancel}
-              </Button>
-              <Button
-                className='modal-submit'
-                loading={savingNickname}
-                onClick={() => void handleSaveNickname()}
-              >
-                {taskStrings.naming.submit}
+            <View className='name-gate-input-row'>
+              <Input
+                className='modal-input'
+                value={nicknameDraft}
+                onInput={(e) => setNicknameDraft(e.detail.value)}
+                placeholder={taskStrings.naming.placeholder}
+                maxlength={6}
+              />
+              <Button className='ai-btn' onClick={handleRandomName}>
+                {taskStrings.naming.random}
               </Button>
             </View>
+            <Text className='name-gate-hint'>{taskStrings.profile.editNicknameHint}</Text>
+            <Button
+              className='task-action name-gate-submit'
+              loading={savingNickname}
+              onClick={() => void handleSaveNickname()}
+            >
+              {taskStrings.naming.submit}
+            </Button>
+            <Button className='task-action ghost' onClick={() => setShowNicknameModal(false)}>
+              {taskStrings.profile.editNicknameCancel}
+            </Button>
           </View>
         </View>
       )}
