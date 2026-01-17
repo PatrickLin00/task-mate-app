@@ -233,16 +233,18 @@ export default function ProfilePane({
               </Button>
             </View>
             <Text className='name-gate-hint'>{taskStrings.profile.editNicknameHint}</Text>
-            <Button
-              className='task-action name-gate-submit'
-              loading={savingNickname}
-              onClick={() => void handleSaveNickname()}
-            >
-              {taskStrings.naming.submit}
-            </Button>
-            <Button className='task-action ghost' onClick={() => setShowNicknameModal(false)}>
-              {taskStrings.profile.editNicknameCancel}
-            </Button>
+            <View className='nickname-modal-actions'>
+              <Button
+                className='task-action name-gate-submit'
+                loading={savingNickname}
+                onClick={() => void handleSaveNickname()}
+              >
+                {taskStrings.naming.submit}
+              </Button>
+              <Button className='task-action ghost' onClick={() => setShowNicknameModal(false)}>
+                {taskStrings.profile.editNicknameCancel}
+              </Button>
+            </View>
           </View>
         </View>
       )}

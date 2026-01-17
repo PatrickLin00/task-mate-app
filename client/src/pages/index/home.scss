@@ -103,6 +103,16 @@ $surface: #ffffff;
   min-height: 48px;
 }
 
+.nickname-modal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.nickname-modal-actions .task-action {
+  width: 100%;
+}
+
 .action-icon {
   font-size: calc(16px * var(--font-scale));
 }
