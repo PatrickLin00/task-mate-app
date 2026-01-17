@@ -247,7 +247,7 @@
     timelineIcon: '🧭',
     challengeIcon: '🧩',
     calendarIcon: '📅',
-    todayTitle: '星程简录',
+    todayTitle: '星愿待办',
     todayMeta: '今天',
     todayUnit: '项',
     feedTitle: '星旅挑战',
