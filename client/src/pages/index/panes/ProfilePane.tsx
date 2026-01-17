@@ -21,6 +21,7 @@ export default function ProfilePane({
   const [switching, setSwitching] = useState(false)
   const [nicknameDraft, setNicknameDraft] = useState(() => nickname || '')
   const [savingNickname, setSavingNickname] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
 
   const displayName = nickname || currentUserId || taskStrings.home.heroName
   const displayStars = 0
@@ -30,6 +31,14 @@ export default function ProfilePane({
   useEffect(() => {
     setNicknameDraft(nickname || '')
   }, [nickname])
+
+  useEffect(() => {
+    const shown = Taro.getStorageSync('guideShown')
+    if (!shown) {
+      setShowGuide(true)
+      Taro.setStorageSync('guideShown', '1')
+    }
+  }, [])
 
   const handleDevSwitch = async (nextUserId: string) => {
     const trimmed = String(nextUserId || '').trim()
@@ -61,6 +70,14 @@ export default function ProfilePane({
 
   const handleOpenAbout = () => {
     Taro.navigateTo({ url: '/pages/about/index' })
+  }
+
+  const handleOpenGuide = () => {
+    setShowGuide(true)
+  }
+
+  const handleCloseGuide = () => {
+    setShowGuide(false)
   }
 
   const handleSaveNickname = async () => {
@@ -122,6 +139,11 @@ export default function ProfilePane({
             {taskStrings.profile.aboutLabel}
           </Button>
         </View>
+        <View className='one-line-row'>
+          <Button className='ai-btn' onClick={handleOpenGuide}>
+            {taskStrings.profile.guideLabel}
+          </Button>
+        </View>
       </View>
 
       {canUseDev && (
@@ -155,6 +177,30 @@ export default function ProfilePane({
                 {userId}
               </Button>
             ))}
+          </View>
+        </View>
+      )}
+
+      {showGuide && (
+        <View className='guide-mask' catchMove onClick={handleCloseGuide}>
+          <View className='guide-card' onClick={(e) => e.stopPropagation()}>
+            <View className='guide-header'>
+              <Text className='guide-title'>{taskStrings.profile.guideTitle}</Text>
+              <Text className='guide-close' onClick={handleCloseGuide}>
+                ×
+              </Text>
+            </View>
+            <View className='guide-section'>
+              <Text className='guide-section-title'>{taskStrings.profile.guideSelfTitle}</Text>
+              <Text className='guide-text'>{taskStrings.profile.guideSelfSteps}</Text>
+            </View>
+            <View className='guide-section'>
+              <Text className='guide-section-title'>{taskStrings.profile.guideShareTitle}</Text>
+              <Text className='guide-text'>{taskStrings.profile.guideShareSteps}</Text>
+            </View>
+            <Button className='guide-btn' onClick={handleCloseGuide}>
+              {taskStrings.profile.guideOk}
+            </Button>
           </View>
         </View>
       )}
