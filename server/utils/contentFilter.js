@@ -2,6 +2,8 @@ const abiaoFilter = require('abiao_filter');
 const ProfanityFilter = require('bad-words-chinese');
 
 const SENSITIVE_HINT = '内容含有敏感词，建议使用星旅生成避免敏感词问题';
+const CONTENT_FILTER_ENABLED =
+  String(process.env.CONTENT_FILTER_ENABLED || '').toLowerCase() !== 'false';
 
 const customWords = [
   '黄赌毒',
@@ -95,6 +97,7 @@ const ensureCustomWords = () => {
 ensureCustomWords();
 
 const containsSensitive = (text) => {
+  if (!CONTENT_FILTER_ENABLED) return false;
   const input = normalize(text);
   if (!input) {
     return false;
@@ -112,6 +115,7 @@ const containsSensitive = (text) => {
 };
 
 const containsSensitiveTask = (task) => {
+  if (!CONTENT_FILTER_ENABLED) return false;
   if (!task) {
     return false;
   }
