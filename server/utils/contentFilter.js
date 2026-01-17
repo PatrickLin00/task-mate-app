@@ -1,4 +1,5 @@
 const abiaoFilter = require('abiao_filter');
+const ProfanityFilter = require('bad-words-chinese');
 
 const SENSITIVE_HINT = '内容含有敏感词，建议使用星旅生成避免敏感词问题';
 
@@ -9,6 +10,13 @@ const customWords = [
   '赌钱',
   '赌球',
   '私彩',
+  '你妈死了',
+  '你妈',
+  '傻逼',
+  '傻b',
+  '草泥马',
+  '操你妈',
+  '他妈的',
   '招嫖',
   '嫖娼',
   '卖淫',
@@ -44,8 +52,29 @@ const customWords = [
   '邪教',
 ];
 
+const romanWords = [
+  'yuepao',
+  'nmsl',
+  'caonima',
+  'cao',
+  'cnm',
+  'tmd',
+  'sb',
+  'sbn',
+  'sabi',
+  'shabi',
+  'fxxk',
+  'fuck',
+  'bitch',
+  'shit',
+];
+
 const filter = abiaoFilter && abiaoFilter.default ? abiaoFilter.default : abiaoFilter;
 const mint = filter ? filter.mint : null;
+const profanity = new ProfanityFilter({
+  chineseList: customWords,
+  englishList: romanWords,
+});
 
 const normalize = (text) => String(text || '').trim();
 const collapseNoise = (text) =>
@@ -70,12 +99,15 @@ const containsSensitive = (text) => {
   if (!input) {
     return false;
   }
+  if (profanity.isProfane(input)) return true;
   if (mint && typeof mint.verify === 'function') {
     if (!mint.verify(input)) return true;
     const collapsed = collapseNoise(input);
+    if (profanity.isProfane(collapsed)) return true;
     if (collapsed !== input && !mint.verify(collapsed)) return true;
   }
   const collapsed = collapseNoise(input);
+  if (romanWords.some((word) => collapsed.includes(word))) return true;
   return customWords.some((word) => input.includes(word) || collapsed.includes(word));
 };
 
