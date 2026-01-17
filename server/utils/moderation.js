@@ -9,6 +9,7 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL;
 
 const AI_MODERATION_ENABLED = String(process.env.AI_MODERATION_ENABLED || '').toLowerCase() === 'true';
 const AI_MODERATION_MODEL = process.env.AI_MODERATION_MODEL;
+const AI_MODERATION_DEBUG = String(process.env.AI_MODERATION_DEBUG || '').toLowerCase() === 'true';
 
 const getClientConfig = () => {
   if (HUNYUAN_API_KEY) {
@@ -40,25 +41,49 @@ const clipText = (text, limit = 120) => {
 };
 
 const parseDecision = (content) => {
-  const value = String(content || '').trim().toUpperCase();
-  if (value.includes('BLOCK')) return true;
-  if (value.includes('ALLOW')) return false;
+  const raw = String(content || '').trim();
+  if (!raw) return false;
+  const upper = raw.toUpperCase();
+  if (upper.includes('BLOCK')) return true;
+  if (upper.includes('ALLOW')) return false;
+
+  if (raw.includes('不违规') || raw.includes('未违规') || raw.includes('合规') || raw.includes('安全')) {
+    return false;
+  }
+  if (raw.includes('违规') || raw.includes('不通过') || raw.includes('禁止') || raw.includes('敏感')) {
+    return true;
+  }
+  if (raw.includes('辱骂') || raw.includes('侮辱') || raw.includes('色情') || raw.includes('赌博')) {
+    return true;
+  }
+  if (raw.includes('毒品') || raw.includes('暴力') || raw.includes('恐怖') || raw.includes('政治')) {
+    return true;
+  }
   return false;
 };
 
 const buildMessages = (text) => [
   {
     role: 'system',
-    content: 'You are a safety classifier. Reply only with ALLOW or BLOCK.',
+    content: '你是内容安全审核，只能输出 ALLOW 或 BLOCK。',
   },
   {
     role: 'user',
-    content: `Text: ${text}`,
+    content: `文本: ${text}`,
   },
 ];
 
 const moderateText = async (text) => {
-  if (!AI_MODERATION_ENABLED || !client || !moderationModel) return false;
+  if (!AI_MODERATION_ENABLED || !client || !moderationModel) {
+    if (AI_MODERATION_DEBUG) {
+      console.log('[moderation] skipped', {
+        enabled: AI_MODERATION_ENABLED,
+        hasClient: Boolean(client),
+        model: moderationModel,
+      });
+    }
+    return false;
+  }
   const input = clipText(text);
   if (!input) return false;
   try {
@@ -66,11 +91,15 @@ const moderateText = async (text) => {
       model: moderationModel,
       messages: buildMessages(input),
       temperature: 0,
-      max_tokens: 1,
+      max_tokens: 2,
       top_p: 1,
     });
     const content = completion.choices?.[0]?.message?.content;
-    return parseDecision(content);
+    const blocked = parseDecision(content);
+    if (AI_MODERATION_DEBUG) {
+      console.log('[moderation] decision', { input, content, blocked });
+    }
+    return blocked;
   } catch (error) {
     console.error('moderateText error:', error?.message || error);
     return false;
