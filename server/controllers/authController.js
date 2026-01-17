@@ -5,6 +5,8 @@ const User = require('../models/User')
 const { ensureDevScenarioTasks } = require('../utils/seedTasks')
 const { containsSensitive, SENSITIVE_HINT } = require('../utils/contentFilter')
 
+const DEBUG_CONTENT_FILTER = String(process.env.CONTENT_FILTER_DEBUG || '').toLowerCase() === 'true'
+
 // POST /api/auth/weapp/login
 // body: { code }
 // TODO: rate limit & better error mapping (pending ops/security)
@@ -111,6 +113,9 @@ exports.updateProfile = async (req, res) => {
     const updates = {}
     if (typeof nickname === 'string') {
       const trimmed = nickname.trim()
+      if (DEBUG_CONTENT_FILTER) {
+        console.log('[content-filter] updateProfile nickname', { userId, trimmed })
+      }
       if (trimmed && containsSensitive(trimmed)) {
         return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
       }

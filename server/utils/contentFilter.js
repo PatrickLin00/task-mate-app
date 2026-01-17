@@ -1,5 +1,7 @@
 const abiaoFilter = require('abiao_filter');
 
+const DEBUG_CONTENT_FILTER = String(process.env.CONTENT_FILTER_DEBUG || '').toLowerCase() === 'true';
+
 const SENSITIVE_HINT =
   '\u5185\u5bb9\u542b\u6709\u654f\u611f\u8bcd\uff0c\u5efa\u8bae\u4f7f\u7528\u661f\u65c5\u751f\u6210\u907f\u514d\u654f\u611f\u8bcd\u95ee\u9898';
 
@@ -72,12 +74,36 @@ const containsSensitive = (text) => {
     return false;
   }
   if (mint && typeof mint.verify === 'function') {
-    if (!mint.verify(input)) return true;
+    const ok = mint.verify(input);
+    if (!ok) {
+      if (DEBUG_CONTENT_FILTER) {
+        console.log('[content-filter] blocked by mint', { input });
+      }
+      return true;
+    }
     const collapsed = collapseNoise(input);
-    if (collapsed !== input && !mint.verify(collapsed)) return true;
+    if (collapsed !== input) {
+      const collapsedOk = mint.verify(collapsed);
+      if (!collapsedOk) {
+        if (DEBUG_CONTENT_FILTER) {
+          console.log('[content-filter] blocked by mint (collapsed)', { input, collapsed });
+        }
+        return true;
+      }
+    }
   }
   const collapsed = collapseNoise(input);
-  return customWords.some((word) => input.includes(word) || collapsed.includes(word));
+  const hit = customWords.find((word) => input.includes(word) || collapsed.includes(word));
+  if (hit) {
+    if (DEBUG_CONTENT_FILTER) {
+      console.log('[content-filter] blocked by custom', { input, collapsed, hit });
+    }
+    return true;
+  }
+  if (DEBUG_CONTENT_FILTER) {
+    console.log('[content-filter] pass', { input, collapsed });
+  }
+  return false;
 };
 
 const containsSensitiveTask = (task) => {
