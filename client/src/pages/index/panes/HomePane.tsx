@@ -118,6 +118,7 @@ export default function HomePane({
   const [frameIndex, setFrameIndex] = useState(0)
   const [modalTask, setModalTask] = useState<RoadTask | null>(null)
   const [showTodayTip, setShowTodayTip] = useState(false)
+  const [todayTipStyle, setTodayTipStyle] = useState({ top: 0, left: 0, width: 0 })
   const [dialogEditing, setDialogEditing] = useState(false)
   const [dialogDraft, setDialogDraft] = useState<Subtask[]>([])
   const [shareOnly, setShareOnly] = useState(false)
@@ -554,6 +555,22 @@ export default function HomePane({
     }
   }, [isActive, dialogEditing, shareOnly, modalTask])
 
+  const openTodayTip = () => {
+    const query = Taro.createSelectorQuery()
+    query.select('#today-help-anchor').boundingClientRect()
+    query.exec((res) => {
+      const rect = res?.[0]
+      const { windowWidth } = Taro.getSystemInfoSync()
+      const width = Math.min(320, windowWidth - 32)
+      const left = rect
+        ? Math.min(windowWidth - width - 16, Math.max(16, rect.left - 8))
+        : Math.max(16, (windowWidth - width) / 2)
+      const top = rect ? rect.bottom + 8 : 140
+      setTodayTipStyle({ top, left, width })
+      setShowTodayTip(true)
+    })
+  }
+
   useEffect(() => {
     if (!isActive || !modalTask || dialogEditing) return
     let cancelled = false
@@ -669,10 +686,9 @@ export default function HomePane({
             <View className='today-title'>
               <Text className='section-title'>{homeStrings.todayTitle}</Text>
               <View
+                id='today-help-anchor'
                 className='today-help'
-                onClick={() => {
-                  setShowTodayTip(true)
-                }}
+                onClick={openTodayTip}
               >
                 <Text>?</Text>
               </View>
@@ -690,7 +706,14 @@ export default function HomePane({
               setShowTodayTip(false)
             }}
           >
-            <View className='today-tip'>
+            <View
+              className='today-tip'
+              style={{
+                top: `${todayTipStyle.top}px`,
+                left: `${todayTipStyle.left}px`,
+                width: `${todayTipStyle.width}px`,
+              }}
+            >
               <Text>{homeStrings.todayTip}</Text>
             </View>
           </View>

@@ -314,10 +314,7 @@ $surface: #ffffff;
 }
 
 .today-tip {
-  position: absolute;
-  left: 28px;
-  right: 28px;
-  top: 150px;
+  position: fixed;
   background: rgba(255, 255, 255, 0.98);
   border: 1px solid rgba(148, 126, 255, 0.25);
   border-radius: 20px;
@@ -326,6 +323,7 @@ $surface: #ffffff;
   font-size: calc(18px * var(--font-scale));
   line-height: 1.6;
   box-shadow: 0 18px 30px rgba(92, 78, 204, 0.18);
+  z-index: 41;
 }
 
 /* Today mini cards */
