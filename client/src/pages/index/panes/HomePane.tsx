@@ -119,6 +119,7 @@ export default function HomePane({
   const [modalTask, setModalTask] = useState<RoadTask | null>(null)
   const [showTodayTip, setShowTodayTip] = useState(false)
   const [todayTipStyle, setTodayTipStyle] = useState({ top: 0, left: 0, width: 0 })
+  const todayTipAnchorRef = useRef<{ top: number; bottom: number; left: number } | null>(null)
   const [dialogEditing, setDialogEditing] = useState(false)
   const [dialogDraft, setDialogDraft] = useState<Subtask[]>([])
   const [shareOnly, setShareOnly] = useState(false)
@@ -561,15 +562,31 @@ export default function HomePane({
     query.exec((res) => {
       const rect = res?.[0]
       const { windowWidth } = Taro.getSystemInfoSync()
-      const width = Math.min(320, windowWidth - 32)
+      const width = Math.min(240, windowWidth - 32)
       const left = rect
         ? Math.min(windowWidth - width - 16, Math.max(16, rect.left - 8))
         : Math.max(16, (windowWidth - width) / 2)
-      const top = rect ? rect.bottom + 8 : 140
+      const top = rect ? rect.top - 8 : 140
+      todayTipAnchorRef.current = rect ? { top: rect.top, bottom: rect.bottom, left: rect.left } : null
       setTodayTipStyle({ top, left, width })
       setShowTodayTip(true)
     })
   }
+
+  useEffect(() => {
+    if (!showTodayTip) return
+    const anchor = todayTipAnchorRef.current
+    if (!anchor) return
+    const query = Taro.createSelectorQuery()
+    query.select('#today-tip').boundingClientRect()
+    query.exec((res) => {
+      const rect = res?.[0]
+      if (!rect) return
+      const desiredTop = anchor.top - rect.height - 8
+      const top = Math.max(12, desiredTop)
+      setTodayTipStyle((prev) => ({ ...prev, top }))
+    })
+  }, [showTodayTip])
 
   useEffect(() => {
     if (!isActive || !modalTask || dialogEditing) return
@@ -708,6 +725,7 @@ export default function HomePane({
           >
             <View
               className='today-tip'
+              id='today-tip'
               style={{
                 top: `${todayTipStyle.top}px`,
                 left: `${todayTipStyle.left}px`,
