@@ -3,6 +3,7 @@
   padding: 24px 24px 48px;
   background: #f5f6fb;
   color: #1f2937;
+  box-sizing: border-box;
 }
 
 .legal-card {
@@ -11,24 +12,35 @@
   border-radius: 18px;
   background: #ffffff;
   box-shadow: 0 12px 30px rgba(62, 45, 139, 0.08);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .legal-title {
   font-size: calc(22px * var(--font-scale));
   font-weight: 700;
+  display: block;
+  max-width: 100%;
 }
 
 .legal-sub {
   margin-top: 6px;
   color: #6b7280;
   font-size: calc(15px * var(--font-scale));
-  word-break: break-all;
+  display: block;
+  max-width: 100%;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .legal-section-title {
   font-size: calc(18px * var(--font-scale));
   font-weight: 600;
   margin-bottom: 10px;
+  display: block;
+  max-width: 100%;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .legal-text {
@@ -36,7 +48,10 @@
   line-height: 1.7;
   color: #374151;
   font-size: calc(15px * var(--font-scale));
-  word-break: break-all;
+  display: block;
+  max-width: 100%;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .legal-button {
@@ -48,6 +63,8 @@
   background: #7c3aed;
   color: #fff;
   font-size: calc(12px * var(--font-scale));
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .legal-button.ghost {
