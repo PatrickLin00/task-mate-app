@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Button } from '@tarojs/components'
+import { View, ScrollView, Button } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import './index.scss'
 import { taskStrings } from '@/pages/index/shared/strings'
@@ -53,30 +53,27 @@ export default function LegalPage() {
   return (
     <ScrollView className='legal-page' scrollY>
       <View className='legal-card'>
-        <Text className='legal-title'>{taskStrings.legal.title}</Text>
-        <Text className='legal-sub'>{appName}</Text>
+        <View className='legal-title'>{taskStrings.legal.title}</View>
+        <View className='legal-sub'>{appName}</View>
       </View>
 
       <View className='legal-card'>
-        <Text className='legal-section-title'>{taskStrings.legal.termsTitle}</Text>
-        <Text className='legal-text'>{terms || taskStrings.legal.missingTerms}</Text>
+        <View className='legal-section-title'>{taskStrings.legal.termsTitle}</View>
+        <View className='legal-text'>{terms || taskStrings.legal.missingTerms}</View>
       </View>
 
       <View className='legal-card'>
-        <Text className='legal-section-title'>{taskStrings.legal.privacyTitle}</Text>
-        <Text className='legal-text'>{privacy || taskStrings.legal.missingPrivacy}</Text>
+        <View className='legal-section-title'>{taskStrings.legal.privacyTitle}</View>
+        <View className='legal-text'>{privacy || taskStrings.legal.missingPrivacy}</View>
         <Button className='legal-button ghost' onClick={() => void handleOpenPrivacyGuide()}>
           {taskStrings.legal.openPrivacyGuide}
         </Button>
       </View>
 
       <View className='legal-card'>
-        <Text className='legal-section-title'>{taskStrings.legal.operatorTitle}</Text>
-        <Text className='legal-text'>
-          {operator || taskStrings.legal.missingOperator}
-          {'\n'}
-          {contact || taskStrings.legal.missingContact}
-        </Text>
+        <View className='legal-section-title'>{taskStrings.legal.operatorTitle}</View>
+        <View className='legal-text'>{operator || taskStrings.legal.missingOperator}</View>
+        <View className='legal-text'>{contact || taskStrings.legal.missingContact}</View>
         <Button className='legal-button ghost' onClick={() => void handleCopyContact()}>
           {taskStrings.legal.copyContact}
         </Button>
