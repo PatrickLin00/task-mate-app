@@ -588,9 +588,17 @@ export default function HomePane({
       if (!rect) return
       const desiredTop = anchor.top - rect.height - 8
       const top = Math.max(12, desiredTop)
-      setTodayTipStyle((prev) => ({ ...prev, top }))
+      const { windowWidth } = Taro.getSystemInfoSync()
+      let left = todayTipStyle.left
+      if (rect.right > windowWidth - 12) {
+        left = Math.max(12, windowWidth - rect.width - 12)
+      }
+      if (rect.left < 12) {
+        left = 12
+      }
+      setTodayTipStyle((prev) => ({ ...prev, top, left }))
     })
-  }, [showTodayTip])
+  }, [showTodayTip, todayTipStyle.left])
 
   useEffect(() => {
     if (!isActive || !modalTask || dialogEditing) return

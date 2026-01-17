@@ -1946,9 +1946,17 @@ export default function TasksPane({
       if (!rect) return
       const desiredTop = anchor.top - rect.height - 8
       const top = Math.max(12, desiredTop)
-      setOneLineTipStyle((prev) => ({ ...prev, top }))
+      const { windowWidth } = Taro.getSystemInfoSync()
+      let left = oneLineTipStyle.left
+      if (rect.right > windowWidth - 12) {
+        left = Math.max(12, windowWidth - rect.width - 12)
+      }
+      if (rect.left < 12) {
+        left = 12
+      }
+      setOneLineTipStyle((prev) => ({ ...prev, top, left }))
     })
-  }, [showOneLineTip])
+  }, [showOneLineTip, oneLineTipStyle.left])
 
   const handleGenerate = async () => {
     if (generating) return
