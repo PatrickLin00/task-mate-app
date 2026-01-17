@@ -10,13 +10,23 @@ declare const APP_LEGAL_TERMS: string
 declare const APP_LEGAL_PRIVACY: string
 
 const trimValue = (value?: string) => String(value || '').trim()
+const stripTitlePrefix = (text: string, title: string) => {
+  if (!text) return ''
+  const raw = text.trim()
+  if (!raw) return ''
+  if (!title) return raw
+  if (!raw.startsWith(title)) return raw
+  let rest = raw.slice(title.length)
+  rest = rest.replace(/^[\s:：-—]+/, '')
+  return rest.trim()
+}
 
 export default function LegalPage() {
   const appName = trimValue(APP_NAME) || taskStrings.home.heroName
   const operator = trimValue(APP_OPERATOR)
   const contact = trimValue(APP_SUPPORT_CONTACT)
-  const terms = trimValue(APP_LEGAL_TERMS)
-  const privacy = trimValue(APP_LEGAL_PRIVACY)
+  const terms = stripTitlePrefix(trimValue(APP_LEGAL_TERMS), taskStrings.legal.termsTitle)
+  const privacy = stripTitlePrefix(trimValue(APP_LEGAL_PRIVACY), taskStrings.legal.privacyTitle)
 
   const handleOpenPrivacyGuide = async () => {
     const openPrivacy = (Taro as any)?.openPrivacyContract

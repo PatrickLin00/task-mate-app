@@ -21,11 +21,12 @@
 .legal-sub {
   margin-top: 6px;
   color: #6b7280;
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(15px * var(--font-scale));
+  word-break: break-all;
 }
 
 .legal-section-title {
-  font-size: calc(16px * var(--font-scale));
+  font-size: calc(18px * var(--font-scale));
   font-weight: 600;
   margin-bottom: 10px;
 }
@@ -34,7 +35,8 @@
   white-space: pre-wrap;
   line-height: 1.7;
   color: #374151;
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(15px * var(--font-scale));
+  word-break: break-all;
 }
 
 .legal-button {
