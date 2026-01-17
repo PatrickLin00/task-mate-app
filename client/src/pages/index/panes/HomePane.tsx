@@ -110,7 +110,19 @@ export default function HomePane({
   const [todayTasks, setTodayTasks] = useState<RoadTask[]>([])
   const pollingBusyRef = useRef(false)
   const [feedTasks, setFeedTasks] = useState<RoadTask[]>([])
-  const visibleTasks = useMemo(() => feedTasks, [feedTasks])
+  const visibleTasks = useMemo(() => {
+    const items = [...feedTasks]
+    items.sort((a, b) => {
+      const aCompleted = a.status === 'completed'
+      const bCompleted = b.status === 'completed'
+      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
+      const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
+      const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
+      if (aDue !== bDue) return aDue - bDue
+      return a.createdAt.localeCompare(b.createdAt)
+    })
+    return items
+  }, [feedTasks])
   const quietLine = useMemo(
     () => homeStrings.quietLines[Math.floor(Math.random() * homeStrings.quietLines.length)],
     []
