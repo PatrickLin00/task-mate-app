@@ -5,6 +5,7 @@ const User = require('../models/User')
 const { sendSubscribeMessage } = require('../utils/subscribeMessage')
 const { VALUES } = require('../utils/subscribeLabels')
 const { buildSubscribeData } = require('../utils/subscribePayload')
+const { containsSensitiveTask, SENSITIVE_HINT } = require('../utils/contentFilter')
 const {
   getDailyChallengeSeeds,
   buildChallengeTaskSeed,
@@ -79,12 +80,15 @@ const computeProgress = (taskDoc) => {
   return { current, total }
 }
 
+const ANON_NAME = '未命名旅者'
+
 const normalizeDisplayName = (userId, nameMap) => {
   if (!userId) return ''
   const id = String(userId)
   if (id.startsWith(SYSTEM_USER_PREFIX)) return '星旅'
   const mapped = nameMap?.get(id)
-  return mapped || id
+  if (!mapped || mapped === id) return ANON_NAME
+  return mapped
 }
 
 const buildUserNameMap = async (userIds) => {
@@ -117,7 +121,8 @@ const resolveUserName = async (userId) => {
   if (id.startsWith(SYSTEM_USER_PREFIX)) return '星旅'
   const user = await User.findOne({ userId: id }, { nickname: 1 }).lean()
   const nickname = typeof user?.nickname === 'string' ? user.nickname.trim() : ''
-  return nickname || id
+  if (!nickname || nickname === id) return ANON_NAME
+  return nickname
 }
 
 const buildResponse = (taskDoc) => {
@@ -309,6 +314,9 @@ exports.createTask = async (req, res) => {
     if (!title) return res.status(400).json({ error: 'title is required' })
     if (!dueAt) return res.status(400).json({ error: 'dueAt is required and must be a valid date' })
     if (subtasks.length === 0) return res.status(400).json({ error: 'subtasks must be a non-empty array' })
+    if (containsSensitiveTask({ title, detail, subtasks })) {
+      return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
+    }
 
     const reward = body.attributeReward
     const rewardType = reward?.type
@@ -688,6 +696,9 @@ exports.reworkTask = async (req, res) => {
     if (!title) return res.status(400).json({ error: 'title is required' })
     if (!dueAt) return res.status(400).json({ error: 'dueAt is required and must be a valid date' })
     if (subtasks.length === 0) return res.status(400).json({ error: 'subtasks must be a non-empty array' })
+    if (containsSensitiveTask({ title, detail, subtasks })) {
+      return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
+    }
     if (!REWARD_TYPE.includes(rewardType)) return res.status(400).json({ error: 'attributeReward.type is invalid' })
     if (typeof rewardValue !== 'number' || !Number.isFinite(rewardValue) || rewardValue <= 0) {
       return res.status(400).json({ error: 'attributeReward.value must be a positive number' })

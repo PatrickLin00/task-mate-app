@@ -89,7 +89,7 @@ const start = async () => {
         if (cleaned.deleted > 0) console.log(`Deleted ${cleaned.deleted} legacy test tasks`)
       }
 
-      if (devAuthEnabled) {
+      if (isDev && devAuthEnabled) {
         const scenario = await ensureDevScenarioTasks()
         if (scenario.inserted > 0) console.log(`Seeded ${scenario.inserted} dev scenario tasks`)
       }

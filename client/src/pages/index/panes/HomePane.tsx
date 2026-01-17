@@ -125,6 +125,15 @@ export default function HomePane({
   const handledShareIdRef = useRef<string | null>(null)
   const taskDebug = TASK_DEBUG
 
+  const resolveDisplayName = (name?: string | null, id?: string | null) => {
+    const rawId = String(id || '')
+    if (!rawId) return ''
+    const trimmed = String(name || '').trim()
+    const candidate = trimmed || rawId
+    if (candidate === rawId) return taskStrings.labels.unnamed
+    return candidate
+  }
+
   const mapRewardToAttr = (val: 'wisdom' | 'strength' | 'agility') => {
     if (val === 'wisdom') return taskStrings.rewards.wisdom.label
     if (val === 'strength') return taskStrings.rewards.strength.label
@@ -159,8 +168,12 @@ export default function HomePane({
       status: task.status,
       creatorId: task.creatorId,
       assigneeId: task.assigneeId ?? null,
-      creatorName: isChallenge ? taskStrings.labels.creatorSystem : task.creatorName || task.creatorId,
-      assigneeName: task.assigneeName || task.assigneeId || '',
+      creatorName: isChallenge
+        ? taskStrings.labels.creatorSystem
+        : resolveDisplayName(task.creatorName || task.creatorId, task.creatorId),
+      assigneeName: task.assigneeId
+        ? resolveDisplayName(task.assigneeName || task.assigneeId, task.assigneeId)
+        : '',
       seedKey: task.seedKey ?? null,
       dueAt,
       due: formatDueLabel(dueAt),
@@ -405,7 +418,9 @@ export default function HomePane({
   const dialogRemain = modalTask?.dueAt ? humanizeRemain(modalTask.dueAt) : modalTask?.remain
   const dialogDueLabel = modalTask?.dueAt ? formatDueLabel(modalTask.dueAt) : modalTask?.due
   const dialogStartLabel = modalTask?.createdAt ? formatStartDate(modalTask.createdAt) : undefined
-  const dialogCreatorLabel = modalTask?.creatorName || modalTask?.creatorId || ''
+  const dialogCreatorLabel = modalTask?.creatorId
+    ? resolveDisplayName(modalTask?.creatorName || modalTask?.creatorId, modalTask?.creatorId)
+    : ''
   const dialogPendingConfirm = modalTask?.status === 'pending_confirmation'
   const dialogUseComplete = Boolean(
     modalTask?.isChallenge ||

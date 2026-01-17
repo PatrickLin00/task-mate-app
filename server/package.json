@@ -12,13 +12,16 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "dotenv": "^16.4.5",
+    "@nicecode/sensitivewords": "^0.3.0",
+    "abiao_filter": "^0.5.0",
     "axios": "^1.13.1",
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mint-filter": "^4.0.3",
     "mongoose": "^8.19.2",
-    "openai": "^6.7.0",
-    "jsonwebtoken": "^9.0.2"
+    "openai": "^6.7.0"
   }
 }

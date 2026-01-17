@@ -11,8 +11,10 @@ router.post('/:id/accept', auth, taskController.acceptTask)
 router.get('/mission', auth, taskController.getMissionTasks)
 router.get('/collab', auth, taskController.getCollabTasks)
 router.get('/archive', auth, taskController.getArchivedTasks)
-router.get('/debug', auth, taskController.getTaskDebug)
-router.post('/debug', auth, taskController.setTaskDebug)
+if (process.env.NODE_ENV !== 'production') {
+  router.get('/debug', auth, taskController.getTaskDebug)
+  router.post('/debug', auth, taskController.setTaskDebug)
+}
 router.get('/', auth, taskController.getAllTasks)
 router.get('/:id', auth, taskController.getTask)
 router.patch('/:id/progress', auth, taskController.updateProgress)

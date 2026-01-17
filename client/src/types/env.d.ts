@@ -4,3 +4,8 @@ declare const SUBSCRIBE_TPL_TODO: string
 declare const SUBSCRIBE_TPL_TASK_UPDATE: string
 declare const SUBSCRIBE_TPL_REVIEW: string
 declare const SUBSCRIBE_TPL_WORK: string
+declare const APP_NAME: string
+declare const APP_OPERATOR: string
+declare const APP_SUPPORT_CONTACT: string
+declare const APP_LEGAL_TERMS: string
+declare const APP_LEGAL_PRIVACY: string

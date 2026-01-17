@@ -104,6 +104,15 @@ const formatStartDate = (iso?: string) => {
   return `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`
 }
 
+const resolveDisplayName = (name?: string | null, id?: string | null) => {
+  const rawId = String(id || '')
+  if (!rawId) return ''
+  const trimmed = String(name || '').trim()
+  const candidate = trimmed || rawId
+  if (candidate === rawId) return taskStrings.labels.unnamed
+  return candidate
+}
+
 function AttributeTag({ attr, points }: { attr: Attr; points: number }) {
   const tone = attrTone[attr]
   return (
@@ -276,8 +285,12 @@ function MissionCard({
   const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain
   const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel
   const startLabel = formatStartDate(task.startAt || task.createdAt)
-  const assigneeLabel = task.assigneeName || task.assigneeId || metaText.unassigned
-  const creatorLabel = task.creatorName || task.creatorId || ''
+  const assigneeLabel = task.assigneeId
+    ? resolveDisplayName(task.assigneeName || task.assigneeId, task.assigneeId)
+    : metaText.unassigned
+  const creatorLabel = task.creatorId
+    ? resolveDisplayName(task.creatorName || task.creatorId, task.creatorId)
+    : ''
   const isChallengeTask = Boolean(task.seedKey?.startsWith('challenge_'))
   const isSelfAssigned = !!task.assigneeId && task.assigneeId === task.creatorId
   const useComplete = isChallengeTask || isSelfAssigned
@@ -509,8 +522,12 @@ function MissionCard({
     const submittedLabel = formatStartDate(task.submittedAt || task.updatedAt || task.createdAt)
     const completedLabel = formatStartDate(task.completedAt || task.updatedAt || task.createdAt)
     const deleteRemainLabel = task.deleteAt ? humanizeRemain(task.deleteAt) : task.deleteRemain || ''
-    const assigneeLabel = task.assigneeName || task.assigneeId || metaText.unassigned
-    const creatorLabel = task.creatorName || task.creatorId || ''
+    const assigneeLabel = task.assigneeId
+      ? resolveDisplayName(task.assigneeName || task.assigneeId, task.assigneeId)
+      : metaText.unassigned
+    const creatorLabel = task.creatorId
+      ? resolveDisplayName(task.creatorName || task.creatorId, task.creatorId)
+      : ''
 
   return (
     <View className={`task-card tone-${tone} ${hasSubtasks && expanded ? 'expanded' : ''}`}>

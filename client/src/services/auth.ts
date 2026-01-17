@@ -116,3 +116,13 @@ export function getDevUserId() {
     return ""
   }
 }
+
+export function logoutWeapp() {
+  try {
+    Taro.removeStorageSync("token")
+    Taro.removeStorageSync("userId")
+    Taro.removeStorageSync("devUserId")
+  } catch {
+    // ignore storage errors
+  }
+}

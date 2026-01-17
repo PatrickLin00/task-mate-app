@@ -59,7 +59,8 @@ export default function Index() {
     if (resolvedNickname) {
       Taro.setStorageSync('nickname', resolvedNickname)
     }
-    const shouldGate = Boolean(resolvedUserId) && resolvedNickname === resolvedUserId
+    const dismissed = Boolean(Taro.getStorageSync('nameGateDismissed'))
+    const shouldGate = Boolean(resolvedUserId) && resolvedNickname === resolvedUserId && !dismissed
     setNameGateActive(shouldGate)
     setNameDraft(shouldGate ? '' : resolvedNickname)
   }
@@ -79,6 +80,11 @@ export default function Index() {
 
   const handleRandomName = () => {
     setNameDraft(randomNickname())
+  }
+
+  const handleSkipName = () => {
+    Taro.setStorageSync('nameGateDismissed', true)
+    setNameGateActive(false)
   }
 
   const handleSubmitName = async () => {
@@ -132,6 +138,9 @@ export default function Index() {
     }
   })
 
+  const displayName =
+    profile.nickname && profile.nickname !== profile.userId ? profile.nickname : taskStrings.labels.unnamed
+
   return (
     <View className='home'>
       <View className='bg' />
@@ -163,6 +172,9 @@ export default function Index() {
             >
               {taskStrings.naming.submit}
             </Button>
+            <Button className='task-action ghost' onClick={handleSkipName}>
+              {taskStrings.naming.skip}
+            </Button>
           </View>
         </View>
       )}
@@ -188,7 +200,7 @@ export default function Index() {
             isActive={activeTab === 'home'}
             authVersion={authVersion}
             openTaskId={openTaskId}
-            heroName={profile.nickname}
+            heroName={displayName}
             nameGateActive={nameGateActive}
           />
         </SwiperItem>
@@ -205,7 +217,7 @@ export default function Index() {
         </SwiperItem>
         <SwiperItem>
           <ProfilePane
-            nickname={profile.nickname}
+            nickname={displayName}
             onAuthChanged={() => {
               setAuthVersion(Date.now())
               void refreshProfile()

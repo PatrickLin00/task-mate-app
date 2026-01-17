@@ -45,6 +45,11 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
   const subscribeTplTaskUpdate = getEnvValue('TARO_APP_SUBSCRIBE_TPL_TASK_UPDATE') || ''
   const subscribeTplReview = getEnvValue('TARO_APP_SUBSCRIBE_TPL_REVIEW') || ''
   const subscribeTplWork = getEnvValue('TARO_APP_SUBSCRIBE_TPL_WORK') || ''
+  const appNameLabel = getEnvValue('TARO_APP_NAME') || ''
+  const operatorName = getEnvValue('TARO_APP_OPERATOR') || ''
+  const supportContact = getEnvValue('TARO_APP_SUPPORT_CONTACT') || ''
+  const legalTerms = getEnvValue('TARO_APP_LEGAL_TERMS') || ''
+  const legalPrivacy = getEnvValue('TARO_APP_LEGAL_PRIVACY') || ''
   const devAuth = process.env.NODE_ENV === 'production' ? false : devAuthEnabled
   const apiBaseUrl =
     getEnvValue('TASKMATE_API_BASE_URL') ||
@@ -78,6 +83,11 @@ export default defineConfig<'vite'>(async (merge, { command, mode }) => {
       SUBSCRIBE_TPL_TASK_UPDATE: JSON.stringify(subscribeTplTaskUpdate),
       SUBSCRIBE_TPL_REVIEW: JSON.stringify(subscribeTplReview),
       SUBSCRIBE_TPL_WORK: JSON.stringify(subscribeTplWork),
+      APP_NAME: JSON.stringify(appNameLabel),
+      APP_OPERATOR: JSON.stringify(operatorName),
+      APP_SUPPORT_CONTACT: JSON.stringify(supportContact),
+      APP_LEGAL_TERMS: JSON.stringify(legalTerms),
+      APP_LEGAL_PRIVACY: JSON.stringify(legalPrivacy),
     },
     copy: {
       patterns: [

@@ -3,6 +3,7 @@ const https = require('https')
 const jwt = require('jsonwebtoken')
 const User = require('../models/User')
 const { ensureDevScenarioTasks } = require('../utils/seedTasks')
+const { containsSensitive, SENSITIVE_HINT } = require('../utils/contentFilter')
 
 // POST /api/auth/weapp/login
 // body: { code }
@@ -108,7 +109,13 @@ exports.updateProfile = async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'unauthorized' })
     const { nickname, avatar } = req.body || {}
     const updates = {}
-    if (typeof nickname === 'string') updates.nickname = nickname.trim()
+    if (typeof nickname === 'string') {
+      const trimmed = nickname.trim()
+      if (trimmed && containsSensitive(trimmed)) {
+        return res.status(400).json({ error: SENSITIVE_HINT, code: 'SENSITIVE_CONTENT' })
+      }
+      updates.nickname = trimmed
+    }
     if (typeof avatar === 'string') updates.avatar = avatar
     if (Object.keys(updates).length === 0) {
       const existing = await User.findOne({ userId })
