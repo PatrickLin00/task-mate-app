@@ -871,6 +871,45 @@ export default function TasksPane({
   const today = useMemo(() => new Date(), [])
   const [activeTab, setActiveTab] = useState<TabKey>('mission')
   const [missionTasks, setMissionTasks] = useState<MissionTask[]>([])
+  const normalizeStatus = (status?: string | null) => String(status || '').trim()
+
+  const sortMissionTasks = (items: MissionTask[]) => {
+    const sorted = [...items]
+    sorted.sort((a, b) => {
+      const aCompleted = normalizeStatus(a.status) === 'completed'
+      const bCompleted = normalizeStatus(b.status) === 'completed'
+      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
+      const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
+      const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
+      if (aDue !== bDue) return aDue - bDue
+      return a.createdAt.localeCompare(b.createdAt)
+    })
+    if (taskDebug) {
+      console.log('mission sort snapshot', {
+        order: sorted.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt })),
+      })
+    }
+    return sorted
+  }
+
+  const sortCollabTasks = (items: CollabTask[]) => {
+    const sorted = [...items]
+    sorted.sort((a, b) => {
+      const aCompleted = normalizeStatus(a.status) === 'completed'
+      const bCompleted = normalizeStatus(b.status) === 'completed'
+      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
+      const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
+      const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
+      if (aDue !== bDue) return aDue - bDue
+      return a.createdAt.localeCompare(b.createdAt)
+    })
+    if (taskDebug) {
+      console.log('collab sort snapshot', {
+        order: sorted.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt })),
+      })
+    }
+    return sorted
+  }
   const visibleMissionTasks = useMemo(() => sortMissionTasks(missionTasks), [missionTasks])
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
@@ -1088,46 +1127,6 @@ export default function TasksPane({
       dueLabel: formatDueLabel(iso),
       dueDays,
     }
-  }
-
-  const normalizeStatus = (status?: string | null) => String(status || '').trim()
-
-  const sortMissionTasks = (items: MissionTask[]) => {
-    const sorted = [...items]
-    sorted.sort((a, b) => {
-      const aCompleted = normalizeStatus(a.status) === 'completed'
-      const bCompleted = normalizeStatus(b.status) === 'completed'
-      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
-      const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
-      const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
-      if (aDue !== bDue) return aDue - bDue
-      return a.createdAt.localeCompare(b.createdAt)
-    })
-    if (taskDebug) {
-      console.log('mission sort snapshot', {
-        order: sorted.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt })),
-      })
-    }
-    return sorted
-  }
-
-  const sortCollabTasks = (items: CollabTask[]) => {
-    const sorted = [...items]
-    sorted.sort((a, b) => {
-      const aCompleted = normalizeStatus(a.status) === 'completed'
-      const bCompleted = normalizeStatus(b.status) === 'completed'
-      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
-      const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
-      const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
-      if (aDue !== bDue) return aDue - bDue
-      return a.createdAt.localeCompare(b.createdAt)
-    })
-    if (taskDebug) {
-      console.log('collab sort snapshot', {
-        order: sorted.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt })),
-      })
-    }
-    return sorted
   }
 
   const buildTaskLists = (mission: Task[], collab: Task[], archived: Task[]) => {
