@@ -28,9 +28,7 @@ import {
   submitReview,
   continueReview,
   deleteTask,
-  fetchArchivedTasks,
-  fetchCollabTasks,
-  fetchMissionTasks,
+  fetchTaskDashboard,
   generateTaskSuggestion,
   getTask,
   patchProgress,
@@ -1159,20 +1157,16 @@ export default function TasksPane({
     if (loadingRemote) return
     setLoadingRemote(true)
     try {
-      const [mission, collab, archived] = await Promise.all([
-        fetchMissionTasks(),
-        fetchCollabTasks(),
-        fetchArchivedTasks(),
-      ])
+      const dashboard = await fetchTaskDashboard({ force: true })
       if (shouldCancel?.()) return
       if (taskDebug) {
         console.log('refreshTasks ok', {
-          missionCount: mission.length,
-          collabCount: collab.length,
-          archivedCount: archived.length,
+          missionCount: dashboard.mission.length,
+          collabCount: dashboard.collab.length,
+          archivedCount: dashboard.archived.length,
         })
       }
-      applyTaskLists(mission, collab, archived)
+      applyTaskLists(dashboard.mission, dashboard.collab, dashboard.archived)
     } catch (err: any) {
       console.error('load tasks error', err)
       if (!shouldCancel?.()) {
@@ -1193,16 +1187,16 @@ export default function TasksPane({
     if (loadingRemote || pollingBusyRef.current) return
     pollingBusyRef.current = true
     try {
-      const [mission, collab, archived] = await Promise.all([
-        fetchMissionTasks(),
-        fetchCollabTasks(),
-        fetchArchivedTasks(),
-      ])
+      const dashboard = await fetchTaskDashboard()
       if (shouldCancel?.()) return
-      const { missionList, collabList, archivedList } = buildTaskLists(mission, collab, archived)
-    setMissionTasks((prev) => sortMissionTasks(mergeById(prev, missionList)))
-    setCollabTasks((prev) => sortCollabTasks(mergeById(prev, collabList)))
-    setArchivedTasks((prev) => mergeById(prev, archivedList))
+      const { missionList, collabList, archivedList } = buildTaskLists(
+        dashboard.mission,
+        dashboard.collab,
+        dashboard.archived
+      )
+      setMissionTasks((prev) => sortMissionTasks(mergeById(prev, missionList)))
+      setCollabTasks((prev) => sortCollabTasks(mergeById(prev, collabList)))
+      setArchivedTasks((prev) => mergeById(prev, archivedList))
       const completedCount =
         missionList.filter((t) => t.status === 'completed').length +
         collabList.filter((t) => t.status === 'completed').length +

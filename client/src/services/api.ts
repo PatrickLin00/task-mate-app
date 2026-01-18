@@ -138,6 +138,37 @@ export async function fetchTasks(status?: Task['status']) {
 }
 
 export type TodayTasksResponse = { dueTodayCount: number; tasks: Task[] }
+export type TaskDashboardResponse = {
+  mission: Task[]
+  collab: Task[]
+  archived: Task[]
+  today: TodayTasksResponse
+  challenge: Task[]
+}
+
+const DASHBOARD_CACHE_MS = 1500
+let dashboardCache: { data: TaskDashboardResponse; at: number } | null = null
+let dashboardInFlight: Promise<TaskDashboardResponse> | null = null
+
+export async function fetchTaskDashboard(options?: { force?: boolean }) {
+  const now = Date.now()
+  if (!options?.force && dashboardCache && now - dashboardCache.at < DASHBOARD_CACHE_MS) {
+    return dashboardCache.data
+  }
+  if (dashboardInFlight) return dashboardInFlight
+  dashboardInFlight = requestJson<TaskDashboardResponse>({
+    url: `${BASE_URL}/api/tasks/dashboard`,
+    method: 'GET',
+    header: await authHeaderAsync(),
+  })
+  try {
+    const data = await dashboardInFlight
+    dashboardCache = { data, at: Date.now() }
+    return data
+  } finally {
+    dashboardInFlight = null
+  }
+}
 
 export async function fetchMissionTasks() {
   return requestJson<Task[]>({

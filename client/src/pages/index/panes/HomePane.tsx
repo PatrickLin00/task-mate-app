@@ -21,8 +21,7 @@ import {
   acceptChallengeTask,
   completeTask,
   submitReview,
-  fetchChallengeTasks,
-  fetchTodayTasks,
+  fetchTaskDashboard,
   getTask,
   patchProgress,
   rejectReworkTask,
@@ -480,10 +479,12 @@ export default function HomePane({
 
   const refreshHomeTasks = async (showNotice = false, shouldCancel?: () => boolean) => {
     try {
-      const [todayRes, challenge] = await Promise.all([fetchTodayTasks(), fetchChallengeTasks()])
+      const dashboard = await fetchTaskDashboard({ force: showNotice })
       if (shouldCancel?.()) return
-      setTodayTasks((todayRes.tasks || []).filter((t) => t.status !== 'refactored').map((t) => mapApiTaskToRoad(t)))
-      setFeedTasks((challenge || []).map((t) => mapApiTaskToRoad(t)))
+      setTodayTasks(
+        (dashboard.today?.tasks || []).filter((t) => t.status !== 'refactored').map((t) => mapApiTaskToRoad(t))
+      )
+      setFeedTasks((dashboard.challenge || []).map((t) => mapApiTaskToRoad(t)))
       if (showNotice) {
         Taro.showToast({ title: taskStrings.toast.dataRefreshed, icon: 'none' })
       }
@@ -532,10 +533,12 @@ export default function HomePane({
     if (pollingBusyRef.current) return
     pollingBusyRef.current = true
     try {
-      const [todayRes, challenge] = await Promise.all([fetchTodayTasks(), fetchChallengeTasks()])
+      const dashboard = await fetchTaskDashboard()
       if (shouldCancel?.()) return
-      const nextToday = (todayRes.tasks || []).filter((t) => t.status !== 'refactored').map((t) => mapApiTaskToRoad(t))
-      const nextFeed = (challenge || []).map((t) => mapApiTaskToRoad(t))
+      const nextToday = (dashboard.today?.tasks || [])
+        .filter((t) => t.status !== 'refactored')
+        .map((t) => mapApiTaskToRoad(t))
+      const nextFeed = (dashboard.challenge || []).map((t) => mapApiTaskToRoad(t))
       setTodayTasks((prev) => mergeById(prev, nextToday))
       setFeedTasks((prev) => mergeById(prev, nextFeed))
       if (taskDebug) {

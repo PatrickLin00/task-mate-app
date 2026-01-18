@@ -4,6 +4,7 @@ const auth = require('../middleware/auth')
 const taskController = require('../controllers/taskController')
 
 router.post('/', auth, taskController.createTask)
+router.get('/dashboard', auth, taskController.getDashboard)
 router.get('/today', auth, taskController.getTodayTasks)
 router.get('/challenge', auth, taskController.getChallengeTasks)
 router.post('/challenge/:id/accept', auth, taskController.acceptChallengeTask)
