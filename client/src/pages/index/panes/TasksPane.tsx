@@ -884,11 +884,6 @@ export default function TasksPane({
       if (aDue !== bDue) return aDue - bDue
       return a.createdAt.localeCompare(b.createdAt)
     })
-    if (taskDebug) {
-      console.log('mission sort snapshot', {
-        order: sorted.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt })),
-      })
-    }
     return sorted
   }
 
@@ -903,11 +898,6 @@ export default function TasksPane({
       if (aDue !== bDue) return aDue - bDue
       return a.createdAt.localeCompare(b.createdAt)
     })
-    if (taskDebug) {
-      console.log('collab sort snapshot', {
-        order: sorted.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt })),
-      })
-    }
     return sorted
   }
   const visibleMissionTasks = useMemo(() => sortMissionTasks(missionTasks), [missionTasks])
@@ -975,9 +965,6 @@ export default function TasksPane({
     if (dueDay > maxDay) setDueDay(maxDay)
   }, [dueDay, dueMonth, dueYear])
 
-  useEffect(() => {
-    console.warn('[sort-debug] taskDebug', taskDebug)
-  }, [])
 
   const current = tabs.findIndex((t) => t.key === activeTab)
   const touchStartX = useRef<number | null>(null)
@@ -1259,22 +1246,6 @@ export default function TasksPane({
       cancelled = true
     }
   }, [isActive])
-
-  useEffect(() => {
-    if (!taskDebug) return
-    console.warn(
-      '[sort-debug] mission order',
-      missionTasks.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt }))
-    )
-  }, [missionTasks, taskDebug])
-
-  useEffect(() => {
-    if (!taskDebug) return
-    console.warn(
-      '[sort-debug] collab order',
-      collabTasks.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt }))
-    )
-  }, [collabTasks, taskDebug])
 
   useEffect(() => {
     if (!isActive) return
