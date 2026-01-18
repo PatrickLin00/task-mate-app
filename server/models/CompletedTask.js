@@ -38,4 +38,6 @@ const completedTaskSchema = new mongoose.Schema(
   { timestamps: true }
 )
 
+completedTaskSchema.index({ ownerId: 1, updatedAt: -1 })
+
 module.exports = mongoose.model('CompletedTask', completedTaskSchema)

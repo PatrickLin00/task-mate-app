@@ -50,4 +50,9 @@ const taskSchema = new mongoose.Schema(
   { timestamps: true }
 )
 
+taskSchema.index({ assigneeId: 1, status: 1, dueAt: 1 })
+taskSchema.index({ creatorId: 1, status: 1, dueAt: 1 })
+taskSchema.index({ creatorId: 1, assigneeId: 1, status: 1, dueAt: 1 })
+taskSchema.index({ creatorId: 1, seedKey: 1 })
+
 module.exports = mongoose.model('Task', taskSchema)

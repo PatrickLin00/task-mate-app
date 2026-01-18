@@ -221,6 +221,51 @@ const parseDueAt = (value) => {
   return d
 }
 
+const TASK_LIST_FIELDS = [
+  'title',
+  'detail',
+  'icon',
+  'dueAt',
+  'startAt',
+  'closedAt',
+  'deleteAt',
+  'originalDueAt',
+  'originalStartAt',
+  'originalStatus',
+  'status',
+  'creatorId',
+  'assigneeId',
+  'previousTaskId',
+  'subtasks',
+  'attributeReward',
+  'seedKey',
+  'submittedAt',
+  'completedAt',
+  'createdAt',
+  'updatedAt',
+].join(' ')
+
+const COMPLETED_LIST_FIELDS = [
+  'title',
+  'detail',
+  'icon',
+  'dueAt',
+  'startAt',
+  'completedAt',
+  'submittedAt',
+  'deleteAt',
+  'status',
+  'creatorId',
+  'assigneeId',
+  'ownerId',
+  'sourceTaskId',
+  'subtasks',
+  'attributeReward',
+  'seedKey',
+  'createdAt',
+  'updatedAt',
+].join(' ')
+
 const deletePreviousTask = async (taskDoc, session) => {
   if (!taskDoc?.previousTaskId) return
   let query = Task.deleteOne({ _id: taskDoc.previousTaskId })
@@ -427,7 +472,7 @@ exports.getMissionTasks = async (req, res) => {
       assigneeId: userId,
       status: { $in: ACTIVE_ASSIGNEE_STATUS },
     }
-    const tasks = await Task.find(query).sort({ dueAt: 1, createdAt: -1 })
+    const tasks = await Task.find(query).select(TASK_LIST_FIELDS).sort({ dueAt: 1, createdAt: -1 }).lean()
     taskDebugLog('getMissionTasks ok', { userId, count: tasks.length })
 
     return res.json(await buildResponsesWithNames(tasks))
@@ -463,7 +508,7 @@ exports.getCollabTasks = async (req, res) => {
         { $or: [{ status: { $ne: 'closed' } }, { dueAt: { $gte: now } }] },
       ],
     }
-    const tasks = await Task.find(query).sort({ dueAt: 1, createdAt: -1 })
+    const tasks = await Task.find(query).select(TASK_LIST_FIELDS).sort({ dueAt: 1, createdAt: -1 }).lean()
 
     taskDebugLog('getCollabTasks ok', { userId, count: tasks.length })
     return res.json(await buildResponsesWithNames(tasks))
@@ -1297,7 +1342,10 @@ exports.getArchivedTasks = async (req, res) => {
     const userId = ensureAuthorized(req, res)
     if (!userId) return
 
-    const tasks = await CompletedTask.find({ ownerId: userId }).sort({ updatedAt: -1 })
+    const tasks = await CompletedTask.find({ ownerId: userId })
+      .select(COMPLETED_LIST_FIELDS)
+      .sort({ updatedAt: -1 })
+      .lean()
     const sorted = tasks.sort((a, b) => {
       const aTime = a.submittedAt || a.completedAt || a.updatedAt
       const bTime = b.submittedAt || b.completedAt || b.updatedAt
@@ -1319,7 +1367,10 @@ exports.getChallengeTasks = async (req, res) => {
     const now = new Date()
     const { creatorId, start, end, seeds } = getDailyChallengeSeeds(userId, now, 5)
     const seedKeys = seeds.map((s) => s.seedKey)
-    const existing = await Task.find({ creatorId, seedKey: { $in: seedKeys } }).sort({ createdAt: 1 })
+    const existing = await Task.find({ creatorId, seedKey: { $in: seedKeys } })
+      .select(TASK_LIST_FIELDS)
+      .sort({ createdAt: 1 })
+      .lean()
     const existingMap = new Map(existing.map((t) => [t.seedKey, t]))
     const result = []
 
@@ -1517,7 +1568,7 @@ exports.getTodayTasks = async (req, res) => {
       assigneeId: userId,
       status: { $in: ACTIVE_ASSIGNEE_STATUS },
     }
-    const base = await Task.find(query).sort({ dueAt: 1, createdAt: -1 })
+    const base = await Task.find(query).select(TASK_LIST_FIELDS).sort({ dueAt: 1, createdAt: -1 }).lean()
 
     const overdue = base.filter((t) => t.dueAt && t.dueAt < start)
     const dueToday = base.filter((t) => t.dueAt && t.dueAt >= start && t.dueAt <= end)
