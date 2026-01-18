@@ -221,9 +221,6 @@ const parseDueAt = (value) => {
   return d
 }
 
-const fetchReworkedIds = async () =>
-  Task.distinct('previousTaskId', { previousTaskId: { $ne: null } })
-
 const deletePreviousTask = async (taskDoc, session) => {
   if (!taskDoc?.previousTaskId) return
   let query = Task.deleteOne({ _id: taskDoc.previousTaskId })
@@ -426,13 +423,9 @@ exports.getMissionTasks = async (req, res) => {
     if (!userId) return
 
     taskDebugLog('getMissionTasks start', { userId })
-    const reworkedIds = await fetchReworkedIds()
     const query = {
       assigneeId: userId,
       status: { $in: ACTIVE_ASSIGNEE_STATUS },
-    }
-    if (reworkedIds.length > 0) {
-      query._id = { $nin: reworkedIds }
     }
     const tasks = await Task.find(query).sort({ dueAt: 1, createdAt: -1 })
     taskDebugLog('getMissionTasks ok', { userId, count: tasks.length })
@@ -450,7 +443,6 @@ exports.getCollabTasks = async (req, res) => {
     if (!userId) return
 
     const now = new Date()
-    const reworkedIds = await fetchReworkedIds()
     const query = {
       creatorId: userId,
       status: { $ne: 'refactored' },
@@ -470,9 +462,6 @@ exports.getCollabTasks = async (req, res) => {
         },
         { $or: [{ status: { $ne: 'closed' } }, { dueAt: { $gte: now } }] },
       ],
-    }
-    if (reworkedIds.length > 0) {
-      query._id = { $nin: reworkedIds }
     }
     const tasks = await Task.find(query).sort({ dueAt: 1, createdAt: -1 })
 
@@ -1524,13 +1513,9 @@ exports.getTodayTasks = async (req, res) => {
     const start = startOfDay(now)
     const end = endOfDay(now)
 
-    const reworkedIds = await fetchReworkedIds()
     const query = {
       assigneeId: userId,
       status: { $in: ACTIVE_ASSIGNEE_STATUS },
-    }
-    if (reworkedIds.length > 0) {
-      query._id = { $nin: reworkedIds }
     }
     const base = await Task.find(query).sort({ dueAt: 1, createdAt: -1 })
 

@@ -69,6 +69,23 @@ const mergeById = <T extends { id: string }>(prev: T[], next: T[]) => {
   return [...kept, ...appended]
 }
 
+const historyIcon =
+  'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAyNCAyNCcgZmlsbD0nbm9uZSc+PHBhdGggZD0nTTMgMTJhOSA5IDAgMSAwIDMtNi43JyBzdHJva2U9JyM0YzFkOTUnIHN0cm9rZS13aWR0aD0nMi44JyBzdHJva2UtbGluZWNhcD0ncm91bmQnIHN0cm9rZS1saW5lam9pbj0ncm91bmQnLz48cGF0aCBkPSdNMyA1djRoNCcgc3Ryb2tlPScjNGMxZDk1JyBzdHJva2Utd2lkdGg9JzIuOCcgc3Ryb2tlLWxpbmVjYXA9J3JvdW5kJyBzdHJva2UtbGluZWpvaW49J3JvdW5kJy8+PHBhdGggZD0nTTEyIDd2NWwzIDInIHN0cm9rZT0nIzRjMWQ5NScgc3Ryb2tlLXdpZHRoPScyLjgnIHN0cm9rZS1saW5lY2FwPSdyb3VuZCcgc3Ryb2tlLWxpbmVqb2luPSdyb3VuZCcvPjwvc3ZnPg=='
+
+function HistoryButton({ onClick }: { onClick?: () => void }) {
+  return (
+    <View
+      className='history-btn'
+      onClick={(e) => {
+        e.stopPropagation?.()
+        onClick?.()
+      }}
+    >
+      <Image className='history-icon' src={historyIcon} mode='aspectFit' />
+    </View>
+  )
+}
+
 const calcPercent = (current: number, total: number) =>
   Math.min(100, Math.round((current / Math.max(1, total || 1)) * 100))
 
@@ -194,6 +211,7 @@ export default function HomePane({
       assigneeName: task.assigneeId
         ? resolveDisplayName(task.assigneeName || task.assigneeId, task.assigneeId)
         : '',
+      previousTaskId: task.previousTaskId ?? null,
       seedKey: task.seedKey ?? null,
       dueAt,
       due: formatDueLabel(dueAt),
@@ -464,7 +482,7 @@ export default function HomePane({
     try {
       const [todayRes, challenge] = await Promise.all([fetchTodayTasks(), fetchChallengeTasks()])
       if (shouldCancel?.()) return
-      setTodayTasks((todayRes.tasks || []).map((t) => mapApiTaskToRoad(t)))
+      setTodayTasks((todayRes.tasks || []).filter((t) => t.status !== 'refactored').map((t) => mapApiTaskToRoad(t)))
       setFeedTasks((challenge || []).map((t) => mapApiTaskToRoad(t)))
       if (showNotice) {
         Taro.showToast({ title: taskStrings.toast.dataRefreshed, icon: 'none' })
@@ -516,7 +534,7 @@ export default function HomePane({
     try {
       const [todayRes, challenge] = await Promise.all([fetchTodayTasks(), fetchChallengeTasks()])
       if (shouldCancel?.()) return
-      const nextToday = (todayRes.tasks || []).map((t) => mapApiTaskToRoad(t))
+      const nextToday = (todayRes.tasks || []).filter((t) => t.status !== 'refactored').map((t) => mapApiTaskToRoad(t))
       const nextFeed = (challenge || []).map((t) => mapApiTaskToRoad(t))
       setTodayTasks((prev) => mergeById(prev, nextToday))
       setFeedTasks((prev) => mergeById(prev, nextFeed))
@@ -870,6 +888,9 @@ export default function HomePane({
                     {chipText(modalTask)}
                   </View>
                 </View>
+                {modalTask.previousTaskId && (
+                  <HistoryButton onClick={() => void refreshModalTask(modalTask.previousTaskId as string)} />
+                )}
               </View>
 
               <View className='dialog-attr'>
