@@ -871,10 +871,12 @@ export default function TasksPane({
   const today = useMemo(() => new Date(), [])
   const [activeTab, setActiveTab] = useState<TabKey>('mission')
   const [missionTasks, setMissionTasks] = useState<MissionTask[]>([])
+  const visibleMissionTasks = useMemo(() => sortMissionTasks(missionTasks), [missionTasks])
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [draftSubtasks, setDraftSubtasks] = useState<Record<string, Subtask[]>>({})
   const [collabTasks, setCollabTasks] = useState<CollabTask[]>([])
+  const visibleCollabTasks = useMemo(() => sortCollabTasks(collabTasks), [collabTasks])
   const [expandedCollabId, setExpandedCollabId] = useState<string | null>(null)
   const [archivedTasks, setArchivedTasks] = useState<ArchivedTask[]>([])
   const pollingBusyRef = useRef(false)
@@ -933,6 +935,10 @@ export default function TasksPane({
     const maxDay = new Date(dueYear, dueMonth, 0).getDate()
     if (dueDay > maxDay) setDueDay(maxDay)
   }, [dueDay, dueMonth, dueYear])
+
+  useEffect(() => {
+    console.warn('[sort-debug] taskDebug', taskDebug)
+  }, [])
 
   const current = tabs.findIndex((t) => t.key === activeTab)
   const touchStartX = useRef<number | null>(null)
@@ -1084,6 +1090,46 @@ export default function TasksPane({
     }
   }
 
+  const normalizeStatus = (status?: string | null) => String(status || '').trim()
+
+  const sortMissionTasks = (items: MissionTask[]) => {
+    const sorted = [...items]
+    sorted.sort((a, b) => {
+      const aCompleted = normalizeStatus(a.status) === 'completed'
+      const bCompleted = normalizeStatus(b.status) === 'completed'
+      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
+      const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
+      const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
+      if (aDue !== bDue) return aDue - bDue
+      return a.createdAt.localeCompare(b.createdAt)
+    })
+    if (taskDebug) {
+      console.log('mission sort snapshot', {
+        order: sorted.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt })),
+      })
+    }
+    return sorted
+  }
+
+  const sortCollabTasks = (items: CollabTask[]) => {
+    const sorted = [...items]
+    sorted.sort((a, b) => {
+      const aCompleted = normalizeStatus(a.status) === 'completed'
+      const bCompleted = normalizeStatus(b.status) === 'completed'
+      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
+      const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
+      const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
+      if (aDue !== bDue) return aDue - bDue
+      return a.createdAt.localeCompare(b.createdAt)
+    })
+    if (taskDebug) {
+      console.log('collab sort snapshot', {
+        order: sorted.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt })),
+      })
+    }
+    return sorted
+  }
+
   const buildTaskLists = (mission: Task[], collab: Task[], archived: Task[]) => {
     const missionList = mission
       .map((t) => mapApiTaskToMission(t))
@@ -1094,13 +1140,17 @@ export default function TasksPane({
     const archivedList = archived
       .map((t) => mapApiTaskToArchived(t))
       .filter((t) => t.status !== 'refactored')
-    return { missionList, collabList, archivedList }
+    return {
+      missionList: sortMissionTasks(missionList),
+      collabList: sortCollabTasks(collabList),
+      archivedList,
+    }
   }
 
   const applyTaskLists = (mission: Task[], collab: Task[], archived: Task[]) => {
     const { missionList, collabList, archivedList } = buildTaskLists(mission, collab, archived)
-    setMissionTasks(missionList)
-    setCollabTasks(collabList)
+    setMissionTasks(sortMissionTasks(missionList))
+    setCollabTasks(sortCollabTasks(collabList))
     setArchivedTasks(archivedList)
   }
 
@@ -1149,9 +1199,9 @@ export default function TasksPane({
       ])
       if (shouldCancel?.()) return
       const { missionList, collabList, archivedList } = buildTaskLists(mission, collab, archived)
-      setMissionTasks((prev) => mergeById(prev, missionList))
-      setCollabTasks((prev) => mergeById(prev, collabList))
-      setArchivedTasks((prev) => mergeById(prev, archivedList))
+    setMissionTasks((prev) => sortMissionTasks(mergeById(prev, missionList)))
+    setCollabTasks((prev) => sortCollabTasks(mergeById(prev, collabList)))
+    setArchivedTasks((prev) => mergeById(prev, archivedList))
       if (taskDebug) {
         console.log('refreshTasks diff', {
           missionCount: missionList.length,
@@ -1212,6 +1262,22 @@ export default function TasksPane({
   }, [isActive])
 
   useEffect(() => {
+    if (!taskDebug) return
+    console.warn(
+      '[sort-debug] mission order',
+      missionTasks.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt }))
+    )
+  }, [missionTasks, taskDebug])
+
+  useEffect(() => {
+    if (!taskDebug) return
+    console.warn(
+      '[sort-debug] collab order',
+      collabTasks.map((t) => ({ id: t.id, status: t.status, dueAt: t.dueAt }))
+    )
+  }, [collabTasks, taskDebug])
+
+  useEffect(() => {
     if (!isActive) return
     if (editingTaskId || showCreate || historyLoading || confirmReworkOpen || creating || generating) return
     let cancelled = false
@@ -1261,7 +1327,7 @@ export default function TasksPane({
 
   const updateCollabTaskInState = (taskId: string, updated: Task) => {
     const mapped = mapApiTaskToCollab(updated)
-    setCollabTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...mapped } : t)))
+    setCollabTasks((prev) => sortCollabTasks(prev.map((t) => (t.id === taskId ? { ...t, ...mapped } : t))))
   }
 
   const handleCloseCollabTask = async (taskId: string) => {
@@ -1374,8 +1440,8 @@ export default function TasksPane({
       }
       const progress = summarizeSubtasksProgress(draft)
       setMissionTasks((prev) =>
-        prev.map((t) =>
-          t.id === editingTaskId ? { ...t, subtasks: draft, progress } : t
+        sortMissionTasks(
+          prev.map((t) => (t.id === editingTaskId ? { ...t, subtasks: draft, progress } : t))
         )
       )
       Taro.showToast({ title: taskStrings.toast.submitted, icon: 'success' })
@@ -1415,7 +1481,7 @@ export default function TasksPane({
         setCollabTasks((prev) => prev.filter((t) => t.id !== task.id))
         setArchivedTasks((prev) => [archivedMapped, ...prev.filter((t) => t.id !== task.id)])
       } else {
-        setCollabTasks((prev) => prev.map((t) => (t.id === task.id ? mapped : t)))
+        setCollabTasks((prev) => sortCollabTasks(prev.map((t) => (t.id === task.id ? mapped : t))))
       }
       Taro.showToast({ title: taskStrings.toast.completed, icon: 'success' })
     } catch (err: any) {
@@ -1452,7 +1518,7 @@ export default function TasksPane({
     try {
       const updated = await continueReview(taskId)
       const mapped = mapApiTaskToCollab(updated)
-      setCollabTasks((prev) => prev.map((t) => (t.id === taskId ? mapped : t)))
+      setCollabTasks((prev) => sortCollabTasks(prev.map((t) => (t.id === taskId ? mapped : t))))
       Taro.showToast({ title: taskStrings.toast.reviewContinue, icon: 'success' })
     } catch (err: any) {
       console.error('continue review error', err)
@@ -1800,10 +1866,9 @@ export default function TasksPane({
         Taro.showToast({ title: taskStrings.toast.noChanges, icon: 'none' })
       } else {
         const mapped = mapApiTaskToCollab(actualTask as Task)
-        setCollabTasks((prev) => [
-          mapped,
-          ...prev.filter((t) => t.id !== confirmPayload.taskId && t.status !== 'refactored'),
-        ])
+        setCollabTasks((prev) =>
+          sortCollabTasks([mapped, ...prev.filter((t) => t.id !== confirmPayload.taskId && t.status !== 'refactored')])
+        )
         setActiveTab('collab')
         Taro.showToast({ title: taskStrings.toast.reworked, icon: 'success' })
       }
@@ -1875,10 +1940,9 @@ export default function TasksPane({
           Taro.showToast({ title: taskStrings.toast.noChanges, icon: 'none' })
         } else {
           const mapped = mapApiTaskToCollab(actualTask as Task)
-          setCollabTasks((prev) => [
-            mapped,
-            ...prev.filter((t) => t.id !== reworkTaskId && t.status !== 'refactored'),
-          ])
+          setCollabTasks((prev) =>
+            sortCollabTasks([mapped, ...prev.filter((t) => t.id !== reworkTaskId && t.status !== 'refactored')])
+          )
           setActiveTab('collab')
           Taro.showToast({ title: taskStrings.toast.reworked, icon: 'success' })
         }
@@ -1892,10 +1956,10 @@ export default function TasksPane({
           selfAssign,
         })
         const mapped = mapApiTaskToCollab(created)
-        setCollabTasks((prev) => [mapped, ...prev])
+        setCollabTasks((prev) => sortCollabTasks([mapped, ...prev]))
         if (selfAssign) {
           const missionMapped = mapApiTaskToMission(created)
-          setMissionTasks((prev) => [missionMapped, ...prev])
+          setMissionTasks((prev) => sortMissionTasks([missionMapped, ...prev]))
           setActiveTab('mission')
           Taro.showToast({ title: taskStrings.toast.createAccepted, icon: 'success' })
         } else {
@@ -2050,9 +2114,9 @@ export default function TasksPane({
               }}
             >
               <View className='task-list'>
-                {missionTasks
-                  .filter((t) => t.status !== 'refactored' && t.status !== 'review_pending')
-                  .map((task) => {
+                  {visibleMissionTasks
+                    .filter((t) => t.status !== 'refactored' && t.status !== 'review_pending')
+                    .map((task) => {
                     const editing = editingTaskId === task.id
                     const subsDraft = (editing && draftSubtasks[task.id]) || task.subtasks
                     const progress = editing
@@ -2087,7 +2151,7 @@ export default function TasksPane({
           <SwiperItem>
             <ScrollView scrollY scrollWithAnimation enableFlex className='task-scroll'>
               <View className='task-list'>
-                {collabTasks
+                {visibleCollabTasks
                   .filter((t) => t.status !== 'refactored')
                   .map((task) => {
                     const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
