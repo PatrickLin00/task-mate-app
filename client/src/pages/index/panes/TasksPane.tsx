@@ -48,6 +48,7 @@ type TasksPaneProps = {
   onSwipeToHome?: () => void
   onSwipeToAchievements?: () => void
   authVersion?: number
+  onProfileRefresh?: () => void
 }
 
 const tabs: { key: TabKey; label: string; hint: string }[] = [
@@ -867,6 +868,7 @@ export default function TasksPane({
   onSwipeToHome,
   onSwipeToAchievements,
   authVersion = 0,
+  onProfileRefresh,
 }: TasksPaneProps) {
   const today = useMemo(() => new Date(), [])
   const [activeTab, setActiveTab] = useState<TabKey>('mission')
@@ -908,6 +910,7 @@ export default function TasksPane({
   const visibleCollabTasks = useMemo(() => sortCollabTasks(collabTasks), [collabTasks])
   const [expandedCollabId, setExpandedCollabId] = useState<string | null>(null)
   const [archivedTasks, setArchivedTasks] = useState<ArchivedTask[]>([])
+  const completedCountRef = useRef<number | null>(null)
   const pollingBusyRef = useRef(false)
   const [loadingRemote, setLoadingRemote] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
@@ -1138,6 +1141,18 @@ export default function TasksPane({
     setMissionTasks(sortMissionTasks(missionList))
     setCollabTasks(sortCollabTasks(collabList))
     setArchivedTasks(archivedList)
+    const completedCount =
+      missionList.filter((t) => t.status === 'completed').length +
+      collabList.filter((t) => t.status === 'completed').length +
+      archivedList.filter((t) => t.status === 'completed').length
+    if (completedCountRef.current === null) {
+      completedCountRef.current = completedCount
+    } else if (completedCount > completedCountRef.current) {
+      completedCountRef.current = completedCount
+      onProfileRefresh?.()
+    } else {
+      completedCountRef.current = completedCount
+    }
   }
 
   const refreshTasks = async (shouldCancel?: () => boolean) => {
@@ -1188,6 +1203,18 @@ export default function TasksPane({
     setMissionTasks((prev) => sortMissionTasks(mergeById(prev, missionList)))
     setCollabTasks((prev) => sortCollabTasks(mergeById(prev, collabList)))
     setArchivedTasks((prev) => mergeById(prev, archivedList))
+      const completedCount =
+        missionList.filter((t) => t.status === 'completed').length +
+        collabList.filter((t) => t.status === 'completed').length +
+        archivedList.filter((t) => t.status === 'completed').length
+      if (completedCountRef.current === null) {
+        completedCountRef.current = completedCount
+      } else if (completedCount > completedCountRef.current) {
+        completedCountRef.current = completedCount
+        onProfileRefresh?.()
+      } else {
+        completedCountRef.current = completedCount
+      }
       if (taskDebug) {
         console.log('refreshTasks diff', {
           missionCount: missionList.length,
@@ -1436,6 +1463,7 @@ export default function TasksPane({
       setCollabTasks((prev) => prev.filter((t) => t.id !== task.id))
       setArchivedTasks((prev) => [archivedMapped, ...prev.filter((t) => t.id !== task.id)])
       Taro.showToast({ title: taskStrings.toast.completed, icon: 'success' })
+      onProfileRefresh?.()
     } catch (err: any) {
       console.error('complete task error', err)
       await refreshTasksWithNotice()
@@ -1454,6 +1482,7 @@ export default function TasksPane({
         setCollabTasks((prev) => sortCollabTasks(prev.map((t) => (t.id === task.id ? mapped : t))))
       }
       Taro.showToast({ title: taskStrings.toast.completed, icon: 'success' })
+      onProfileRefresh?.()
     } catch (err: any) {
       console.error('complete task error', err)
       await refreshTasksWithNotice()

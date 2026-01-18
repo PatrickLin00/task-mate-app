@@ -88,6 +88,7 @@ type HomePaneProps = {
   heroName?: string
   heroStats?: { wisdom?: number; strength?: number; agility?: number }
   nameGateActive?: boolean
+  onProfileRefresh?: () => void
 }
 
 export default function HomePane({
@@ -97,6 +98,7 @@ export default function HomePane({
   heroName,
   heroStats,
   nameGateActive = false,
+  onProfileRefresh,
 }: HomePaneProps) {
   const normalizeStat = (value?: number) => Math.max(0, Math.round(Number(value || 0)))
   const heroStatsMap = useMemo(
@@ -328,6 +330,7 @@ export default function HomePane({
       setDialogEditing(false)
       setDialogDraft([])
       await refreshHomeTasks()
+      onProfileRefresh?.()
     } catch (err) {
       console.error('complete task error', err)
       await refreshAfterNotice()

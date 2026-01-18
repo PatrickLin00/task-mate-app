@@ -228,6 +228,7 @@ export default function Index() {
               agility: profile.agility,
             }}
             nameGateActive={nameGateActive}
+            onProfileRefresh={() => void refreshProfile()}
           />
         </SwiperItem>
         <SwiperItem>
@@ -236,6 +237,7 @@ export default function Index() {
             authVersion={authVersion}
             onSwipeToHome={() => setActiveTab('home')}
             onSwipeToAchievements={() => setActiveTab('achievements')}
+            onProfileRefresh={() => void refreshProfile()}
           />
         </SwiperItem>
         <SwiperItem>
