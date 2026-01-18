@@ -139,9 +139,10 @@ export async function fetchTasks(status?: Task['status']) {
 
 export type TodayTasksResponse = { dueTodayCount: number; tasks: Task[] }
 export type TaskDashboardResponse = {
-  mission: Task[]
-  collab: Task[]
-  archived: Task[]
+  creator: Task[]
+  assignee: Task[]
+  completed: Task[]
+  history: Task[]
   today: TodayTasksResponse
   challenge: Task[]
 }

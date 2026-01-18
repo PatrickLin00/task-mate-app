@@ -30,7 +30,6 @@ import {
   deleteTask,
   fetchTaskDashboard,
   generateTaskSuggestion,
-  getTask,
   patchProgress,
   rejectReworkTask,
   refreshTaskSchedule,
@@ -908,6 +907,8 @@ export default function TasksPane({
   const visibleCollabTasks = useMemo(() => sortCollabTasks(collabTasks), [collabTasks])
   const [expandedCollabId, setExpandedCollabId] = useState<string | null>(null)
   const [archivedTasks, setArchivedTasks] = useState<ArchivedTask[]>([])
+  const [historyTasks, setHistoryTasks] = useState<CollabTask[]>([])
+  const historyMap = useMemo(() => new Map(historyTasks.map((task) => [task.id, task])), [historyTasks])
   const completedCountRef = useRef<number | null>(null)
   const pollingBusyRef = useRef(false)
   const [loadingRemote, setLoadingRemote] = useState(false)
@@ -1159,14 +1160,26 @@ export default function TasksPane({
     try {
       const dashboard = await fetchTaskDashboard({ force: true })
       if (shouldCancel?.()) return
+      const missionSource = (dashboard.assignee || []).filter((t) =>
+        t.status === 'in_progress' || t.status === 'pending_confirmation'
+      )
+      const now = new Date()
+      const collabSource = (dashboard.creator || []).filter((t) => {
+        if (t.status === 'refactored') return false
+        if (t.assigneeId && t.creatorId === t.assigneeId) return false
+        if (t.status === 'closed' && t.dueAt && new Date(t.dueAt).getTime() < now.getTime()) return false
+        if (t.status === 'completed' && (!t.assigneeId || t.assigneeId === t.creatorId)) return false
+        return true
+      })
       if (taskDebug) {
         console.log('refreshTasks ok', {
-          missionCount: dashboard.mission.length,
-          collabCount: dashboard.collab.length,
-          archivedCount: dashboard.archived.length,
+          missionCount: missionSource.length,
+          collabCount: collabSource.length,
+          archivedCount: dashboard.completed.length,
         })
       }
-      applyTaskLists(dashboard.mission, dashboard.collab, dashboard.archived)
+      applyTaskLists(missionSource, collabSource, dashboard.completed)
+      setHistoryTasks((dashboard.history || []).map((t) => mapApiTaskToCollab(t)))
     } catch (err: any) {
       console.error('load tasks error', err)
       if (!shouldCancel?.()) {
@@ -1189,14 +1202,26 @@ export default function TasksPane({
     try {
       const dashboard = await fetchTaskDashboard()
       if (shouldCancel?.()) return
+      const missionSource = (dashboard.assignee || []).filter((t) =>
+        t.status === 'in_progress' || t.status === 'pending_confirmation'
+      )
+      const now = new Date()
+      const collabSource = (dashboard.creator || []).filter((t) => {
+        if (t.status === 'refactored') return false
+        if (t.assigneeId && t.creatorId === t.assigneeId) return false
+        if (t.status === 'closed' && t.dueAt && new Date(t.dueAt).getTime() < now.getTime()) return false
+        if (t.status === 'completed' && (!t.assigneeId || t.assigneeId === t.creatorId)) return false
+        return true
+      })
       const { missionList, collabList, archivedList } = buildTaskLists(
-        dashboard.mission,
-        dashboard.collab,
-        dashboard.archived
+        missionSource,
+        collabSource,
+        dashboard.completed
       )
       setMissionTasks((prev) => sortMissionTasks(mergeById(prev, missionList)))
       setCollabTasks((prev) => sortCollabTasks(mergeById(prev, collabList)))
       setArchivedTasks((prev) => mergeById(prev, archivedList))
+      setHistoryTasks((prev) => mergeById(prev, (dashboard.history || []).map((t) => mapApiTaskToCollab(t))))
       const completedCount =
         missionList.filter((t) => t.status === 'completed').length +
         collabList.filter((t) => t.status === 'completed').length +
@@ -1831,11 +1856,12 @@ export default function TasksPane({
     if (!taskId) return
     setHistoryLoading(true)
     try {
-      const task = await getTask(taskId)
-      setHistoryTask(mapApiTaskToCollab(task))
-    } catch (err: any) {
-      console.error('load history error', err)
-      Taro.showToast({ title: err?.message || taskStrings.toast.loadFail, icon: 'none' })
+      const task = historyMap.get(taskId)
+      if (!task) {
+        Taro.showToast({ title: taskStrings.toast.loadFail, icon: 'none' })
+        return
+      }
+      setHistoryTask(task)
     } finally {
       setHistoryLoading(false)
     }

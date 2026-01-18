@@ -967,6 +967,7 @@ exports.acceptReworkTask = async (req, res) => {
                   originalStatus,
                   originalStartAt,
                   originalDueAt,
+                  assigneeId: null,
                   updatedAt: now,
                 },
               },
@@ -1074,6 +1075,7 @@ exports.rejectReworkTask = async (req, res) => {
                   originalStatus,
                   originalStartAt,
                   originalDueAt,
+                  assigneeId: null,
                   updatedAt: now,
                 },
               },
@@ -1604,48 +1606,37 @@ exports.getDashboard = async (req, res) => {
     const now = new Date()
     const dayStart = startOfDay(now)
     const dayEnd = endOfDay(now)
-    const missionQuery = {
-      assigneeId: userId,
-      status: { $in: ACTIVE_ASSIGNEE_STATUS },
-    }
-    const collabQuery = {
-      creatorId: userId,
-      status: { $ne: 'refactored' },
-      $and: [
-        { assigneeId: { $ne: userId } },
-        {
-          $or: [
-            { status: { $ne: 'completed' } },
-            {
-              $and: [
-                { status: 'completed' },
-                { assigneeId: { $ne: userId } },
-                { assigneeId: { $ne: null } },
-              ],
-            },
-          ],
-        },
-        { $or: [{ status: { $ne: 'closed' } }, { dueAt: { $gte: now } }] },
-      ],
-    }
 
     const { creatorId, start: seedStart, end: seedEnd, seeds } = getDailyChallengeSeeds(userId, now, 5)
     const seedKeys = seeds.map((s) => s.seedKey)
 
-    const [mission, collab, archived, challengeExisting] = await Promise.all([
-      Task.find(missionQuery).select(TASK_LIST_FIELDS).sort({ dueAt: 1, createdAt: -1 }).lean(),
-      Task.find(collabQuery).select(TASK_LIST_FIELDS).sort({ dueAt: 1, createdAt: -1 }).lean(),
+    const [creatorTasks, assigneeTasks, completed, challengeExisting] = await Promise.all([
+      Task.find({ creatorId: userId }).select(TASK_LIST_FIELDS).sort({ dueAt: 1, createdAt: -1 }).lean(),
+      Task.find({ assigneeId: userId }).select(TASK_LIST_FIELDS).sort({ dueAt: 1, createdAt: -1 }).lean(),
       CompletedTask.find({ ownerId: userId }).select(COMPLETED_LIST_FIELDS).sort({ updatedAt: -1 }).lean(),
       Task.find({ creatorId, seedKey: { $in: seedKeys } }).select(TASK_LIST_FIELDS).sort({ createdAt: 1 }).lean(),
     ])
 
-    const overdue = mission.filter((t) => t.dueAt && t.dueAt < dayStart)
-    const dueToday = mission.filter((t) => t.dueAt && t.dueAt >= dayStart && t.dueAt <= dayEnd)
-    const upcoming = mission.filter((t) => t.dueAt && t.dueAt > dayEnd)
+    const historyIds = Array.from(
+      new Set(
+        assigneeTasks
+          .map((task) => task.previousTaskId)
+          .filter(Boolean)
+          .map((id) => String(id))
+      )
+    )
+    const historyTasks = historyIds.length
+      ? await Task.find({ _id: { $in: historyIds } }).select(TASK_LIST_FIELDS).lean()
+      : []
+
+    const activeAssignee = assigneeTasks.filter((t) => ACTIVE_ASSIGNEE_STATUS.includes(t.status))
+    const overdue = activeAssignee.filter((t) => t.dueAt && t.dueAt < dayStart)
+    const dueToday = activeAssignee.filter((t) => t.dueAt && t.dueAt >= dayStart && t.dueAt <= dayEnd)
+    const upcoming = activeAssignee.filter((t) => t.dueAt && t.dueAt > dayEnd)
     const dueNow = [...overdue, ...dueToday]
     const picked = (dueNow.length >= 5 ? dueNow : [...dueNow, ...upcoming]).slice(0, 5)
 
-    const archivedSorted = archived.sort((a, b) => {
+    const archivedSorted = completed.sort((a, b) => {
       const aTime = a.submittedAt || a.completedAt || a.updatedAt
       const bTime = b.submittedAt || b.completedAt || b.updatedAt
       return new Date(bTime).getTime() - new Date(aTime).getTime()
@@ -1664,12 +1655,19 @@ exports.getDashboard = async (req, res) => {
       challenge.push(buildChallengeVirtualTask({ template, seedKey, creatorId, start: seedStart, end: seedEnd }))
     })
 
-    const nameMap = await buildNameMapForTasks([...mission, ...collab, ...archived, ...challenge])
+    const nameMap = await buildNameMapForTasks([
+      ...creatorTasks,
+      ...assigneeTasks,
+      ...archivedSorted,
+      ...challenge,
+      ...historyTasks,
+    ])
 
     return res.json({
-      mission: buildResponsesWithNamesFromMap(mission, nameMap),
-      collab: buildResponsesWithNamesFromMap(collab, nameMap),
-      archived: buildResponsesWithNamesFromMap(archivedSorted, nameMap),
+      creator: buildResponsesWithNamesFromMap(creatorTasks, nameMap),
+      assignee: buildResponsesWithNamesFromMap(assigneeTasks, nameMap),
+      completed: buildResponsesWithNamesFromMap(archivedSorted, nameMap),
+      history: buildResponsesWithNamesFromMap(historyTasks, nameMap),
       today: {
         dueTodayCount: dueToday.length,
         tasks: buildResponsesWithNamesFromMap(picked, nameMap),

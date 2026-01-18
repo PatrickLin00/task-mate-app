@@ -128,6 +128,8 @@ export default function HomePane({
   const [todayTasks, setTodayTasks] = useState<RoadTask[]>([])
   const pollingBusyRef = useRef(false)
   const [feedTasks, setFeedTasks] = useState<RoadTask[]>([])
+  const [historyTasks, setHistoryTasks] = useState<RoadTask[]>([])
+  const historyMap = useMemo(() => new Map(historyTasks.map((task) => [task.id, task])), [historyTasks])
   const visibleTasks = useMemo(() => {
     const items = [...feedTasks]
     items.sort((a, b) => {
@@ -238,6 +240,18 @@ export default function HomePane({
   const handleMiniCardPress = (task: RoadTask) => {
     if (nameGateActive) return
     setModalTask(task)
+    setDialogEditing(false)
+    setDialogDraft([])
+  }
+
+  const handleOpenHistory = (taskId?: string | null) => {
+    if (!taskId) return
+    const found = historyMap.get(taskId)
+    if (!found) {
+      Taro.showToast({ title: taskStrings.toast.loadFail, icon: 'none' })
+      return
+    }
+    setModalTask(found)
     setDialogEditing(false)
     setDialogDraft([])
   }
@@ -485,6 +499,7 @@ export default function HomePane({
         (dashboard.today?.tasks || []).filter((t) => t.status !== 'refactored').map((t) => mapApiTaskToRoad(t))
       )
       setFeedTasks((dashboard.challenge || []).map((t) => mapApiTaskToRoad(t)))
+      setHistoryTasks((dashboard.history || []).map((t) => mapApiTaskToRoad(t)))
       if (showNotice) {
         Taro.showToast({ title: taskStrings.toast.dataRefreshed, icon: 'none' })
       }
@@ -539,8 +554,10 @@ export default function HomePane({
         .filter((t) => t.status !== 'refactored')
         .map((t) => mapApiTaskToRoad(t))
       const nextFeed = (dashboard.challenge || []).map((t) => mapApiTaskToRoad(t))
+      const nextHistory = (dashboard.history || []).map((t) => mapApiTaskToRoad(t))
       setTodayTasks((prev) => mergeById(prev, nextToday))
       setFeedTasks((prev) => mergeById(prev, nextFeed))
+      setHistoryTasks((prev) => mergeById(prev, nextHistory))
       if (taskDebug) {
         console.log('refreshHomeTasks diff', {
           todayCount: nextToday.length,
@@ -892,7 +909,7 @@ export default function HomePane({
                   </View>
                 </View>
                 {modalTask.previousTaskId && (
-                  <HistoryButton onClick={() => void refreshModalTask(modalTask.previousTaskId as string)} />
+                  <HistoryButton onClick={() => handleOpenHistory(modalTask.previousTaskId)} />
                 )}
               </View>
 
