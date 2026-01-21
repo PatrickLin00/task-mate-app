@@ -102,6 +102,14 @@ const runHourly = async () => {
   }).limit(200)
 
   debugLog('subscribe scheduler hourly dueSoon', { count: dueSoon.length })
+  const overdue = await Task.find({
+    ...baseQuery,
+    dueAt: { $lt: now },
+    overdueNotifiedAt: null,
+  }).limit(200)
+
+  debugLog('subscribe scheduler hourly overdue', { count: overdue.length })
+  const nameMap = await buildAssigneeNameMap([...dueSoon, ...overdue])
   for (const task of dueSoon) {
     const remainText = formatRemain(task.dueAt.getTime() - now.getTime())
     await markAndNotify(
@@ -121,15 +129,6 @@ const runHourly = async () => {
       nameMap
     )
   }
-
-  const overdue = await Task.find({
-    ...baseQuery,
-    dueAt: { $lt: now },
-    overdueNotifiedAt: null,
-  }).limit(200)
-
-  debugLog('subscribe scheduler hourly overdue', { count: overdue.length })
-  const nameMap = await buildAssigneeNameMap([...dueSoon, ...overdue])
   for (const task of overdue) {
     await markAndNotify(
       task,

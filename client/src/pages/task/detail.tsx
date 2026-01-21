@@ -1,7 +1,7 @@
 ﻿import { useLoad, useShareAppMessage } from '@tarojs/taro'
 import { View, Text, Button } from '@tarojs/components'
 import { useState } from 'react'
-import { getTask, type Task } from '@/services/api'
+import { getCachedTaskById, getTask, type Task } from '@/services/api'
 import { taskStrings } from '@/pages/index/shared/strings'
 import './detail.scss'
 
@@ -11,6 +11,12 @@ export default function TaskDetail() {
   useLoad((options) => {
     const id = (options as any)?.taskId as string
     if (id) {
+      const cached = getCachedTaskById(id)
+      if (cached) {
+        setTask(cached)
+        return
+      }
+      console.warn('[task-detail] cache miss, fetching', { taskId: id })
       getTask(id)
         .then(setTask)
         .catch((e) => {

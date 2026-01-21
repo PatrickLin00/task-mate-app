@@ -22,6 +22,7 @@ import {
   completeTask,
   submitReview,
   fetchTaskDashboard,
+  getCachedTaskById,
   getTask,
   patchProgress,
   rejectReworkTask,
@@ -129,7 +130,19 @@ export default function HomePane({
   const pollingBusyRef = useRef(false)
   const [feedTasks, setFeedTasks] = useState<RoadTask[]>([])
   const [historyTasks, setHistoryTasks] = useState<RoadTask[]>([])
-  const historyMap = useMemo(() => new Map(historyTasks.map((task) => [task.id, task])), [historyTasks])
+  const historyMap = useMemo(
+    () => new Map(historyTasks.map((task) => [String(task.id || ''), task])),
+    [historyTasks]
+  )
+  const historyReverseMap = useMemo(() => {
+    const entries: Array<[string, RoadTask]> = []
+    historyTasks.forEach((task) => {
+      if (task.previousTaskId) {
+        entries.push([String(task.previousTaskId), task])
+      }
+    })
+    return new Map(entries)
+  }, [historyTasks])
   const visibleTasks = useMemo(() => {
     const items = [...feedTasks]
     items.sort((a, b) => {
@@ -162,6 +175,14 @@ export default function HomePane({
   const [dialogDragValues, setDialogDragValues] = useState<Record<string, number>>({})
   const handledShareIdRef = useRef<string | null>(null)
   const taskDebug = TASK_DEBUG
+  const normalizeDashboardList = <T,>(label: string, list: T[] | undefined) => {
+    const raw = Array.isArray(list) ? list : []
+    const filtered = raw.filter(Boolean)
+    if (taskDebug && filtered.length !== raw.length) {
+      console.log('dashboard sanitize', { label, raw: raw.length, filtered: filtered.length })
+    }
+    return filtered
+  }
 
   const resolveDisplayName = (name?: string | null, id?: string | null) => {
     const rawId = String(id || '')
@@ -212,7 +233,7 @@ export default function HomePane({
       assigneeName: task.assigneeId
         ? resolveDisplayName(task.assigneeName || task.assigneeId, task.assigneeId)
         : '',
-      previousTaskId: task.previousTaskId ?? null,
+      previousTaskId: task.previousTaskId ? String(task.previousTaskId) : null,
       seedKey: task.seedKey ?? null,
       dueAt,
       due: formatDueLabel(dueAt),
@@ -244,12 +265,30 @@ export default function HomePane({
     setDialogDraft([])
   }
 
-  const handleOpenHistory = (taskId?: string | null) => {
-    if (!taskId) return
-    const found = historyMap.get(taskId)
+  const handleOpenHistory = (task?: RoadTask | null) => {
+    if (!task) return
+    const directId = task.previousTaskId ? String(task.previousTaskId) : ''
+    const directFound = directId ? historyMap.get(directId) : undefined
+    const reverseFound = historyReverseMap.get(String(task.id))
+    const cached = directId ? getCachedTaskById(directId) : null
+    const fromCached = cached ? mapApiTaskToRoad(cached) : null
+    const found = directFound || reverseFound || fromCached
     if (!found) {
+      if (taskDebug) {
+        console.log('history miss', {
+          taskId: directId || String(task.id),
+          historyCount: historyMap.size,
+          historySample: Array.from(historyMap.keys()).slice(0, 5),
+        })
+      }
       Taro.showToast({ title: taskStrings.toast.loadFail, icon: 'none' })
       return
+    }
+    if (fromCached) {
+      setHistoryTasks((prev) => mergeById(prev, [fromCached]))
+      if (taskDebug) {
+        console.log('history fallback cache hit', { taskId: directId })
+      }
     }
     setModalTask(found)
     setDialogEditing(false)
@@ -266,6 +305,7 @@ export default function HomePane({
 
   const handleStartDialogEdit = () => {
     if (shareOnly) return
+    if (modalTask?.status === 'refactored') return
     if (!modalTask?.subtasks?.length) return
     setDialogEditing(true)
     setDialogDraft(modalTask.subtasks.map((s) => ({ ...s })))
@@ -467,8 +507,11 @@ export default function HomePane({
     dialogEditing && dialogSubtasksDisplay
       ? summarizeSubtasksProgress(dialogSubtasksDisplay)
       : modalTask?.progress
-  const dialogRemain = modalTask?.dueAt ? humanizeRemain(modalTask.dueAt) : modalTask?.remain
-  const dialogDueLabel = modalTask?.dueAt ? formatDueLabel(modalTask.dueAt) : modalTask?.due
+  const dialogIsHistory = modalTask?.status === 'refactored'
+  const dialogRemain =
+    modalTask?.dueAt && !dialogIsHistory ? humanizeRemain(modalTask.dueAt) : modalTask?.remain
+  const dialogDueLabel =
+    modalTask?.dueAt && !dialogIsHistory ? formatDueLabel(modalTask.dueAt) : modalTask?.due
   const dialogStartLabel = modalTask?.createdAt ? formatStartDate(modalTask.createdAt) : undefined
   const dialogCreatorLabel = modalTask?.creatorId
     ? resolveDisplayName(modalTask?.creatorName || modalTask?.creatorId, modalTask?.creatorId)
@@ -495,11 +538,28 @@ export default function HomePane({
     try {
       const dashboard = await fetchTaskDashboard({ force: showNotice })
       if (shouldCancel?.()) return
-      setTodayTasks(
-        (dashboard.today?.tasks || []).filter((t) => t.status !== 'refactored').map((t) => mapApiTaskToRoad(t))
+      const todayRaw = normalizeDashboardList('today', dashboard.today?.tasks)
+      const challengeRaw = normalizeDashboardList('challenge', dashboard.challenge)
+      const creatorRaw = normalizeDashboardList('creator', dashboard.creator)
+      const assigneeRaw = normalizeDashboardList('assignee', dashboard.assignee)
+      const historyRaw = normalizeDashboardList('history', dashboard.history)
+      const supersededIds = new Set(
+        [...creatorRaw, ...assigneeRaw]
+          .filter((t) => t && t.status !== 'refactored' && t.previousTaskId)
+          .map((t) => String(t.previousTaskId))
       )
-      setFeedTasks((dashboard.challenge || []).map((t) => mapApiTaskToRoad(t)))
-      setHistoryTasks((dashboard.history || []).map((t) => mapApiTaskToRoad(t)))
+      const shouldHide = (task: Task) => supersededIds.has(String(task._id || ''))
+      setTodayTasks(
+        todayRaw
+          .filter((t) => t.status !== 'refactored' && !shouldHide(t))
+          .map((t) => mapApiTaskToRoad(t))
+      )
+      setFeedTasks(challengeRaw.map((t) => mapApiTaskToRoad(t)))
+      const creatorHistory = creatorRaw.filter((t) => t.status === 'refactored')
+      const assigneeHistory = assigneeRaw.filter((t) => t.status === 'refactored')
+      setHistoryTasks(
+        [...creatorHistory, ...assigneeHistory, ...historyRaw].map((t) => mapApiTaskToRoad(t))
+      )
       if (showNotice) {
         Taro.showToast({ title: taskStrings.toast.dataRefreshed, icon: 'none' })
       }
@@ -550,11 +610,26 @@ export default function HomePane({
     try {
       const dashboard = await fetchTaskDashboard()
       if (shouldCancel?.()) return
-      const nextToday = (dashboard.today?.tasks || [])
-        .filter((t) => t.status !== 'refactored')
+      const todayRaw = normalizeDashboardList('today', dashboard.today?.tasks)
+      const challengeRaw = normalizeDashboardList('challenge', dashboard.challenge)
+      const creatorRaw = normalizeDashboardList('creator', dashboard.creator)
+      const assigneeRaw = normalizeDashboardList('assignee', dashboard.assignee)
+      const historyRaw = normalizeDashboardList('history', dashboard.history)
+      const supersededIds = new Set(
+        [...creatorRaw, ...assigneeRaw]
+          .filter((t) => t && t.status !== 'refactored' && t.previousTaskId)
+          .map((t) => String(t.previousTaskId))
+      )
+      const shouldHide = (task: Task) => supersededIds.has(String(task._id || ''))
+      const nextToday = todayRaw
+        .filter((t) => t.status !== 'refactored' && !shouldHide(t))
         .map((t) => mapApiTaskToRoad(t))
-      const nextFeed = (dashboard.challenge || []).map((t) => mapApiTaskToRoad(t))
-      const nextHistory = (dashboard.history || []).map((t) => mapApiTaskToRoad(t))
+      const nextFeed = challengeRaw.map((t) => mapApiTaskToRoad(t))
+      const nextHistory = [
+        ...creatorRaw.filter((t) => t.status === 'refactored'),
+        ...assigneeRaw.filter((t) => t.status === 'refactored'),
+        ...historyRaw,
+      ].map((t) => mapApiTaskToRoad(t))
       setTodayTasks((prev) => mergeById(prev, nextToday))
       setFeedTasks((prev) => mergeById(prev, nextFeed))
       setHistoryTasks((prev) => mergeById(prev, nextHistory))
@@ -908,9 +983,9 @@ export default function HomePane({
                     {chipText(modalTask)}
                   </View>
                 </View>
-                {modalTask.previousTaskId && (
-                  <HistoryButton onClick={() => handleOpenHistory(modalTask.previousTaskId)} />
-                )}
+                  {modalTask.previousTaskId && !dialogIsHistory && (
+                    <HistoryButton onClick={() => handleOpenHistory(modalTask)} />
+                  )}
               </View>
 
               <View className='dialog-attr'>
@@ -1001,36 +1076,48 @@ export default function HomePane({
                 </View>
               )}
 
-              <View className='action-row'>
-                {dialogPendingConfirm ? (
-                  <>
+                <View className='action-row'>
+                  {dialogPendingConfirm ? (
+                    <>
+                      <View
+                        className='task-action'
+                        hoverClass='pressing'
+                        hoverStartTime={0}
+                        hoverStayTime={120}
+                        hoverStopPropagation
+                        onClick={handleDialogReworkAccept}
+                      >
+                        <Text className='action-icon'>{taskStrings.icons.actions.acceptRework}</Text>
+                        <Text>{taskStrings.actions.acceptRework}</Text>
+                      </View>
+                      <View
+                        className='task-action ghost'
+                        hoverClass='pressing'
+                        hoverStartTime={0}
+                        hoverStayTime={120}
+                        hoverStopPropagation
+                        onClick={handleDialogReworkReject}
+                      >
+                        <Text className='action-icon'>{taskStrings.icons.actions.rejectRework}</Text>
+                        <Text>{taskStrings.actions.rejectRework}</Text>
+                      </View>
+                    </>
+                  ) : dialogIsHistory ? (
                     <View
                       className='task-action'
                       hoverClass='pressing'
                       hoverStartTime={0}
                       hoverStayTime={120}
                       hoverStopPropagation
-                      onClick={handleDialogReworkAccept}
+                      onClick={handleCloseModal}
                     >
-                      <Text className='action-icon'>{taskStrings.icons.actions.acceptRework}</Text>
-                      <Text>{taskStrings.actions.acceptRework}</Text>
+                      <Text className='action-icon'>{taskStrings.icons.actions.cancelChange}</Text>
+                      <Text>{taskStrings.actions.close}</Text>
                     </View>
+                  ) : shareOnly ? (
                     <View
-                      className='task-action ghost'
+                      className='task-action'
                       hoverClass='pressing'
-                      hoverStartTime={0}
-                      hoverStayTime={120}
-                      hoverStopPropagation
-                      onClick={handleDialogReworkReject}
-                    >
-                      <Text className='action-icon'>{taskStrings.icons.actions.rejectRework}</Text>
-                      <Text>{taskStrings.actions.rejectRework}</Text>
-                    </View>
-                  </>
-                ) : shareOnly ? (
-                  <View
-                    className='task-action'
-                    hoverClass='pressing'
                     hoverStartTime={0}
                     hoverStayTime={120}
                     hoverStopPropagation

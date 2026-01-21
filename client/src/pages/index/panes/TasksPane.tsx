@@ -1,6 +1,6 @@
 import { View, Text, Swiper, SwiperItem, ScrollView, Button, Input, Textarea, Slider, Picker, Image } from '@tarojs/components'
 import Taro from '@tarojs/taro'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import '../tasks.scss'
 import {
   defaultCreatedAt,
@@ -29,12 +29,15 @@ import {
   continueReview,
   deleteTask,
   fetchTaskDashboard,
+  getDashboardCache,
+  getDashboardCacheTimestamp,
   generateTaskSuggestion,
   patchProgress,
   rejectReworkTask,
   refreshTaskSchedule,
   restartTask,
   reworkTask,
+  subscribeDashboardCache,
   type Task,
 } from '@/services/api'
 
@@ -94,6 +97,7 @@ const calcPercent = (current: number, total: number) =>
 
 const clampValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const snapSubtaskValue = (value: number, total: number) => clampValue(Math.round(value), 0, total)
+const normalizeStatus = (status?: string | null) => String(status || '').trim()
 
 const formatStartDate = (iso?: string) => {
   if (!iso) return ''
@@ -109,6 +113,261 @@ const resolveDisplayName = (name?: string | null, id?: string | null) => {
   const candidate = trimmed || rawId
   if (candidate === rawId) return taskStrings.labels.unnamed
   return candidate
+}
+
+const computeDueMeta = (iso: string) => {
+  const due = new Date(iso)
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate())
+  const dueDays = Math.floor((dueStart.getTime() - todayStart.getTime()) / DAY)
+  return {
+    dueAt: iso,
+    remain: humanizeRemain(iso),
+    dueLabel: formatDueLabel(iso),
+    dueDays,
+  }
+}
+
+const sortMissionTasks = (items: MissionTask[]) => {
+  const sorted = [...items]
+  sorted.sort((a, b) => {
+    const aCompleted = normalizeStatus(a.status) === 'completed'
+    const bCompleted = normalizeStatus(b.status) === 'completed'
+    if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
+    const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
+    const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
+    if (aDue !== bDue) return aDue - bDue
+    return a.createdAt.localeCompare(b.createdAt)
+  })
+  return sorted
+}
+
+const sortCollabTasks = (items: CollabTask[]) => {
+  const sorted = [...items]
+  sorted.sort((a, b) => {
+    const aCompleted = normalizeStatus(a.status) === 'completed'
+    const bCompleted = normalizeStatus(b.status) === 'completed'
+    if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
+    const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
+    const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
+    if (aDue !== bDue) return aDue - bDue
+    return a.createdAt.localeCompare(b.createdAt)
+  })
+  return sorted
+}
+
+const mapRewardToAttr = (val: 'wisdom' | 'strength' | 'agility') => {
+  if (val === 'wisdom') return taskStrings.rewards.wisdom.label
+  if (val === 'strength') return taskStrings.rewards.strength.label
+  return taskStrings.rewards.agility.label
+}
+
+const formatAgo = (iso?: string) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const diff = Date.now() - d.getTime()
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+  if (diff < minute) return taskStrings.time.justNow
+  if (diff < hour) return `${Math.floor(diff / minute)}${taskStrings.time.minuteAgo}`
+  if (diff < day) return `${Math.floor(diff / hour)}${taskStrings.time.hourAgo}`
+  return `${Math.floor(diff / day)}${taskStrings.time.dayAgo}`
+}
+
+const mapApiTaskToMission = (task: Task): MissionTask => {
+  const attr = mapRewardToAttr(task.attributeReward.type)
+  const createdAt = task.createdAt || defaultCreatedAt
+  const baseId = task._id || 'task'
+  const subtasks = (
+    task.subtasks && task.subtasks.length > 0
+      ? task.subtasks.map((s, idx) => ({
+          id: s._id || baseId + '-sub-' + (idx + 1),
+          title: s.title || `${taskStrings.labels.subtaskFallback} ${idx + 1}`,
+          current: s.current ?? 0,
+          total: s.total || 1,
+        }))
+      : [
+          {
+            id: baseId + '-sub-1',
+            title: task.title,
+            current: 0,
+            total: 1,
+          },
+        ]
+  )
+  const progress = task.computedProgress || summarizeSubtasksProgress(subtasks)
+  const dueIso = task.dueAt || task.updatedAt || task.createdAt || new Date(Date.now() + DAY).toISOString()
+  const dueMeta = computeDueMeta(dueIso)
+  const difficulty =
+    task.attributeReward.value >= 20
+      ? taskStrings.labels.difficultyMid
+      : taskStrings.labels.difficultyEasy
+  const isChallenge = task.seedKey?.startsWith('challenge_')
+  return {
+    id: task._id || Math.random().toString(36).slice(2),
+    title: task.title,
+    detail: task.detail || '',
+    attr,
+    points: task.attributeReward.value,
+    createdAt,
+    previousTaskId: task.previousTaskId ?? null,
+    seedKey: task.seedKey ?? null,
+    status: task.status,
+    creatorId: task.creatorId,
+    assigneeId: task.assigneeId ?? null,
+    creatorName: isChallenge ? taskStrings.labels.creatorSystem : task.creatorName || task.creatorId,
+    assigneeName: task.assigneeName || task.assigneeId || '',
+    icon: task.icon || '?',
+    progress: { current: progress.current, total: progress.total || 1 },
+    subtasks,
+    ...dueMeta,
+    difficulty,
+  }
+}
+
+const mapApiTaskToCollab = (task: Task): CollabTask => {
+  const attr = mapRewardToAttr(task.attributeReward.type)
+  const createdAt = task.createdAt || defaultCreatedAt
+  const baseId = task._id || 'task'
+  const subtasks =
+    task.subtasks && task.subtasks.length > 0
+      ? task.subtasks.map((s, idx) => ({
+          id: s._id || baseId + '-sub-' + (idx + 1),
+          title: s.title || `${taskStrings.labels.subtaskFallback} ${idx + 1}`,
+          current: s.current ?? 0,
+          total: s.total || 1,
+        }))
+      : []
+
+  const progress = task.computedProgress || summarizeSubtasksProgress(subtasks)
+  const dueIso = task.dueAt || task.updatedAt || task.createdAt || new Date(Date.now() + DAY).toISOString()
+  const dueMeta = computeDueMeta(dueIso)
+  const deleteAt = task.deleteAt || null
+  const deleteRemain = deleteAt ? humanizeRemain(deleteAt) : undefined
+
+  return {
+    id: task._id || Math.random().toString(36).slice(2),
+    title: task.title,
+    detail: task.detail || '',
+    attr,
+    points: task.attributeReward.value,
+    createdAt,
+    previousTaskId: task.previousTaskId ?? null,
+    startAt: task.startAt || undefined,
+    closedAt: task.closedAt ?? null,
+    originalDueAt: task.originalDueAt ?? null,
+    originalStartAt: task.originalStartAt ?? null,
+    originalStatus: task.originalStatus ?? null,
+    status: task.status,
+    creatorId: task.creatorId,
+    assigneeId: task.assigneeId ?? null,
+    creatorName: task.creatorName || task.creatorId,
+    assigneeName: task.assigneeName || task.assigneeId || '',
+    seedKey: task.seedKey ?? null,
+    submittedAt: task.submittedAt ?? null,
+    completedAt: task.completedAt ?? null,
+    deleteAt,
+    deleteRemain,
+    icon: task.icon || '?',
+    progress: { current: progress.current, total: progress.total || 1 },
+    subtasks,
+    ...dueMeta,
+  }
+}
+
+const mapApiTaskToArchived = (task: Task): ArchivedTask => {
+  const attr = mapRewardToAttr(task.attributeReward.type)
+  const createdAt = task.createdAt || defaultCreatedAt
+  const baseId = task._id || 'task'
+  const subtasks =
+    task.subtasks && task.subtasks.length > 0
+      ? task.subtasks.map((s, idx) => ({
+          id: s._id || baseId + '-sub-' + (idx + 1),
+          title: s.title || `${taskStrings.labels.subtaskFallback} ${idx + 1}`,
+          current: s.current ?? 0,
+          total: s.total || 1,
+        }))
+      : []
+  const isReviewPending = task.status === 'review_pending'
+  const finishedAt = isReviewPending
+    ? task.submittedAt || task.updatedAt || task.createdAt
+    : task.completedAt || task.updatedAt || task.createdAt
+  const deleteAt = isReviewPending ? null : task.deleteAt || null
+  return {
+    id: task._id || Math.random().toString(36).slice(2),
+    title: task.title,
+    detail: task.detail || '',
+    attr,
+    points: task.attributeReward.value,
+    createdAt,
+    previousTaskId: task.previousTaskId ?? null,
+    status: task.status,
+    creatorId: task.creatorId,
+    assigneeId: task.assigneeId ?? null,
+    creatorName: task.creatorName || task.creatorId,
+    assigneeName: task.assigneeName || task.assigneeId || '',
+    seedKey: task.seedKey ?? null,
+    icon: task.icon || '?',
+    finishedAgo: formatAgo(finishedAt),
+    submittedAt: task.submittedAt ?? null,
+    deleteAt: deleteAt || undefined,
+    deleteRemain: deleteAt ? humanizeRemain(deleteAt) : undefined,
+    subtasks,
+  }
+}
+
+const buildDashboardSnapshot = (dashboard: ReturnType<typeof getDashboardCache>) => {
+  if (!dashboard) {
+    return {
+      missionList: [] as MissionTask[],
+      collabList: [] as CollabTask[],
+      archivedList: [] as ArchivedTask[],
+      historyList: [] as CollabTask[],
+    }
+  }
+  const safe = <T,>(list: T[] | undefined) => (Array.isArray(list) ? list.filter(Boolean) : [])
+  const assigneeRaw = safe(dashboard.assignee)
+  const creatorRaw = safe(dashboard.creator)
+  const completedRaw = safe(dashboard.completed)
+  const historyRaw = safe(dashboard.history)
+  const supersededIds = new Set(
+    [...creatorRaw, ...assigneeRaw]
+      .filter((t) => t && t.status !== 'refactored' && t.previousTaskId)
+      .map((t) => String(t.previousTaskId))
+  )
+  const shouldHide = (task: Task) => supersededIds.has(String(task._id || ''))
+  const missionSource = assigneeRaw.filter(
+    (t) => (t.status === 'in_progress' || t.status === 'pending_confirmation') && !shouldHide(t)
+  )
+  const now = new Date()
+  const collabSource = creatorRaw.filter((t) => {
+    if (shouldHide(t)) return false
+    if (t.status === 'refactored') return false
+    if (t.assigneeId && t.creatorId === t.assigneeId) return false
+    if (t.status === 'closed' && t.dueAt && new Date(t.dueAt).getTime() < now.getTime()) return false
+    if (t.status === 'completed' && (!t.assigneeId || t.assigneeId === t.creatorId)) return false
+    return true
+  })
+  const missionList = missionSource
+    .map((t) => mapApiTaskToMission(t))
+    .filter((t) => t.status !== 'refactored')
+  const collabList = collabSource
+    .map((t) => mapApiTaskToCollab(t))
+    .filter((t) => t.status !== 'refactored' && !(t.assigneeId && t.creatorId === t.assigneeId))
+  const archivedList = completedRaw
+    .map((t) => mapApiTaskToArchived(t))
+    .filter((t) => t.status !== 'refactored')
+  const creatorHistory = creatorRaw.filter((t) => t.status === 'refactored')
+  const historyList = [...creatorHistory, ...historyRaw].map((t) => mapApiTaskToCollab(t))
+  return {
+    missionList: sortMissionTasks(missionList),
+    collabList: sortCollabTasks(collabList),
+    archivedList,
+    historyList,
+  }
 }
 
 function AttributeTag({ attr, points }: { attr: Attr; points: number }) {
@@ -343,17 +602,17 @@ function MissionCard({
         </View>
           <Text className='task-desc'>{task.detail}</Text>
           <ProgressBar current={progress.current} total={progress.total} />
-          <View className='card-meta'>
-            <View className='meta-item'>
-              <Text>{metaIcon.remain}</Text>
-              <Text>{metaText.remain}</Text>
-              <Text>{remainLabel}</Text>
-            </View>
-            <View className='meta-item'>
-              <Text>{metaIcon.due}</Text>
-              <Text>{metaText.due}</Text>
-              <Text>{dueLabel}</Text>
-            </View>
+        <View className='card-meta'>
+          <View className='meta-item'>
+            <Text>{metaIcon.remain}</Text>
+            <Text>{metaText.remain}</Text>
+            <Text>{remainLabel}</Text>
+          </View>
+          <View className='meta-item'>
+            <Text>{metaIcon.due}</Text>
+            <Text>{metaText.due}</Text>
+            <Text>{dueLabel}</Text>
+          </View>
             <View className='meta-item meta-start'>
               <Text>{metaIcon.start}</Text>
               <Text>{metaText.start}</Text>
@@ -785,19 +1044,20 @@ function MissionCard({
   )
 }
 
-function HistoryCard({ task }: { task: CollabTask }) {
+function HistoryCard({ task, className }: { task: CollabTask; className?: string }) {
   const tone = attrTone[task.attr]
   const hasSubtasks = !!task.subtasks && task.subtasks.length > 0
   const progress = task.progress || summarizeSubtasksProgress(task.subtasks || [])
-  const remainLabel = task.dueAt ? humanizeRemain(task.dueAt) : task.remain || ''
-  const dueLabel = task.dueAt ? formatDueLabel(task.dueAt) : task.dueLabel || ''
+  const isHistory = task.status === 'refactored'
+  const remainLabel = task.dueAt && !isHistory ? humanizeRemain(task.dueAt) : task.remain || ''
+  const dueLabel = task.dueAt && !isHistory ? formatDueLabel(task.dueAt) : task.dueLabel || ''
   const startIso = task.startAt || task.createdAt
   const startLabel = formatStartDate(startIso)
   const assigneeLabel = task.assigneeName || task.assigneeId || metaText.unassigned
   const creatorLabel = task.creatorName || task.creatorId || ''
 
   return (
-    <View className={`task-card tone-${tone}`}>
+    <View className={`task-card tone-${tone} ${className || ''}`.trim()}>
       <View className='card-head'>
         <View className='title-stack'>
           <StatusBadge status={task.status as TaskStatus} />
@@ -868,47 +1128,64 @@ export default function TasksPane({
   onProfileRefresh,
 }: TasksPaneProps) {
   const today = useMemo(() => new Date(), [])
+  const initialSnapshot = useMemo(() => buildDashboardSnapshot(getDashboardCache()), [])
+  const dashboardAtRef = useRef(getDashboardCacheTimestamp())
   const [activeTab, setActiveTab] = useState<TabKey>('mission')
-  const [missionTasks, setMissionTasks] = useState<MissionTask[]>([])
-  const normalizeStatus = (status?: string | null) => String(status || '').trim()
-
-  const sortMissionTasks = (items: MissionTask[]) => {
-    const sorted = [...items]
-    sorted.sort((a, b) => {
-      const aCompleted = normalizeStatus(a.status) === 'completed'
-      const bCompleted = normalizeStatus(b.status) === 'completed'
-      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
-      const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
-      const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
-      if (aDue !== bDue) return aDue - bDue
-      return a.createdAt.localeCompare(b.createdAt)
-    })
-    return sorted
-  }
-
-  const sortCollabTasks = (items: CollabTask[]) => {
-    const sorted = [...items]
-    sorted.sort((a, b) => {
-      const aCompleted = normalizeStatus(a.status) === 'completed'
-      const bCompleted = normalizeStatus(b.status) === 'completed'
-      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
-      const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY
-      const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY
-      if (aDue !== bDue) return aDue - bDue
-      return a.createdAt.localeCompare(b.createdAt)
-    })
-    return sorted
-  }
+  const [missionTasks, setMissionTasks] = useState<MissionTask[]>(initialSnapshot.missionList)
   const visibleMissionTasks = useMemo(() => sortMissionTasks(missionTasks), [missionTasks])
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [draftSubtasks, setDraftSubtasks] = useState<Record<string, Subtask[]>>({})
-  const [collabTasks, setCollabTasks] = useState<CollabTask[]>([])
+  const [collabTasks, setCollabTasks] = useState<CollabTask[]>(initialSnapshot.collabList)
   const visibleCollabTasks = useMemo(() => sortCollabTasks(collabTasks), [collabTasks])
   const [expandedCollabId, setExpandedCollabId] = useState<string | null>(null)
-  const [archivedTasks, setArchivedTasks] = useState<ArchivedTask[]>([])
-  const [historyTasks, setHistoryTasks] = useState<CollabTask[]>([])
+  const [archivedTasks, setArchivedTasks] = useState<ArchivedTask[]>(initialSnapshot.archivedList)
+  const [historyTasks, setHistoryTasks] = useState<CollabTask[]>(initialSnapshot.historyList)
   const historyMap = useMemo(() => new Map(historyTasks.map((task) => [task.id, task])), [historyTasks])
+  const normalizeDashboardList = <T,>(label: string, list: T[] | undefined) => {
+    const raw = Array.isArray(list) ? list : []
+    const filtered = raw.filter(Boolean)
+    if (taskDebug && filtered.length !== raw.length) {
+      console.log('dashboard sanitize', { label, raw: raw.length, filtered: filtered.length })
+    }
+    return filtered
+  }
+
+  const applyDashboardIfFresh = () => {
+    const cachedAt = getDashboardCacheTimestamp()
+    if (!cachedAt || cachedAt === dashboardAtRef.current) return
+    dashboardAtRef.current = cachedAt
+    applyDashboardSnapshot(getDashboardCache())
+  }
+
+  const applyDashboardSnapshot = (dashboard: ReturnType<typeof getDashboardCache>) => {
+    if (!dashboard) return
+    const assigneeRaw = normalizeDashboardList('assignee', dashboard.assignee)
+    const creatorRaw = normalizeDashboardList('creator', dashboard.creator)
+    const completedRaw = normalizeDashboardList('completed', dashboard.completed)
+    const historyRaw = normalizeDashboardList('history', dashboard.history)
+    const supersededIds = new Set(
+      [...creatorRaw, ...assigneeRaw]
+        .filter((t) => t && t.status !== 'refactored' && t.previousTaskId)
+        .map((t) => String(t.previousTaskId))
+    )
+    const shouldHide = (task: Task) => supersededIds.has(String(task._id || ''))
+    const missionSource = assigneeRaw.filter((t) =>
+      (t.status === 'in_progress' || t.status === 'pending_confirmation') && !shouldHide(t)
+    )
+    const now = new Date()
+    const collabSource = creatorRaw.filter((t) => {
+      if (shouldHide(t)) return false
+      if (t.status === 'refactored') return false
+      if (t.assigneeId && t.creatorId === t.assigneeId) return false
+      if (t.status === 'closed' && t.dueAt && new Date(t.dueAt).getTime() < now.getTime()) return false
+      if (t.status === 'completed' && (!t.assigneeId || t.assigneeId === t.creatorId)) return false
+      return true
+    })
+    applyTaskLists(missionSource, collabSource, completedRaw)
+    const creatorHistory = creatorRaw.filter((t) => t.status === 'refactored')
+    setHistoryTasks([...creatorHistory, ...historyRaw].map((t) => mapApiTaskToCollab(t)))
+  }
   const completedCountRef = useRef<number | null>(null)
   const pollingBusyRef = useRef(false)
   const [loadingRemote, setLoadingRemote] = useState(false)
@@ -1104,20 +1381,6 @@ export default function TasksPane({
     return date
   }
 
-  const computeDueMeta = (iso: string) => {
-    const due = new Date(iso)
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate())
-    const dueDays = Math.floor((dueStart.getTime() - todayStart.getTime()) / DAY)
-    return {
-      dueAt: iso,
-      remain: humanizeRemain(iso),
-      dueLabel: formatDueLabel(iso),
-      dueDays,
-    }
-  }
-
   const buildTaskLists = (mission: Task[], collab: Task[], archived: Task[]) => {
     const missionList = mission
       .map((t) => mapApiTaskToMission(t))
@@ -1160,11 +1423,22 @@ export default function TasksPane({
     try {
       const dashboard = await fetchTaskDashboard({ force: true })
       if (shouldCancel?.()) return
-      const missionSource = (dashboard.assignee || []).filter((t) =>
-        t.status === 'in_progress' || t.status === 'pending_confirmation'
+      const assigneeRaw = normalizeDashboardList('assignee', dashboard.assignee)
+      const creatorRaw = normalizeDashboardList('creator', dashboard.creator)
+      const completedRaw = normalizeDashboardList('completed', dashboard.completed)
+      const historyRaw = normalizeDashboardList('history', dashboard.history)
+      const supersededIds = new Set(
+        [...creatorRaw, ...assigneeRaw]
+          .filter((t) => t && t.status !== 'refactored' && t.previousTaskId)
+          .map((t) => String(t.previousTaskId))
+      )
+      const shouldHide = (task: Task) => supersededIds.has(String(task._id || ''))
+      const missionSource = assigneeRaw.filter((t) =>
+        (t.status === 'in_progress' || t.status === 'pending_confirmation') && !shouldHide(t)
       )
       const now = new Date()
-      const collabSource = (dashboard.creator || []).filter((t) => {
+      const collabSource = creatorRaw.filter((t) => {
+        if (shouldHide(t)) return false
         if (t.status === 'refactored') return false
         if (t.assigneeId && t.creatorId === t.assigneeId) return false
         if (t.status === 'closed' && t.dueAt && new Date(t.dueAt).getTime() < now.getTime()) return false
@@ -1175,11 +1449,14 @@ export default function TasksPane({
         console.log('refreshTasks ok', {
           missionCount: missionSource.length,
           collabCount: collabSource.length,
-          archivedCount: dashboard.completed.length,
+          archivedCount: completedRaw.length,
         })
       }
-      applyTaskLists(missionSource, collabSource, dashboard.completed)
-      setHistoryTasks((dashboard.history || []).map((t) => mapApiTaskToCollab(t)))
+      applyTaskLists(missionSource, collabSource, completedRaw)
+      const creatorHistory = creatorRaw.filter((t) => t.status === 'refactored')
+      setHistoryTasks(
+        [...creatorHistory, ...historyRaw].map((t) => mapApiTaskToCollab(t))
+      )
     } catch (err: any) {
       console.error('load tasks error', err)
       if (!shouldCancel?.()) {
@@ -1202,11 +1479,22 @@ export default function TasksPane({
     try {
       const dashboard = await fetchTaskDashboard()
       if (shouldCancel?.()) return
-      const missionSource = (dashboard.assignee || []).filter((t) =>
-        t.status === 'in_progress' || t.status === 'pending_confirmation'
+      const assigneeRaw = normalizeDashboardList('assignee', dashboard.assignee)
+      const creatorRaw = normalizeDashboardList('creator', dashboard.creator)
+      const completedRaw = normalizeDashboardList('completed', dashboard.completed)
+      const historyRaw = normalizeDashboardList('history', dashboard.history)
+      const supersededIds = new Set(
+        [...creatorRaw, ...assigneeRaw]
+          .filter((t) => t && t.status !== 'refactored' && t.previousTaskId)
+          .map((t) => String(t.previousTaskId))
+      )
+      const shouldHide = (task: Task) => supersededIds.has(String(task._id || ''))
+      const missionSource = assigneeRaw.filter((t) =>
+        (t.status === 'in_progress' || t.status === 'pending_confirmation') && !shouldHide(t)
       )
       const now = new Date()
-      const collabSource = (dashboard.creator || []).filter((t) => {
+      const collabSource = creatorRaw.filter((t) => {
+        if (shouldHide(t)) return false
         if (t.status === 'refactored') return false
         if (t.assigneeId && t.creatorId === t.assigneeId) return false
         if (t.status === 'closed' && t.dueAt && new Date(t.dueAt).getTime() < now.getTime()) return false
@@ -1216,12 +1504,15 @@ export default function TasksPane({
       const { missionList, collabList, archivedList } = buildTaskLists(
         missionSource,
         collabSource,
-        dashboard.completed
+        completedRaw
       )
       setMissionTasks((prev) => sortMissionTasks(mergeById(prev, missionList)))
       setCollabTasks((prev) => sortCollabTasks(mergeById(prev, collabList)))
       setArchivedTasks((prev) => mergeById(prev, archivedList))
-      setHistoryTasks((prev) => mergeById(prev, (dashboard.history || []).map((t) => mapApiTaskToCollab(t))))
+      const nextHistory = [...creatorRaw.filter((t) => t.status === 'refactored'), ...historyRaw].map((t) =>
+        mapApiTaskToCollab(t)
+      )
+      setHistoryTasks((prev) => mergeById(prev, nextHistory))
       const completedCount =
         missionList.filter((t) => t.status === 'completed').length +
         collabList.filter((t) => t.status === 'completed').length +
@@ -1283,29 +1574,18 @@ export default function TasksPane({
     }
   }, [showCreate])
 
-  useEffect(() => {
-    if (!isActive) return
-    let cancelled = false
-    const cancelCheck = () => cancelled
-    void refreshTasks(cancelCheck)
-    return () => {
-      cancelled = true
-    }
-  }, [isActive])
+  useLayoutEffect(() => {
+    applyDashboardIfFresh()
+  }, [authVersion])
 
   useEffect(() => {
-    if (!isActive) return
-    if (editingTaskId || showCreate || historyLoading || confirmReworkOpen || creating || generating) return
-    let cancelled = false
-    const cancelCheck = () => cancelled
-    const timer = setInterval(() => {
-      void refreshTasksSilent(cancelCheck)
-    }, POLL_INTERVAL)
+    const unsubscribe = subscribeDashboardCache(() => {
+      applyDashboardIfFresh()
+    })
     return () => {
-      cancelled = true
-      clearInterval(timer)
+      unsubscribe()
     }
-  }, [isActive, editingTaskId, showCreate, historyLoading, confirmReworkOpen, creating, generating])
+  }, [])
 
   useEffect(() => {
     const enabled = taskMemReport
@@ -1605,168 +1885,6 @@ export default function TasksPane({
           : s
       )
     )
-  }
-
-  const mapRewardToAttr = (val: 'wisdom' | 'strength' | 'agility') => {
-    if (val === 'wisdom') return taskStrings.rewards.wisdom.label
-    if (val === 'strength') return taskStrings.rewards.strength.label
-    return taskStrings.rewards.agility.label
-  }
-
-  const formatAgo = (iso?: string) => {
-    if (!iso) return ''
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return ''
-    const diff = Date.now() - d.getTime()
-    const minute = 60 * 1000
-    const hour = 60 * minute
-    const day = 24 * hour
-    if (diff < minute) return taskStrings.time.justNow
-    if (diff < hour) return `${Math.floor(diff / minute)}${taskStrings.time.minuteAgo}`
-    if (diff < day) return `${Math.floor(diff / hour)}${taskStrings.time.hourAgo}`
-    return `${Math.floor(diff / day)}${taskStrings.time.dayAgo}`
-  }
-
-  const mapApiTaskToMission = (task: Task): MissionTask => {
-    const attr = mapRewardToAttr(task.attributeReward.type)
-    const createdAt = task.createdAt || defaultCreatedAt
-    const baseId = task._id || 'task'
-    const subtasks = (
-      task.subtasks && task.subtasks.length > 0
-        ? task.subtasks.map((s, idx) => ({
-            id: s._id || baseId + '-sub-' + (idx + 1),
-            title: s.title || `${taskStrings.labels.subtaskFallback} ${idx + 1}`,
-            current: s.current ?? 0,
-            total: s.total || 1,
-          }))
-        : [
-            {
-              id: baseId + '-sub-1',
-              title: task.title,
-              current: 0,
-              total: 1,
-            },
-          ]
-    )
-    const progress = task.computedProgress || summarizeSubtasksProgress(subtasks)
-    const dueIso = task.dueAt || task.updatedAt || task.createdAt || new Date(Date.now() + DAY).toISOString()
-    const dueMeta = computeDueMeta(dueIso)
-    const difficulty =
-      task.attributeReward.value >= 20
-        ? taskStrings.labels.difficultyMid
-        : taskStrings.labels.difficultyEasy
-    const isChallenge = task.seedKey?.startsWith('challenge_')
-    return {
-      id: task._id || Math.random().toString(36).slice(2),
-      title: task.title,
-      detail: task.detail || '',
-      attr,
-      points: task.attributeReward.value,
-      createdAt,
-      previousTaskId: task.previousTaskId ?? null,
-      seedKey: task.seedKey ?? null,
-      status: task.status,
-      creatorId: task.creatorId,
-      assigneeId: task.assigneeId ?? null,
-      creatorName: isChallenge ? taskStrings.labels.creatorSystem : task.creatorName || task.creatorId,
-      assigneeName: task.assigneeName || task.assigneeId || '',
-      icon: task.icon || '?',
-      progress: { current: progress.current, total: progress.total || 1 },
-      subtasks,
-      ...dueMeta,
-      difficulty,
-    }
-  }
-
-  const mapApiTaskToCollab = (task: Task): CollabTask => {
-    const attr = mapRewardToAttr(task.attributeReward.type)
-    const createdAt = task.createdAt || defaultCreatedAt
-    const baseId = task._id || 'task'
-    const subtasks =
-      task.subtasks && task.subtasks.length > 0
-        ? task.subtasks.map((s, idx) => ({
-            id: s._id || baseId + '-sub-' + (idx + 1),
-            title: s.title || `${taskStrings.labels.subtaskFallback} ${idx + 1}`,
-            current: s.current ?? 0,
-            total: s.total || 1,
-          }))
-        : []
-
-    const progress = task.computedProgress || summarizeSubtasksProgress(subtasks)
-    const dueIso = task.dueAt || task.updatedAt || task.createdAt || new Date(Date.now() + DAY).toISOString()
-    const dueMeta = computeDueMeta(dueIso)
-    const deleteAt = task.deleteAt || null
-    const deleteRemain = deleteAt ? humanizeRemain(deleteAt) : undefined
-
-    return {
-      id: task._id || Math.random().toString(36).slice(2),
-      title: task.title,
-      detail: task.detail || '',
-      attr,
-      points: task.attributeReward.value,
-      createdAt,
-      previousTaskId: task.previousTaskId ?? null,
-      startAt: task.startAt || undefined,
-      closedAt: task.closedAt ?? null,
-      originalDueAt: task.originalDueAt ?? null,
-      originalStartAt: task.originalStartAt ?? null,
-      originalStatus: task.originalStatus ?? null,
-      status: task.status,
-      creatorId: task.creatorId,
-      assigneeId: task.assigneeId ?? null,
-      creatorName: task.creatorName || task.creatorId,
-      assigneeName: task.assigneeName || task.assigneeId || '',
-      seedKey: task.seedKey ?? null,
-      submittedAt: task.submittedAt ?? null,
-      completedAt: task.completedAt ?? null,
-      deleteAt,
-      deleteRemain,
-      icon: task.icon || '?',
-      progress: { current: progress.current, total: progress.total || 1 },
-      subtasks,
-      ...dueMeta,
-    }
-  }
-
-  const mapApiTaskToArchived = (task: Task): ArchivedTask => {
-    const attr = mapRewardToAttr(task.attributeReward.type)
-    const createdAt = task.createdAt || defaultCreatedAt
-    const baseId = task._id || 'task'
-    const subtasks =
-      task.subtasks && task.subtasks.length > 0
-        ? task.subtasks.map((s, idx) => ({
-            id: s._id || baseId + '-sub-' + (idx + 1),
-            title: s.title || `${taskStrings.labels.subtaskFallback} ${idx + 1}`,
-            current: s.current ?? 0,
-            total: s.total || 1,
-          }))
-        : []
-    const isReviewPending = task.status === 'review_pending'
-    const finishedAt = isReviewPending
-      ? task.submittedAt || task.updatedAt || task.createdAt
-      : task.completedAt || task.updatedAt || task.createdAt
-    const deleteAt = isReviewPending ? null : task.deleteAt || null
-    return {
-      id: task._id || Math.random().toString(36).slice(2),
-      title: task.title,
-      detail: task.detail || '',
-      attr,
-      points: task.attributeReward.value,
-      createdAt,
-      previousTaskId: task.previousTaskId ?? null,
-      status: task.status,
-      creatorId: task.creatorId,
-      assigneeId: task.assigneeId ?? null,
-      creatorName: task.creatorName || task.creatorId,
-      assigneeName: task.assigneeName || task.assigneeId || '',
-      seedKey: task.seedKey ?? null,
-      icon: task.icon || '?',
-      finishedAgo: formatAgo(finishedAt),
-      submittedAt: task.submittedAt ?? null,
-      deleteAt: deleteAt || undefined,
-      deleteRemain: deleteAt ? humanizeRemain(deleteAt) : undefined,
-      subtasks,
-    }
   }
 
   const resetForm = (clearLine = true) => {
@@ -2485,29 +2603,20 @@ export default function TasksPane({
       )}
 
       {historyVisible && (
-        <View className='task-modal-overlay' onClick={handleCloseHistory}>
+        <View className='mini-dialog-overlay' onClick={handleCloseHistory}>
           <View
-            className='task-modal card'
+            className='mini-dialog-wrap'
             onClick={(e) => {
               e.stopPropagation()
             }}
           >
-            <View className='modal-head'>
-              <View>
-                <Text className='modal-title'>{taskStrings.modal.historyTitle}</Text>
-                <Text className='modal-sub'>{taskStrings.modal.historySub}</Text>
-              </View>
-              <Text className='modal-close' onClick={handleCloseHistory}>
-                {taskStrings.modal.closeIcon}
-              </Text>
-            </View>
-            <View className='modal-body'>
-              {historyLoading || !historyTask ? (
+            {historyLoading || !historyTask ? (
+              <View className='mini-dialog card'>
                 <Text className='modal-hint'>{taskStrings.modal.loading}</Text>
-              ) : (
-                <HistoryCard task={historyTask} />
-              )}
-            </View>
+              </View>
+            ) : (
+              <HistoryCard task={historyTask} className='mini-dialog card' />
+            )}
           </View>
         </View>
       )}

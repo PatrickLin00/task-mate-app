@@ -150,6 +150,36 @@ export type TaskDashboardResponse = {
 const DASHBOARD_CACHE_MS = 1500
 let dashboardCache: { data: TaskDashboardResponse; at: number } | null = null
 let dashboardInFlight: Promise<TaskDashboardResponse> | null = null
+const dashboardSubscribers = new Set<(data: TaskDashboardResponse) => void>()
+
+export function getCachedTaskById(taskId: string) {
+  const cached = dashboardCache?.data
+  if (!cached) return null
+  const allTasks = [
+    ...(cached.creator || []),
+    ...(cached.assignee || []),
+    ...(cached.completed || []),
+    ...(cached.history || []),
+    ...(cached.today?.tasks || []),
+    ...(cached.challenge || []),
+  ]
+  return allTasks.find((task) => String(task?._id || '') === String(taskId)) || null
+}
+
+export function getDashboardCache() {
+  return dashboardCache?.data || null
+}
+
+export function getDashboardCacheTimestamp() {
+  return dashboardCache?.at || 0
+}
+
+export function subscribeDashboardCache(listener: (data: TaskDashboardResponse) => void) {
+  dashboardSubscribers.add(listener)
+  return () => {
+    dashboardSubscribers.delete(listener)
+  }
+}
 
 export async function fetchTaskDashboard(options?: { force?: boolean }) {
   const now = Date.now()
@@ -157,6 +187,7 @@ export async function fetchTaskDashboard(options?: { force?: boolean }) {
     return dashboardCache.data
   }
   if (dashboardInFlight) return dashboardInFlight
+  if (TASK_DEBUG) console.log('fetchTaskDashboard start', { force: options?.force })
   dashboardInFlight = requestJson<TaskDashboardResponse>({
     url: `${BASE_URL}/api/tasks/dashboard`,
     method: 'GET',
@@ -164,7 +195,29 @@ export async function fetchTaskDashboard(options?: { force?: boolean }) {
   })
   try {
     const data = await dashboardInFlight
+    if (TASK_DEBUG) {
+      const count = (list?: unknown[]) => (Array.isArray(list) ? list.length : 0)
+      const nullCount = (list?: unknown[]) =>
+        Array.isArray(list) ? list.filter((item) => !item).length : 0
+      console.log('fetchTaskDashboard ok', {
+        creator: count(data.creator),
+        assignee: count(data.assignee),
+        completed: count(data.completed),
+        history: count(data.history),
+        today: count(data.today?.tasks),
+        challenge: count(data.challenge),
+        nulls: {
+          creator: nullCount(data.creator),
+          assignee: nullCount(data.assignee),
+          completed: nullCount(data.completed),
+          history: nullCount(data.history),
+          today: nullCount(data.today?.tasks),
+          challenge: nullCount(data.challenge),
+        },
+      })
+    }
     dashboardCache = { data, at: Date.now() }
+    dashboardSubscribers.forEach((listener) => listener(data))
     return data
   } finally {
     dashboardInFlight = null

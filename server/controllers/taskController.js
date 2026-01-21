@@ -48,10 +48,12 @@ const buildAttributeInc = (reward) => {
 }
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id)
-let taskDebugEnabled = String(process.env.TASK_DEBUG_LOGS || '').toLowerCase() === 'true'
+const isTaskDebugEnvEnabled = () =>
+  String(process.env.TASK_DEBUG_LOGS || '').toLowerCase() === 'true'
+let taskDebugEnabled = isTaskDebugEnvEnabled()
 
 const taskDebugLog = (...args) => {
-  if (!taskDebugEnabled) return
+  if (!taskDebugEnabled && !isTaskDebugEnvEnabled()) return
   console.log(...args)
 }
 
@@ -449,8 +451,8 @@ exports.getTask = async (req, res) => {
 
     const { id } = req.params
     if (!isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' })
-    const task = await Task.findById(id)
-    if (!task) return res.status(404).json({ error: 'task not found' })
+      const task = await Task.findById(id)
+      if (!task) return res.status(404).json({ error: 'task not found' })
 
     if (!visibleToUserId(task, userId)) {
       const canPreviewShared = task.status === 'pending' && !task.assigneeId
@@ -1603,9 +1605,18 @@ exports.getDashboard = async (req, res) => {
     const userId = ensureAuthorized(req, res)
     if (!userId) return
 
+    taskDebugLog('getDashboard start', { userId })
     const now = new Date()
     const dayStart = startOfDay(now)
     const dayEnd = endOfDay(now)
+    if (taskDebugEnabled) {
+      taskDebugLog('getDashboard query', {
+        userId,
+        now: now.toISOString(),
+        dayStart: dayStart.toISOString(),
+        dayEnd: dayEnd.toISOString(),
+      })
+    }
 
     const { creatorId, start: seedStart, end: seedEnd, seeds } = getDailyChallengeSeeds(userId, now, 5)
     const seedKeys = seeds.map((s) => s.seedKey)
@@ -1617,6 +1628,14 @@ exports.getDashboard = async (req, res) => {
       Task.find({ creatorId, seedKey: { $in: seedKeys } }).select(TASK_LIST_FIELDS).sort({ createdAt: 1 }).lean(),
     ])
 
+    if (taskDebugEnabled) {
+      const sampleIds = (items) => items.slice(0, 3).map((t) => String(t?._id || t?.id || ''))
+      taskDebugLog('getDashboard sample', {
+        creatorIds: sampleIds(creatorTasks),
+        assigneeIds: sampleIds(assigneeTasks),
+        completedIds: sampleIds(completed),
+      })
+    }
     const historyIds = Array.from(
       new Set(
         assigneeTasks
@@ -1628,6 +1647,17 @@ exports.getDashboard = async (req, res) => {
     const historyTasks = historyIds.length
       ? await Task.find({ _id: { $in: historyIds } }).select(TASK_LIST_FIELDS).lean()
       : []
+    if (taskDebugEnabled) {
+      taskDebugLog('getDashboard tasks', {
+        userId,
+        creator: creatorTasks.length,
+        assignee: assigneeTasks.length,
+        completed: completed.length,
+        historyIds: historyIds.length,
+        history: historyTasks.length,
+        challengeExisting: challengeExisting.length,
+      })
+    }
 
     const activeAssignee = assigneeTasks.filter((t) => ACTIVE_ASSIGNEE_STATUS.includes(t.status))
     const overdue = activeAssignee.filter((t) => t.dueAt && t.dueAt < dayStart)
@@ -1663,7 +1693,7 @@ exports.getDashboard = async (req, res) => {
       ...historyTasks,
     ])
 
-    return res.json({
+    const response = {
       creator: buildResponsesWithNamesFromMap(creatorTasks, nameMap),
       assignee: buildResponsesWithNamesFromMap(assigneeTasks, nameMap),
       completed: buildResponsesWithNamesFromMap(archivedSorted, nameMap),
@@ -1673,7 +1703,19 @@ exports.getDashboard = async (req, res) => {
         tasks: buildResponsesWithNamesFromMap(picked, nameMap),
       },
       challenge: buildResponsesWithNamesFromMap(challenge, nameMap),
-    })
+    }
+    if (taskDebugEnabled) {
+      taskDebugLog('getDashboard response', {
+        userId,
+        creator: response.creator.length,
+        assignee: response.assignee.length,
+        completed: response.completed.length,
+        history: response.history.length,
+        today: response.today?.tasks?.length || 0,
+        challenge: response.challenge.length,
+      })
+    }
+    return res.json(response)
   } catch (error) {
     console.error('getDashboard error:', error)
     return res.status(500).json({ error: 'get dashboard failed' })

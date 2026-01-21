@@ -1,6 +1,6 @@
 import { View, Text, Swiper, SwiperItem, Input, Button } from '@tarojs/components'
 import Taro, { useDidShow, useShareAppMessage } from '@tarojs/taro'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import './index.scss'
 
 import HomePane from './panes/HomePane'
@@ -9,7 +9,7 @@ import AchievementsPane from './panes/AchievementsPane'
 import ProfilePane from './panes/ProfilePane'
 import { taskStrings } from './shared/strings'
 import { randomNickname } from './shared/nickname'
-import { fetchProfile, updateProfile } from '@/services/api'
+import { fetchProfile, updateProfile, fetchTaskDashboard } from '@/services/api'
 import { getUserId } from '@/services/auth'
 
 type Tab = 'home' | 'tasks' | 'achievements' | 'profile'
@@ -18,8 +18,10 @@ const tabMeta: Record<Tab, { label: string; icon: string }> = taskStrings.nav
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>('home')
+  const [swiperDuration, setSwiperDuration] = useState(220)
   const [authVersion, setAuthVersion] = useState(0)
   const [openTaskId, setOpenTaskId] = useState<string | undefined>(undefined)
+  const warmupDoneRef = useRef(false)
   const [profile, setProfile] = useState<{
     userId: string
     nickname: string
@@ -136,6 +138,18 @@ export default function Index() {
     setOpenTaskId(next)
     if (next) setActiveTab('home')
     void refreshProfile()
+    void fetchTaskDashboard().then(() => {
+      if (warmupDoneRef.current) return
+      if (next) return
+      warmupDoneRef.current = true
+      const previousTab = activeTab
+      setSwiperDuration(0)
+      setActiveTab('tasks')
+      Taro.nextTick(() => {
+        setActiveTab(previousTab)
+        setSwiperDuration(220)
+      })
+    })
   })
 
   useShareAppMessage((res) => {
@@ -214,7 +228,8 @@ export default function Index() {
         current={tabOrder.indexOf(activeTab)}
         onChange={(e) => setActiveTab(tabOrder[e.detail.current])}
         circular={false}
-        duration={220}
+        duration={swiperDuration}
+        skipHiddenItemLayout={false}
       >
         <SwiperItem>
           <HomePane
