@@ -28,7 +28,6 @@ import {
   submitReview,
   continueReview,
   deleteTask,
-  fetchTaskDashboard,
   getDashboardCache,
   getDashboardCacheTimestamp,
   generateTaskSuggestion,
@@ -87,7 +86,6 @@ const metaText = taskStrings.metaText
 type SubtaskInput = { title: string; total: number }
 
 const DAY = 24 * 60 * 60 * 1000
-const POLL_INTERVAL = 30 * 1000
 const pad2 = (num: number) => (num < 10 ? `0${num}` : `${num}`)
 const taskDebug = TASK_DEBUG
 const taskMemReport = TASK_MEM_REPORT
@@ -1187,8 +1185,6 @@ export default function TasksPane({
     setHistoryTasks([...creatorHistory, ...historyRaw].map((t) => mapApiTaskToCollab(t)))
   }
   const completedCountRef = useRef<number | null>(null)
-  const pollingBusyRef = useRef(false)
-  const [loadingRemote, setLoadingRemote] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [reworkTaskId, setReworkTaskId] = useState<string | null>(null)
   const [historyTask, setHistoryTask] = useState<CollabTask | null>(null)
@@ -1417,131 +1413,41 @@ export default function TasksPane({
     }
   }
 
-  const refreshTasks = async (shouldCancel?: () => boolean) => {
-    if (loadingRemote) return
-    setLoadingRemote(true)
-    try {
-      const dashboard = await fetchTaskDashboard({ force: true })
-      if (shouldCancel?.()) return
-      const assigneeRaw = normalizeDashboardList('assignee', dashboard.assignee)
-      const creatorRaw = normalizeDashboardList('creator', dashboard.creator)
-      const completedRaw = normalizeDashboardList('completed', dashboard.completed)
-      const historyRaw = normalizeDashboardList('history', dashboard.history)
-      const supersededIds = new Set(
-        [...creatorRaw, ...assigneeRaw]
-          .filter((t) => t && t.status !== 'refactored' && t.previousTaskId)
-          .map((t) => String(t.previousTaskId))
-      )
-      const shouldHide = (task: Task) => supersededIds.has(String(task._id || ''))
-      const missionSource = assigneeRaw.filter((t) =>
-        (t.status === 'in_progress' || t.status === 'pending_confirmation') && !shouldHide(t)
-      )
-      const now = new Date()
-      const collabSource = creatorRaw.filter((t) => {
-        if (shouldHide(t)) return false
-        if (t.status === 'refactored') return false
-        if (t.assigneeId && t.creatorId === t.assigneeId) return false
-        if (t.status === 'closed' && t.dueAt && new Date(t.dueAt).getTime() < now.getTime()) return false
-        if (t.status === 'completed' && (!t.assigneeId || t.assigneeId === t.creatorId)) return false
-        return true
-      })
-      if (taskDebug) {
-        console.log('refreshTasks ok', {
-          missionCount: missionSource.length,
-          collabCount: collabSource.length,
-          archivedCount: completedRaw.length,
-        })
-      }
-      applyTaskLists(missionSource, collabSource, completedRaw)
-      const creatorHistory = creatorRaw.filter((t) => t.status === 'refactored')
-      setHistoryTasks(
-        [...creatorHistory, ...historyRaw].map((t) => mapApiTaskToCollab(t))
-      )
-    } catch (err: any) {
-      console.error('load tasks error', err)
-      if (!shouldCancel?.()) {
-        const hasLocal =
-          missionTasks.length > 0 || collabTasks.length > 0 || archivedTasks.length > 0
-        if (!hasLocal) {
-          setMissionTasks([])
-          setCollabTasks([])
-          setArchivedTasks([])
-        }
-      }
-    } finally {
-      setLoadingRemote(false)
-    }
+  const upsertMissionTask = (task: Task) => {
+    const mapped = mapApiTaskToMission(task)
+    setMissionTasks((prev) => {
+      const exists = prev.some((t) => t.id === mapped.id)
+      const next = exists ? prev.map((t) => (t.id === mapped.id ? mapped : t)) : [mapped, ...prev]
+      return sortMissionTasks(next.filter((t) => t.status !== 'refactored'))
+    })
   }
 
-  const refreshTasksSilent = async (shouldCancel?: () => boolean) => {
-    if (loadingRemote || pollingBusyRef.current) return
-    pollingBusyRef.current = true
-    try {
-      const dashboard = await fetchTaskDashboard()
-      if (shouldCancel?.()) return
-      const assigneeRaw = normalizeDashboardList('assignee', dashboard.assignee)
-      const creatorRaw = normalizeDashboardList('creator', dashboard.creator)
-      const completedRaw = normalizeDashboardList('completed', dashboard.completed)
-      const historyRaw = normalizeDashboardList('history', dashboard.history)
-      const supersededIds = new Set(
-        [...creatorRaw, ...assigneeRaw]
-          .filter((t) => t && t.status !== 'refactored' && t.previousTaskId)
-          .map((t) => String(t.previousTaskId))
-      )
-      const shouldHide = (task: Task) => supersededIds.has(String(task._id || ''))
-      const missionSource = assigneeRaw.filter((t) =>
-        (t.status === 'in_progress' || t.status === 'pending_confirmation') && !shouldHide(t)
-      )
-      const now = new Date()
-      const collabSource = creatorRaw.filter((t) => {
-        if (shouldHide(t)) return false
-        if (t.status === 'refactored') return false
-        if (t.assigneeId && t.creatorId === t.assigneeId) return false
-        if (t.status === 'closed' && t.dueAt && new Date(t.dueAt).getTime() < now.getTime()) return false
-        if (t.status === 'completed' && (!t.assigneeId || t.assigneeId === t.creatorId)) return false
-        return true
-      })
-      const { missionList, collabList, archivedList } = buildTaskLists(
-        missionSource,
-        collabSource,
-        completedRaw
-      )
-      setMissionTasks((prev) => sortMissionTasks(mergeById(prev, missionList)))
-      setCollabTasks((prev) => sortCollabTasks(mergeById(prev, collabList)))
-      setArchivedTasks((prev) => mergeById(prev, archivedList))
-      const nextHistory = [...creatorRaw.filter((t) => t.status === 'refactored'), ...historyRaw].map((t) =>
-        mapApiTaskToCollab(t)
-      )
-      setHistoryTasks((prev) => mergeById(prev, nextHistory))
-      const completedCount =
-        missionList.filter((t) => t.status === 'completed').length +
-        collabList.filter((t) => t.status === 'completed').length +
-        archivedList.filter((t) => t.status === 'completed').length
-      if (completedCountRef.current === null) {
-        completedCountRef.current = completedCount
-      } else if (completedCount > completedCountRef.current) {
-        completedCountRef.current = completedCount
-        onProfileRefresh?.()
-      } else {
-        completedCountRef.current = completedCount
-      }
-      if (taskDebug) {
-        console.log('refreshTasks diff', {
-          missionCount: missionList.length,
-          collabCount: collabList.length,
-          archivedCount: archivedList.length,
-        })
-      }
-    } catch (err: any) {
-      console.error('load tasks error', err)
-    } finally {
-      pollingBusyRef.current = false
-    }
+  const removeMissionTask = (taskId: string) => {
+    setMissionTasks((prev) => prev.filter((t) => t.id !== taskId))
   }
 
-  const refreshTasksWithNotice = async () => {
-    await refreshTasks()
-    Taro.showToast({ title: taskStrings.toast.dataRefreshed, icon: 'none' })
+  const removeCollabTask = (taskId: string) => {
+    setCollabTasks((prev) => prev.filter((t) => t.id !== taskId))
+  }
+
+  const restoreHistoryToCollab = (taskId?: string | null) => {
+    if (!taskId) return
+    const history = historyMap.get(taskId)
+    if (!history) return
+    const restored: CollabTask = {
+      ...history,
+      status: (history.originalStatus as TaskStatus) || 'in_progress',
+      startAt: history.originalStartAt || history.startAt,
+      dueAt: history.originalDueAt || history.dueAt,
+      closedAt: null,
+      deleteAt: null,
+      deleteRemain: undefined,
+      originalStatus: null,
+      originalStartAt: null,
+      originalDueAt: null,
+    }
+    setHistoryTasks((prev) => prev.filter((t) => t.id !== taskId))
+    setCollabTasks((prev) => sortCollabTasks([restored, ...prev.filter((t) => t.id !== taskId)]))
   }
 
   const reportMemoryUsage = () => {
@@ -1653,11 +1559,9 @@ export default function TasksPane({
       const updated = await refreshTaskSchedule(taskId)
       updateCollabTaskInState(taskId, updated)
       Taro.showToast({ title: taskStrings.toast.refreshTaskOk, icon: 'success' })
-      await refreshTasks()
     } catch (err: any) {
       console.error('refresh task error', err)
       Taro.showToast({ title: taskStrings.toast.refreshTaskFail, icon: 'none' })
-      await refreshTasks()
     }
   }
 
@@ -1675,7 +1579,6 @@ export default function TasksPane({
       Taro.showToast({ title: taskStrings.toast.deleted, icon: 'success' })
     } catch (err: any) {
       console.error('delete task error', err)
-      await refreshTasksWithNotice()
     }
   }
 
@@ -1690,10 +1593,8 @@ export default function TasksPane({
     try {
       await abandonTask(taskId)
       Taro.showToast({ title: taskStrings.toast.abandoned, icon: 'success' })
-      await refreshTasks()
     } catch (err: any) {
       console.error('abandon task error', err)
-      await refreshTasksWithNotice()
     }
   }
 
@@ -1743,7 +1644,6 @@ export default function TasksPane({
       Taro.showToast({ title: taskStrings.toast.submitted, icon: 'success' })
     } catch (err: any) {
       console.error('update progress error', err)
-      await refreshTasksWithNotice()
     } finally {
       setEditingTaskId(null)
       setDraftSubtasks((prev) => {
@@ -1765,7 +1665,6 @@ export default function TasksPane({
       onProfileRefresh?.()
     } catch (err: any) {
       console.error('complete task error', err)
-      await refreshTasksWithNotice()
     }
   }
 
@@ -1784,7 +1683,6 @@ export default function TasksPane({
       onProfileRefresh?.()
     } catch (err: any) {
       console.error('complete task error', err)
-      await refreshTasksWithNotice()
     }
   }
 
@@ -1808,7 +1706,6 @@ export default function TasksPane({
       Taro.showToast({ title: taskStrings.toast.submitted, icon: 'success' })
     } catch (err: any) {
       console.error('submit review error', err)
-      await refreshTasksWithNotice()
     }
   }
 
@@ -1820,7 +1717,6 @@ export default function TasksPane({
       Taro.showToast({ title: taskStrings.toast.reviewContinue, icon: 'success' })
     } catch (err: any) {
       console.error('continue review error', err)
-      await refreshTasksWithNotice()
     }
   }
 
@@ -1838,7 +1734,6 @@ export default function TasksPane({
       Taro.showToast({ title: taskStrings.toast.deleted, icon: 'success' })
     } catch (err: any) {
       console.error('delete archived task error', err)
-      await refreshTasksWithNotice()
     }
   }
 
@@ -1939,34 +1834,38 @@ export default function TasksPane({
   const handleAcceptRework = async (taskId: string) => {
     try {
       await requestTaskSubscribeAuth()
-      await acceptReworkTask(taskId)
+      const updated = await acceptReworkTask(taskId)
+      upsertMissionTask(updated)
+      removeCollabTask(taskId)
       Taro.showToast({ title: taskStrings.toast.accepted, icon: 'success' })
-      await refreshTasks()
     } catch (err: any) {
       console.error('accept rework error', err)
-      await refreshTasksWithNotice()
+      Taro.showToast({ title: err?.message || taskStrings.toast.reworkFail, icon: 'none' })
     }
   }
 
   const handleRejectRework = async (taskId: string) => {
     try {
       await rejectReworkTask(taskId)
+      removeMissionTask(taskId)
+      removeCollabTask(taskId)
       Taro.showToast({ title: taskStrings.toast.rejected, icon: 'success' })
-      await refreshTasks()
     } catch (err: any) {
       console.error('reject rework error', err)
-      await refreshTasksWithNotice()
+      Taro.showToast({ title: err?.message || taskStrings.toast.reworkFail, icon: 'none' })
     }
   }
 
   const handleCancelRework = async (taskId: string) => {
     try {
+      const pending = collabTasks.find((t) => t.id === taskId)
       await cancelReworkTask(taskId)
+      removeCollabTask(taskId)
+      restoreHistoryToCollab(pending?.previousTaskId || null)
       Taro.showToast({ title: taskStrings.toast.canceled, icon: 'success' })
-      await refreshTasks()
     } catch (err: any) {
       console.error('cancel rework error', err)
-      await refreshTasksWithNotice()
+      Taro.showToast({ title: err?.message || taskStrings.toast.reworkFail, icon: 'none' })
     }
   }
 

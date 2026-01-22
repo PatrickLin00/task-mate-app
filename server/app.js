@@ -3,6 +3,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '.env') })
 const express = require('express')
 const cors = require('cors')
 const mongoose = require('mongoose')
+const http = require('http')
 
 const taskRoutes = require('./routes/taskRoutes')
 const authRoutes = require('./routes/authRoutes')
@@ -12,6 +13,7 @@ const { migrateUserIds } = require('./utils/migrateLegacyIds')
 const { migrateTaskIds } = require('./utils/migrateLegacyTaskIds')
 const { cleanupLegacyTestTasks } = require('./utils/cleanupDevData')
 const { startSubscribeScheduler } = require('./utils/subscribeScheduler')
+const { initWebSocket } = require('./utils/wsHub')
 
 const app = express()
 
@@ -100,7 +102,9 @@ const start = async () => {
     startSubscribeScheduler()
 
     const PORT = process.env.PORT || 3000
-    app.listen(PORT, () => {
+    const server = http.createServer(app)
+    initWebSocket(server)
+    server.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`)
     })
   } catch (err) {

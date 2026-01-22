@@ -23,6 +23,7 @@
     "jsonwebtoken": "^9.0.2",
     "mint-filter": "^4.0.3",
     "mongoose": "^8.19.2",
-    "openai": "^6.7.0"
+    "openai": "^6.7.0",
+    "ws": "^8.18.0"
   }
 }

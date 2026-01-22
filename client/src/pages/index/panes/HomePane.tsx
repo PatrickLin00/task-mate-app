@@ -22,10 +22,12 @@ import {
   completeTask,
   submitReview,
   fetchTaskDashboard,
+  getDashboardCache,
   getCachedTaskById,
   getTask,
   patchProgress,
   rejectReworkTask,
+  subscribeDashboardCache,
   type Task,
 } from '@/services/api'
 import { ensureWeappLogin } from '@/services/auth'
@@ -59,7 +61,6 @@ const UI = {
 const homeStrings = taskStrings.home
 
 const FRAME_DURATION = 240
-const POLL_INTERVAL = 30 * 1000
 
 const mergeById = <T extends { id: string }>(prev: T[], next: T[]) => {
   const nextMap = new Map(next.map((item) => [item.id, item]))
@@ -127,7 +128,6 @@ export default function HomePane({
     [heroStats?.wisdom, heroStats?.strength, heroStats?.agility]
   )
   const [todayTasks, setTodayTasks] = useState<RoadTask[]>([])
-  const pollingBusyRef = useRef(false)
   const [feedTasks, setFeedTasks] = useState<RoadTask[]>([])
   const [historyTasks, setHistoryTasks] = useState<RoadTask[]>([])
   const historyMap = useMemo(
@@ -363,7 +363,6 @@ export default function HomePane({
       await requestTaskSubscribeAuth()
       await acceptChallengeTask(taskId)
       Taro.showToast({ title: taskStrings.toast.createAccepted, icon: 'success' })
-      await refreshHomeTasks()
     } catch (err) {
       console.error('accept challenge error', err)
       await refreshAfterNotice()
@@ -385,7 +384,6 @@ export default function HomePane({
       setModalTask(null)
       setDialogEditing(false)
       setDialogDraft([])
-      await refreshHomeTasks()
     } catch (err) {
       console.error('abandon task error', err)
       await refreshAfterNotice()
@@ -400,7 +398,6 @@ export default function HomePane({
       setModalTask(null)
       setDialogEditing(false)
       setDialogDraft([])
-      await refreshHomeTasks()
       onProfileRefresh?.()
     } catch (err) {
       console.error('complete task error', err)
@@ -418,7 +415,6 @@ export default function HomePane({
       setDialogEditing(false)
       setDialogDraft([])
       setShareOnly(false)
-      await refreshHomeTasks()
     } catch (err) {
       console.error('accept task error', err)
       const errData = (err as any)?.data
@@ -426,7 +422,6 @@ export default function HomePane({
       const isExpired = errMessage === 'task expired' || errData?.error === 'task expired'
       if (isExpired) {
         Taro.showToast({ title: taskStrings.toast.taskExpired, icon: 'none' })
-        await refreshHomeTasks()
         return
       }
       const refreshed = await refreshModalTask(modalTask.id)
@@ -454,7 +449,6 @@ export default function HomePane({
       setModalTask(null)
       setDialogEditing(false)
       setDialogDraft([])
-      await refreshHomeTasks()
     } catch (err) {
       console.error('submit review error', err)
       await refreshAfterNotice()
@@ -471,7 +465,6 @@ export default function HomePane({
       setDialogEditing(false)
       setDialogDraft([])
       setShareOnly(false)
-      await refreshHomeTasks()
     } catch (err) {
       console.error('accept rework error', err)
       await refreshAfterNotice()
@@ -487,7 +480,6 @@ export default function HomePane({
       setDialogEditing(false)
       setDialogDraft([])
       setShareOnly(false)
-      await refreshHomeTasks()
     } catch (err) {
       console.error('reject rework error', err)
       await refreshAfterNotice()
@@ -534,35 +526,40 @@ export default function HomePane({
       (modalTask.status !== 'pending' || (modalTask.assigneeId && modalTask.assigneeId !== ''))
   )
 
+  const applyDashboardSnapshot = (dashboard: ReturnType<typeof getDashboardCache>, showNotice = false) => {
+    if (!dashboard) return
+    const todayRaw = normalizeDashboardList('today', dashboard.today?.tasks)
+    const challengeRaw = normalizeDashboardList('challenge', dashboard.challenge)
+    const creatorRaw = normalizeDashboardList('creator', dashboard.creator)
+    const assigneeRaw = normalizeDashboardList('assignee', dashboard.assignee)
+    const historyRaw = normalizeDashboardList('history', dashboard.history)
+    const supersededIds = new Set(
+      [...creatorRaw, ...assigneeRaw]
+        .filter((t) => t && t.status !== 'refactored' && t.previousTaskId)
+        .map((t) => String(t.previousTaskId))
+    )
+    const shouldHide = (task: Task) => supersededIds.has(String(task._id || ''))
+    setTodayTasks(
+      todayRaw
+        .filter((t) => t.status !== 'refactored' && !shouldHide(t))
+        .map((t) => mapApiTaskToRoad(t))
+    )
+    setFeedTasks(challengeRaw.map((t) => mapApiTaskToRoad(t)))
+    const creatorHistory = creatorRaw.filter((t) => t.status === 'refactored')
+    const assigneeHistory = assigneeRaw.filter((t) => t.status === 'refactored')
+    setHistoryTasks(
+      [...creatorHistory, ...assigneeHistory, ...historyRaw].map((t) => mapApiTaskToRoad(t))
+    )
+    if (showNotice) {
+      Taro.showToast({ title: taskStrings.toast.dataRefreshed, icon: 'none' })
+    }
+  }
+
   const refreshHomeTasks = async (showNotice = false, shouldCancel?: () => boolean) => {
     try {
       const dashboard = await fetchTaskDashboard({ force: showNotice })
       if (shouldCancel?.()) return
-      const todayRaw = normalizeDashboardList('today', dashboard.today?.tasks)
-      const challengeRaw = normalizeDashboardList('challenge', dashboard.challenge)
-      const creatorRaw = normalizeDashboardList('creator', dashboard.creator)
-      const assigneeRaw = normalizeDashboardList('assignee', dashboard.assignee)
-      const historyRaw = normalizeDashboardList('history', dashboard.history)
-      const supersededIds = new Set(
-        [...creatorRaw, ...assigneeRaw]
-          .filter((t) => t && t.status !== 'refactored' && t.previousTaskId)
-          .map((t) => String(t.previousTaskId))
-      )
-      const shouldHide = (task: Task) => supersededIds.has(String(task._id || ''))
-      setTodayTasks(
-        todayRaw
-          .filter((t) => t.status !== 'refactored' && !shouldHide(t))
-          .map((t) => mapApiTaskToRoad(t))
-      )
-      setFeedTasks(challengeRaw.map((t) => mapApiTaskToRoad(t)))
-      const creatorHistory = creatorRaw.filter((t) => t.status === 'refactored')
-      const assigneeHistory = assigneeRaw.filter((t) => t.status === 'refactored')
-      setHistoryTasks(
-        [...creatorHistory, ...assigneeHistory, ...historyRaw].map((t) => mapApiTaskToRoad(t))
-      )
-      if (showNotice) {
-        Taro.showToast({ title: taskStrings.toast.dataRefreshed, icon: 'none' })
-      }
+      applyDashboardSnapshot(dashboard, showNotice)
     } catch (err) {
       console.error('load home tasks error', err)
       if (shouldCancel?.()) return
@@ -604,47 +601,6 @@ export default function HomePane({
     await refreshHomeTasks(true)
   }
 
-  const refreshHomeTasksSilent = async (shouldCancel?: () => boolean) => {
-    if (pollingBusyRef.current) return
-    pollingBusyRef.current = true
-    try {
-      const dashboard = await fetchTaskDashboard()
-      if (shouldCancel?.()) return
-      const todayRaw = normalizeDashboardList('today', dashboard.today?.tasks)
-      const challengeRaw = normalizeDashboardList('challenge', dashboard.challenge)
-      const creatorRaw = normalizeDashboardList('creator', dashboard.creator)
-      const assigneeRaw = normalizeDashboardList('assignee', dashboard.assignee)
-      const historyRaw = normalizeDashboardList('history', dashboard.history)
-      const supersededIds = new Set(
-        [...creatorRaw, ...assigneeRaw]
-          .filter((t) => t && t.status !== 'refactored' && t.previousTaskId)
-          .map((t) => String(t.previousTaskId))
-      )
-      const shouldHide = (task: Task) => supersededIds.has(String(task._id || ''))
-      const nextToday = todayRaw
-        .filter((t) => t.status !== 'refactored' && !shouldHide(t))
-        .map((t) => mapApiTaskToRoad(t))
-      const nextFeed = challengeRaw.map((t) => mapApiTaskToRoad(t))
-      const nextHistory = [
-        ...creatorRaw.filter((t) => t.status === 'refactored'),
-        ...assigneeRaw.filter((t) => t.status === 'refactored'),
-        ...historyRaw,
-      ].map((t) => mapApiTaskToRoad(t))
-      setTodayTasks((prev) => mergeById(prev, nextToday))
-      setFeedTasks((prev) => mergeById(prev, nextFeed))
-      setHistoryTasks((prev) => mergeById(prev, nextHistory))
-      if (taskDebug) {
-        console.log('refreshHomeTasks diff', {
-          todayCount: nextToday.length,
-          feedCount: nextFeed.length,
-        })
-      }
-    } catch (err) {
-      console.error('load home tasks error', err)
-    } finally {
-      pollingBusyRef.current = false
-    }
-  }
 
   useEffect(() => {
     if (nameGateActive && modalTask) {
@@ -667,26 +623,17 @@ export default function HomePane({
 
   useEffect(() => {
     if (!isActive) return
-    let cancelled = false
-    void refreshHomeTasks(false, () => cancelled)
-    return () => {
-      cancelled = true
-    }
+    applyDashboardSnapshot(getDashboardCache())
   }, [authVersion, isActive])
 
   useEffect(() => {
-    if (!isActive) return
-    if (dialogEditing) return
-    let cancelled = false
-    const cancelCheck = () => cancelled
-    const timer = setInterval(() => {
-      void refreshHomeTasksSilent(cancelCheck)
-    }, POLL_INTERVAL)
+    const unsubscribe = subscribeDashboardCache((dashboard) => {
+      applyDashboardSnapshot(dashboard)
+    })
     return () => {
-      cancelled = true
-      clearInterval(timer)
+      unsubscribe()
     }
-  }, [isActive, dialogEditing, shareOnly, modalTask])
+  }, [])
 
   const openTodayTip = () => {
     const query = Taro.createSelectorQuery()
@@ -728,19 +675,6 @@ export default function HomePane({
     })
   }, [showTodayTip, todayTipStyle.left])
 
-  useEffect(() => {
-    if (!isActive || !modalTask || dialogEditing) return
-    let cancelled = false
-    const taskId = modalTask.id
-    const timer = setInterval(() => {
-      if (cancelled) return
-      void refreshModalTask(taskId)
-    }, POLL_INTERVAL)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [isActive, modalTask?.id, dialogEditing])
 
   useEffect(() => {
     if (taskDebug) {

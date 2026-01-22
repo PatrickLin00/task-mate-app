@@ -10,6 +10,7 @@ import ProfilePane from './panes/ProfilePane'
 import { taskStrings } from './shared/strings'
 import { randomNickname } from './shared/nickname'
 import { fetchProfile, updateProfile, fetchTaskDashboard } from '@/services/api'
+import { connectTaskSocket } from '@/services/socket'
 import { getUserId } from '@/services/auth'
 
 type Tab = 'home' | 'tasks' | 'achievements' | 'profile'
@@ -137,6 +138,7 @@ export default function Index() {
     if (next) setActiveTab('home')
     void refreshProfile()
     void fetchTaskDashboard()
+    void connectTaskSocket()
   })
 
   useShareAppMessage((res) => {

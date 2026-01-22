@@ -7,6 +7,7 @@ const { VALUES } = require('../utils/subscribeLabels')
 const { buildSubscribeData } = require('../utils/subscribePayload')
 const { containsSensitiveTask, SENSITIVE_HINT } = require('../utils/contentFilter')
 const { moderateText } = require('../utils/moderation')
+const { emitTaskChanged, emitTaskRemoved } = require('../utils/wsHub')
 const {
   getDailyChallengeSeeds,
   buildChallengeTaskSeed,
@@ -149,6 +150,20 @@ const buildResponseWithNames = async (taskDoc, nameMap) => {
   doc.creatorName = normalizeDisplayName(taskDoc?.creatorId, resolvedMap)
   doc.assigneeName = taskDoc?.assigneeId ? normalizeDisplayName(taskDoc?.assigneeId, resolvedMap) : ''
   return doc
+}
+
+const respondWithTask = async (res, taskDoc) => {
+  const payload = await buildResponseWithNames(taskDoc)
+  emitTaskChanged(payload)
+  return res.json(payload)
+}
+
+const maybeEmitTaskChange = (body) => {
+  if (!body) return
+  const candidate = body?.task && (body.task._id || body.task.id) ? body.task : body
+  if (candidate && (candidate._id || candidate.id)) {
+    emitTaskChanged(candidate)
+  }
 }
 
 const buildResponsesWithNames = async (tasks) => {
@@ -414,7 +429,9 @@ exports.createTask = async (req, res) => {
       status: task.status,
     })
 
-    return res.status(201).json(await buildResponseWithNames(task))
+    const payload = await buildResponseWithNames(task)
+    emitTaskChanged(payload)
+    return res.status(201).json(payload)
   } catch (error) {
     console.error('createTask error:', error)
     return res.status(500).json({ error: 'create task failed' })
@@ -615,7 +632,7 @@ exports.closeTask = async (req, res) => {
         },
       })
     }
-    return res.json(await buildResponseWithNames(updated))
+    return respondWithTask(res, updated)
   } catch (error) {
     console.error('closeTask error:', error)
     return res.status(500).json({ error: 'close task failed' })
@@ -634,6 +651,7 @@ exports.deleteTask = async (req, res) => {
     let reviewNotify = null
     let cancelNotify = null
     let reworkNotify = null
+    let removedTask = null
 
     try {
       await session.withTransaction(async () => {
@@ -686,6 +704,7 @@ exports.deleteTask = async (req, res) => {
             title: task.title,
             assigneeId: task.assigneeId,
           }
+          removedTask = { id: task._id, users: [task.creatorId, task.assigneeId] }
       })
     } finally {
       session.endSession()
@@ -719,6 +738,11 @@ exports.deleteTask = async (req, res) => {
         } catch (error) {
           console.error('rejectReworkTask subscribe error:', error)
         }
+      }
+      maybeEmitTaskChange(response.body)
+      maybeEmitTaskChange(response.body)
+      if (removedTask) {
+        emitTaskRemoved(removedTask.id, removedTask.users)
       }
       return res.status(response.status).json(response.body)
     }
@@ -900,6 +924,7 @@ exports.reworkTask = async (req, res) => {
           console.error('reworkTask subscribe error:', error)
         }
       }
+      maybeEmitTaskChange(response.body)
       return res.status(response.status).json(response.body)
     }
 
@@ -1023,6 +1048,7 @@ exports.acceptReworkTask = async (req, res) => {
           console.error('acceptReworkTask subscribe error:', error)
         }
       }
+      maybeEmitTaskChange(response.body)
       return res.status(response.status).json(response.body)
     }
 
@@ -1162,6 +1188,7 @@ exports.rejectReworkTask = async (req, res) => {
           console.error('cancelReworkTask subscribe error:', error)
         }
       }
+      maybeEmitTaskChange(response.body)
       return res.status(response.status).json(response.body)
     }
 
@@ -1246,6 +1273,7 @@ exports.cancelReworkTask = async (req, res) => {
     }
 
     if (response) {
+      maybeEmitTaskChange(response.body)
       return res.status(response.status).json(response.body)
     }
 
@@ -1300,7 +1328,7 @@ exports.restartTask = async (req, res) => {
     )
 
     if (!updated) return conflict(res)
-    return res.json(await buildResponseWithNames(updated))
+    return respondWithTask(res, updated)
   } catch (error) {
     console.error('restartTask error:', error)
     return res.status(500).json({ error: 'restart task failed' })
@@ -1342,7 +1370,7 @@ exports.refreshTaskSchedule = async (req, res) => {
 
     if (!updated) return conflict(res)
 
-    return res.json(await buildResponseWithNames(updated))
+    return respondWithTask(res, updated)
   } catch (error) {
     console.error('refreshTaskSchedule error:', error)
     return res.status(500).json({ error: 'refresh task failed' })
@@ -1459,7 +1487,7 @@ exports.acceptChallengeTask = async (req, res) => {
         updated.deleteAt = updated.dueAt
       }
 
-      return res.json(await buildResponseWithNames(updated))
+      return respondWithTask(res, updated)
     }
 
     const picked = seeds.find((s) => s.seedKey === id)
@@ -1483,7 +1511,7 @@ exports.acceptChallengeTask = async (req, res) => {
       assigneeId: created.assigneeId,
     })
 
-    return res.json(await buildResponseWithNames(created))
+    return respondWithTask(res, created)
   } catch (error) {
     console.error('acceptChallengeTask error:', error)
     return res.status(500).json({ error: 'accept challenge failed' })
@@ -1559,7 +1587,7 @@ exports.acceptTask = async (req, res) => {
       }
     }
 
-    return res.json(await buildResponseWithNames(updated))
+    return respondWithTask(res, updated)
   } catch (error) {
     console.error('acceptTask error:', error)
     return res.status(500).json({ error: 'accept task failed' })
@@ -1636,7 +1664,7 @@ exports.getDashboard = async (req, res) => {
         completedIds: sampleIds(completed),
       })
     }
-    const historyIds = Array.from(
+    const directHistoryIds = Array.from(
       new Set(
         assigneeTasks
           .map((task) => task.previousTaskId)
@@ -1644,17 +1672,29 @@ exports.getDashboard = async (req, res) => {
           .map((id) => String(id))
       )
     )
-    const historyTasks = historyIds.length
-      ? await Task.find({ _id: { $in: historyIds } }).select(TASK_LIST_FIELDS).lean()
+    const historyTasks = directHistoryIds.length
+      ? await Task.find({ _id: { $in: directHistoryIds } }).select(TASK_LIST_FIELDS).lean()
       : []
+    const pendingHistoryIds = new Set(
+      assigneeTasks
+        .filter((task) => task.status === 'pending_confirmation' && task.previousTaskId)
+        .map((task) => String(task.previousTaskId))
+    )
+    const chainedHistoryIds = historyTasks
+      .filter((task) => pendingHistoryIds.has(String(task._id)) && task.previousTaskId)
+      .map((task) => String(task.previousTaskId))
+    const chainedHistoryTasks = chainedHistoryIds.length
+      ? await Task.find({ _id: { $in: chainedHistoryIds } }).select(TASK_LIST_FIELDS).lean()
+      : []
+    const combinedHistoryTasks = [...historyTasks, ...chainedHistoryTasks]
     if (taskDebugEnabled) {
       taskDebugLog('getDashboard tasks', {
         userId,
         creator: creatorTasks.length,
         assignee: assigneeTasks.length,
         completed: completed.length,
-        historyIds: historyIds.length,
-        history: historyTasks.length,
+        historyIds: directHistoryIds.length,
+        history: combinedHistoryTasks.length,
         challengeExisting: challengeExisting.length,
       })
     }
@@ -1690,14 +1730,14 @@ exports.getDashboard = async (req, res) => {
       ...assigneeTasks,
       ...archivedSorted,
       ...challenge,
-      ...historyTasks,
+      ...combinedHistoryTasks,
     ])
 
     const response = {
       creator: buildResponsesWithNamesFromMap(creatorTasks, nameMap),
       assignee: buildResponsesWithNamesFromMap(assigneeTasks, nameMap),
       completed: buildResponsesWithNamesFromMap(archivedSorted, nameMap),
-      history: buildResponsesWithNamesFromMap(historyTasks, nameMap),
+      history: buildResponsesWithNamesFromMap(combinedHistoryTasks, nameMap),
       today: {
         dueTodayCount: dueToday.length,
         tasks: buildResponsesWithNamesFromMap(picked, nameMap),
@@ -1763,7 +1803,7 @@ exports.updateProgress = async (req, res) => {
 
     if (!updated) return conflict(res)
 
-    return res.json(await buildResponseWithNames(updated))
+    return respondWithTask(res, updated)
   } catch (error) {
     console.error('updateProgress error:', error)
     return res.status(500).json({ error: 'update progress failed' })
@@ -1855,6 +1895,7 @@ exports.submitReview = async (req, res) => {
         console.error('submitReview subscribe error:', error)
       }
     }
+    maybeEmitTaskChange(response.body)
     return res.status(response.status).json(response.body)
   } catch (error) {
     console.error('submitReview error:', error)
@@ -1906,7 +1947,10 @@ exports.continueReview = async (req, res) => {
       session.endSession()
     }
 
-    if (response) return res.status(response.status).json(response.body)
+    if (response) {
+      maybeEmitTaskChange(response.body)
+      return res.status(response.status).json(response.body)
+    }
     return res.status(500).json({ error: 'continue review failed' })
   } catch (error) {
     console.error('continueReview error:', error)
@@ -1971,6 +2015,7 @@ exports.completeTask = async (req, res) => {
     }
 
     if (response) {
+      maybeEmitTaskChange(response.body)
       return res.status(response.status).json(response.body)
     }
 
@@ -2036,7 +2081,7 @@ exports.abandonTask = async (req, res) => {
       }
     }
 
-    return res.json(await buildResponseWithNames(updated))
+    return respondWithTask(res, updated)
   } catch (error) {
     console.error('abandonTask error:', error)
     return res.status(500).json({ error: 'abandon task failed' })
