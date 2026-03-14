@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "pages/home/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "Task Mate",
+    "navigationBarBackgroundColor": "#f4ead9",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f4ead9",
+    "backgroundTextStyle": "light"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

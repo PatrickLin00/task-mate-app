@@ -1,0 +1,361 @@
+﻿<scroll-view
+  class="page-scroll"
+  scroll-y="true"
+  enhanced="true"
+  show-scrollbar="false"
+  refresher-enabled="true"
+  refresher-triggered="{{refreshing}}"
+  bindrefresherrefresh="onPullDownRefresh"
+>
+<view class="page-shell">
+  <view class="hero card {{heroCollapsed ? 'collapsed' : ''}}">
+    <view class="hero-toolbar">
+      <view class="eyebrow">{{strings.hero.eyebrow}}</view>
+      <view class="hero-toggle" bindtap="toggleHeroCollapse">
+        <view class="hero-toggle-stack">
+          <view class="hero-toggle-arrow up {{heroCollapsed ? 'hidden' : 'shown'}}">{{strings.icons.arrowUp}}</view>
+          <view class="hero-toggle-arrow down {{heroCollapsed ? 'shown' : 'hidden'}}">{{strings.icons.arrowDown}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="hero-expanded {{heroCollapsed ? 'hero-panel-hidden' : 'hero-panel-visible'}}">
+      <view class="hero-top">
+        <view class="hero-copy">
+          <view class="title">{{profile.nickname || strings.common.unnamedTraveler}}</view>
+          <view class="section-subtitle">{{strings.hero.intro}}</view>
+        </view>
+        <button hover-class="button-press" hover-stay-time="90" class="primary-button mini-button hero-create-inline" bindtap="openCreateModal">{{strings.hero.createTask}}</button>
+      </view>
+
+      <view class="hero-stats">
+        <view class="stat">
+          <view class="stat-value">{{profile.wisdom || 0}}</view>
+          <view class="stat-label">{{strings.hero.wisdom}}</view>
+        </view>
+        <view class="stat">
+          <view class="stat-value">{{profile.strength || 0}}</view>
+          <view class="stat-label">{{strings.hero.strength}}</view>
+        </view>
+        <view class="stat">
+          <view class="stat-value">{{profile.agility || 0}}</view>
+          <view class="stat-label">{{strings.hero.agility}}</view>
+        </view>
+        <view class="stat">
+          <view class="stat-value">{{dashboard.summary.totalOpen || 0}}</view>
+          <view class="stat-label">{{strings.hero.totalOpen}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="hero-collapsed {{heroCollapsed ? 'hero-panel-visible' : 'hero-panel-hidden'}}">
+      <view class="hero-mini-row">
+        <view class="hero-mini-name">{{profile.nickname || strings.common.unnamedTraveler}}</view>
+        <view class="hero-mini-metrics">
+          <view class="hero-mini-metric">{{strings.hero.strengthMini}}: {{profile.strength || 0}}</view>
+          <view class="hero-mini-metric">{{strings.hero.wisdomMini}}: {{profile.wisdom || 0}}</view>
+          <view class="hero-mini-metric">{{strings.hero.agilityMini}}: {{profile.agility || 0}}</view>
+          <view class="hero-mini-metric">{{strings.hero.totalMini}}: {{dashboard.summary.totalOpen || 0}}</view>
+        </view>
+      </view>
+
+      <view class="hero-create-row">
+        <button hover-class="button-press" hover-stay-time="90" class="primary-button hero-create-full" bindtap="openCreateModal">{{strings.hero.createTask}}</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="tabs card">
+    <view class="tab {{activeTab === 'home' ? 'active' : ''}}" data-tab="home" bindtap="setTab">{{strings.tabs.home}}</view>
+    <view class="tab {{activeTab === 'mission' ? 'active' : ''}}" data-tab="mission" bindtap="setTab">{{strings.tabs.mission}}</view>
+    <view class="tab {{activeTab === 'collab' ? 'active' : ''}}" data-tab="collab" bindtap="setTab">{{strings.tabs.collab}}</view>
+    <view class="tab {{activeTab === 'archive' ? 'active' : ''}}" data-tab="archive" bindtap="setTab">{{strings.tabs.archive}}</view>
+    <view class="tab {{activeTab === 'achievements' ? 'active' : ''}}" data-tab="achievements" bindtap="setTab">{{strings.tabs.achievements}}</view>
+    <view class="tab {{activeTab === 'profile' ? 'active' : ''}}" data-tab="profile" bindtap="setTab">{{strings.tabs.profile}}</view>
+  </view>
+
+  <view class="tab-stage" animation="{{tabAnimation}}">
+    <block wx:if="{{activeTab === 'home'}}">
+      <view class="tab-pane">
+        <view class="card section-card">
+          <view class="section-title">{{strings.home.todayTitle}}</view>
+          <view class="section-subtitle">{{strings.home.todaySubtitle}}</view>
+          <view class="task-list" wx:if="{{view.todayTasks.length}}">
+            <view wx:for="{{view.todayTasks}}" wx:key="_id" class="task-item" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
+              <view class="task-head">
+                <view class="task-title">{{item.title}}</view>
+                <view class="task-status">{{item.statusText}}</view>
+              </view>
+              <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}</view>
+              <view class="task-meta">{{strings.archive.progress}} {{item.progressText}}</view>
+            </view>
+          </view>
+          <view class="empty" wx:else>{{strings.home.todayEmpty}}</view>
+        </view>
+
+        <view class="card section-card">
+          <view class="section-title">{{strings.home.challengeTitle}}</view>
+          <view class="section-subtitle">{{strings.home.challengeSubtitle}}</view>
+          <view class="task-list" wx:if="{{view.challengeTasks.length}}">
+            <view wx:for="{{view.challengeTasks}}" wx:key="_id" class="task-item">
+              <view class="task-head">
+                <view class="task-title">{{item.title}}</view>
+                <view class="task-status">{{item.isVirtual ? strings.home.challengeVirtual : item.statusText}}</view>
+              </view>
+              <view class="task-meta">{{item.detail}}</view>
+              <view class="task-meta">{{strings.home.challengeReward}} {{item.rewardText}}</view>
+              <view class="task-actions">
+                <button hover-class="button-press" hover-stay-time="90" wx:if="{{item.isVirtual}}" size="mini" class="primary-button mini-button" loading="{{actionLoading === 'acceptChallenge'}}" disabled="{{loading && actionLoading !== 'acceptChallenge'}}" data-seed-key="{{item.seedKey}}" bindtap="onAcceptChallenge">{{strings.home.challengeAccept}}</button>
+                <button hover-class="button-press" hover-stay-time="90" wx:else size="mini" class="ghost-button mini-button" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">{{strings.home.challengeView}}</button>
+              </view>
+            </view>
+          </view>
+          <view class="empty" wx:else>{{strings.home.challengeEmpty}}</view>
+        </view>
+      </view>
+    </block>
+
+    <block wx:elif="{{activeTab === 'mission'}}">
+      <view class="card section-card tab-pane">
+        <view class="section-title">{{strings.mission.title}}</view>
+        <view class="section-subtitle">{{strings.mission.subtitle}}</view>
+        <view class="task-list" wx:if="{{view.missionTasks.length}}">
+          <view wx:for="{{view.missionTasks}}" wx:key="_id" class="task-item" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
+            <view class="task-head">
+              <view class="task-title">{{item.title}}</view>
+              <view class="task-status">{{item.statusText}}</view>
+            </view>
+            <view class="task-meta">{{item.creatorName || strings.common.system}}{{strings.mission.creatorJoin}}{{item.progressText}}</view>
+            <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}</view>
+          </view>
+        </view>
+        <view class="empty" wx:else>{{strings.mission.empty}}</view>
+      </view>
+    </block>
+
+    <block wx:elif="{{activeTab === 'collab'}}">
+      <view class="card section-card tab-pane">
+        <view class="section-title">{{strings.collab.title}}</view>
+        <view class="section-subtitle">{{strings.collab.subtitle}}</view>
+        <view class="task-list" wx:if="{{view.collabTasks.length}}">
+          <view wx:for="{{view.collabTasks}}" wx:key="_id" class="task-item" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
+            <view class="task-head">
+              <view class="task-title">{{item.title}}</view>
+              <view class="task-status">{{item.statusText}}</view>
+            </view>
+            <view class="task-meta">{{item.assigneeName ? (strings.collab.assigneePrefix + item.assigneeName) : strings.collab.waitingAccept}}</view>
+            <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}</view>
+            <view class="inline-actions">
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{item.canOpenHistory}}" size="mini" class="ghost-button mini-button" catchtap="openPreviousVersion" data-task-id="{{item.previousTaskId}}">{{strings.collab.previousVersionShort}}</button>
+            </view>
+          </view>
+        </view>
+        <view class="empty" wx:else>{{strings.collab.empty}}</view>
+
+        <view wx:if="{{view.historyTasks.length}}" class="history-block">
+          <view class="section-subtitle">{{strings.collab.historyTitle}}</view>
+          <view class="task-list">
+            <view wx:for="{{view.historyTasks}}" wx:key="_id" class="task-item" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
+              <view class="task-head">
+                <view class="task-title">{{item.title}}</view>
+                <view class="task-status">{{item.statusText}}</view>
+              </view>
+              <view class="task-meta">{{strings.collab.createdAt}} {{item.dueText}}</view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <block wx:elif="{{activeTab === 'archive'}}">
+      <view class="card section-card tab-pane">
+        <view class="section-title">{{strings.archive.title}}</view>
+        <view class="section-subtitle">{{strings.archive.subtitle}}</view>
+        <view class="task-list" wx:if="{{view.archiveTasks.length}}">
+          <view wx:for="{{view.archiveTasks}}" wx:key="_id" class="task-item archive-item" data-task-id="{{item._id}}" data-source="archive" bindtap="openTask">
+            <view class="task-head">
+              <view class="task-title">{{item.title}}</view>
+              <view class="task-status">{{item.statusText}}</view>
+            </view>
+            <view class="task-meta">{{strings.archive.recordedAt}} {{item.finishedText}}</view>
+            <view class="task-meta">{{strings.archive.progress}} {{item.progressText}}</view>
+          </view>
+        </view>
+        <view class="empty" wx:else>{{strings.archive.empty}}</view>
+      </view>
+    </block>
+
+    <block wx:elif="{{activeTab === 'achievements'}}">
+      <view class="card section-card tab-pane">
+        <view class="section-title">{{strings.achievements.title}}</view>
+        <view class="section-subtitle">{{strings.achievements.subtitle}}</view>
+        <view class="achievement-grid">
+          <view class="achievement-item">
+            <view class="achievement-title">{{strings.achievements.wisdom}}</view>
+            <view class="task-meta">{{strings.achievements.currentPointsPrefix}}{{profile.wisdom || 0}}{{strings.achievements.currentPointsSuffix}}</view>
+          </view>
+          <view class="achievement-item">
+            <view class="achievement-title">{{strings.achievements.strength}}</view>
+            <view class="task-meta">{{strings.achievements.currentPointsPrefix}}{{profile.strength || 0}}{{strings.achievements.currentPointsSuffix}}</view>
+          </view>
+          <view class="achievement-item">
+            <view class="achievement-title">{{strings.achievements.agility}}</view>
+            <view class="task-meta">{{strings.achievements.currentPointsPrefix}}{{profile.agility || 0}}{{strings.achievements.currentPointsSuffix}}</view>
+          </view>
+          <view class="achievement-item">
+            <view class="achievement-title">{{strings.achievements.recentArchive}}</view>
+            <view class="task-meta">{{view.archiveTasks.length}}{{strings.achievements.recordCountSuffix}}</view>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="card section-card tab-pane">
+        <view class="section-title">{{strings.profile.title}}</view>
+        <view class="section-subtitle">{{strings.profile.subtitle}}</view>
+        <view class="profile-block">
+          <view class="task-meta">{{strings.profile.userId}}: {{profile.userId}}</view>
+          <view class="task-meta">{{strings.profile.nickname}}: {{profile.nickname}}</view>
+          <button hover-class="button-press" hover-stay-time="90" class="ghost-button" bindtap="openProfileEdit">{{strings.profile.editNickname}}</button>
+          <button hover-class="button-press" hover-stay-time="90" class="ghost-button" bindtap="onRequestSubscribe">{{strings.profile.subscribe}}</button>
+        </view>
+        <view class="profile-block">
+          <view class="section-subtitle">{{strings.profile.syncTitle}}</view>
+          <view class="task-meta">{{strings.profile.sync1}}</view>
+          <view class="task-meta">{{strings.profile.sync2}}</view>
+          <view class="task-meta">{{strings.profile.sync3}}</view>
+        </view>
+      </view>
+    </block>
+  </view>
+  </view>
+</scroll-view>
+  <view wx:if="{{detailMounted && selectedTask}}" class="modal-mask {{detailVisible ? 'modal-open' : ''}} {{detailClosing ? 'modal-closing' : ''}}" bindtap="closeTaskModal" catchtouchmove="noop">
+    <scroll-view scroll-y="true" class="modal modal-scroll card" catchtap="noop">
+      <view class="modal-head">
+        <view class="section-title">{{selectedTask.title}}</view>
+        <view class="task-status">{{selectedTask.statusText}}</view>
+      </view>
+
+      <view wx:if="{{selectedTask.detail}}" class="task-meta">{{selectedTask.detail}}</view>
+      <view class="task-meta">{{strings.detail.dueAt}} {{selectedTask.dueText}}</view>
+      <view class="task-meta">{{strings.detail.reward}} {{selectedTask.rewardText}}</view>
+      <view class="task-meta">{{strings.detail.creator}} {{selectedTask.creatorName || strings.common.system}}</view>
+      <view wx:if="{{selectedTask.assigneeName}}" class="task-meta">{{strings.detail.assignee}} {{selectedTask.assigneeName}}</view>
+      <view wx:if="{{selectedTask.completedText && !selectedTask.isArchive}}" class="task-meta">{{strings.detail.completedAt}} {{selectedTask.completedText}}</view>
+      <view wx:if="{{selectedTask.closedText && !selectedTask.isArchive}}" class="task-meta">{{strings.detail.closedAt}} {{selectedTask.closedText}}</view>
+      <view wx:if="{{selectedTask.finishedText && selectedTask.isArchive}}" class="task-meta">{{strings.detail.recordedAt}} {{selectedTask.finishedText}}</view>
+
+      <view wx:if="{{selectedTaskDraftSubtasks.length}}" class="subtasks">
+        <view wx:for="{{selectedTaskDraftSubtasks}}" wx:key="index" class="subtask-row">
+          <view class="subtask-main">
+            <view class="subtask-title">{{item.title}}</view>
+            <view class="task-meta">{{item.current}} / {{item.total}}</view>
+          </view>
+          <view wx:if="{{selectedTask.canAdjustProgress}}" class="subtask-actions">
+            <button hover-class="button-press" hover-stay-time="90" size="mini" class="ghost-button mini-button" data-index="{{index}}" bindtap="onDecreaseProgress">-1</button>
+            <button hover-class="button-press" hover-stay-time="90" size="mini" class="primary-button mini-button" data-index="{{index}}" bindtap="onIncreaseProgress">+1</button>
+          </view>
+        </view>
+      </view>
+
+      <view class="actions" wx:if="{{!selectedTask.isArchive}}">
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canShare}}" class="ghost-button" open-type="share" data-taskid="{{selectedTask._id}}" data-tasktitle="{{selectedTask.title}}">{{strings.actions.shareTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canOpenHistory}}" class="ghost-button" data-task-id="{{selectedTask.previousTaskId}}" bindtap="openPreviousVersion">{{strings.actions.viewPreviousVersion}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRework}}" class="ghost-button" disabled="{{loading}}" bindtap="startReworkFromSelectedTask">{{strings.actions.reworkTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAcceptTask}}" class="primary-button" loading="{{actionLoading === 'acceptTask'}}" disabled="{{loading && actionLoading !== 'acceptTask'}}" bindtap="onAcceptTask">{{strings.actions.acceptTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAcceptRework}}" class="primary-button" loading="{{actionLoading === 'acceptReworkTask'}}" disabled="{{loading && actionLoading !== 'acceptReworkTask'}}" bindtap="onAcceptReworkTask">{{strings.actions.acceptRework}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRejectRework}}" class="ghost-button" loading="{{actionLoading === 'rejectReworkTask'}}" disabled="{{loading && actionLoading !== 'rejectReworkTask'}}" bindtap="onRejectReworkTask">{{strings.actions.rejectRework}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canCancelRework}}" class="ghost-button" loading="{{actionLoading === 'cancelReworkTask'}}" disabled="{{loading && actionLoading !== 'cancelReworkTask'}}" bindtap="onCancelReworkTask">{{strings.actions.cancelRework}}</button>
+
+        <view wx:if="{{selectedTask.canAdjustProgress && (selectedTask.canSubmitReview || selectedTask.canComplete || selectedTask.canAbandon)}}" class="progress-action-row">
+          <button hover-class="button-press" hover-stay-time="90" class="ghost-button progress-action-button" loading="{{actionLoading === 'applyProgress'}}" disabled="{{!selectedTaskHasDraftChanges || (loading && actionLoading !== 'applyProgress')}}" bindtap="onApplyProgress">{{strings.actions.updateProgress}}</button>
+          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canSubmitReview}}" class="primary-button progress-action-button" loading="{{actionLoading === 'submitReview'}}" disabled="{{loading && actionLoading !== 'submitReview'}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
+          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canComplete}}" class="primary-button progress-action-button" loading="{{actionLoading === 'completeTask'}}" disabled="{{loading && actionLoading !== 'completeTask'}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
+          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAbandon}}" class="ghost-button progress-action-button" loading="{{actionLoading === 'abandonTask'}}" disabled="{{loading && actionLoading !== 'abandonTask'}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
+        </view>
+
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canSubmitReview && !selectedTask.canAdjustProgress}}" class="primary-button" loading="{{actionLoading === 'submitReview'}}" disabled="{{loading && actionLoading !== 'submitReview'}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canContinueReview}}" class="ghost-button" loading="{{actionLoading === 'continueReview'}}" disabled="{{loading && actionLoading !== 'continueReview'}}" bindtap="onContinueReview">{{strings.actions.continueReview}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canComplete && !selectedTask.canAdjustProgress}}" class="primary-button" loading="{{actionLoading === 'completeTask'}}" disabled="{{loading && actionLoading !== 'completeTask'}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAbandon && !selectedTask.canAdjustProgress}}" class="ghost-button" loading="{{actionLoading === 'abandonTask'}}" disabled="{{loading && actionLoading !== 'abandonTask'}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canClose}}" class="ghost-button" loading="{{actionLoading === 'closeTask'}}" disabled="{{loading && actionLoading !== 'closeTask'}}" data-operation="closeTask" data-title="{{strings.dialogs.closeTaskTitle}}" data-content="{{strings.dialogs.closeTaskContent}}" bindtap="confirmAndRun">{{strings.actions.closeTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRestart}}" class="primary-button" loading="{{actionLoading === 'restartTask'}}" disabled="{{loading && actionLoading !== 'restartTask'}}" bindtap="onRestartTask">{{strings.actions.restartTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRefreshSchedule}}" class="ghost-button" loading="{{actionLoading === 'refreshTaskSchedule'}}" disabled="{{loading && actionLoading !== 'refreshTaskSchedule'}}" bindtap="onRefreshTaskSchedule">{{strings.actions.refreshSchedule}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canDelete}}" class="ghost-button" loading="{{actionLoading === 'deleteTask'}}" disabled="{{loading && actionLoading !== 'deleteTask'}}" data-operation="deleteTask" data-title="{{strings.dialogs.deleteTaskTitle}}" data-content="{{strings.dialogs.deleteTaskContent}}" bindtap="confirmAndRun">{{strings.actions.deleteTask}}</button>
+      </view>
+
+      <view class="actions" wx:if="{{selectedTask.isArchive}}">
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canDelete}}" class="ghost-button" loading="{{actionLoading === 'deleteTask'}}" disabled="{{loading && actionLoading !== 'deleteTask'}}" data-operation="deleteTask" data-title="{{strings.detail.deleteArchiveTitle}}" data-content="{{strings.detail.deleteArchiveContent}}" bindtap="confirmAndRun">{{strings.detail.deleteArchiveTitle}}</button>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view wx:if="{{create.visible}}" class="modal-mask create-mask {{createModalVisible ? 'modal-open' : ''}} {{createModalClosing ? 'modal-closing' : ''}}" bindtap="closeCreateModal" catchtouchmove="noop">
+    <scroll-view scroll-y="true" class="modal modal-scroll card create-modal" catchtap="noop">
+      <view class="modal-head">
+        <view class="section-title">{{create.mode === 'rework' ? strings.create.titleRework : strings.create.titleCreate}}</view>
+      </view>
+
+      <textarea class="input area" placeholder="{{strings.create.aiPromptPlaceholder}}" value="{{create.aiPrompt}}" bindinput="onAiPromptInput" />
+      <button hover-class="button-press" hover-stay-time="90" class="ghost-button" loading="{{actionLoading === 'generateCreateDraft'}}" disabled="{{loading && actionLoading !== 'generateCreateDraft'}}" bindtap="onGenerateCreateDraft">{{strings.create.aiGenerate}}</button>
+
+      <input class="input" placeholder="{{strings.create.titlePlaceholder}}" value="{{create.title}}" bindinput="onCreateTitleInput" />
+      <textarea class="input area" placeholder="{{strings.create.detailPlaceholder}}" value="{{create.detail}}" bindinput="onCreateDetailInput" />
+
+      <view class="row">
+        <picker mode="date" value="{{create.dateValue}}" bindchange="onCreateDateChange">
+          <view class="picker">{{create.dateValue}}</view>
+        </picker>
+        <picker mode="time" value="{{create.timeValue}}" bindchange="onCreateTimeChange">
+          <view class="picker">{{create.timeValue}}</view>
+        </picker>
+      </view>
+
+      <view class="reward-types">
+        <view class="reward-chip {{create.rewardType === 'wisdom' ? 'active' : ''}}" data-type="wisdom" bindtap="onRewardTypeChange">{{strings.create.rewardWisdom}}</view>
+        <view class="reward-chip {{create.rewardType === 'strength' ? 'active' : ''}}" data-type="strength" bindtap="onRewardTypeChange">{{strings.create.rewardStrength}}</view>
+        <view class="reward-chip {{create.rewardType === 'agility' ? 'active' : ''}}" data-type="agility" bindtap="onRewardTypeChange">{{strings.create.rewardAgility}}</view>
+      </view>
+      <view class="reward-fixed">{{strings.detail.reward}} {{create.rewardType === 'strength' ? strings.create.rewardStrength : (create.rewardType === 'agility' ? strings.create.rewardAgility : strings.create.rewardWisdom)}} +1</view>
+
+      <checkbox-group bindchange="onSelfAssignChange" wx:if="{{create.mode !== 'rework'}}">
+        <label class="check-line"><checkbox value="self" checked="{{create.selfAssign}}" /> {{strings.create.selfAssign}}</label>
+      </checkbox-group>
+
+      <view class="subtasks">
+        <view class="section-subtitle">{{strings.create.subtasksTitle}}</view>
+        <view wx:for="{{create.subtasks}}" wx:key="index" class="subtask-edit-row">
+          <input class="input flex-input" placeholder="{{strings.create.subtaskPlaceholder}}" value="{{item.title}}" data-index="{{index}}" bindinput="onSubtaskTitleInput" />
+          <input class="input number-input" type="number" value="{{item.total}}" data-index="{{index}}" bindinput="onSubtaskTotalInput" />
+          <button hover-class="button-press" hover-stay-time="90" size="mini" class="ghost-button mini-button delete-step-button" data-index="{{index}}" bindtap="removeSubtask">{{strings.actions.removeStep}}</button>
+        </view>
+      </view>
+
+      <view class="create-footer-actions">
+        <button hover-class="button-press" hover-stay-time="90" class="ghost-button create-footer-button" bindtap="addSubtask">{{strings.actions.addStep}}</button>
+        <button hover-class="button-press" hover-stay-time="90" class="primary-button create-footer-button" loading="{{actionLoading === 'submitCreateTask'}}" disabled="{{loading && actionLoading !== 'submitCreateTask'}}" bindtap="submitCreateTask">{{create.mode === 'rework' ? strings.create.submitRework : strings.create.submitCreate}}</button>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view wx:if="{{profileEditVisible}}" class="modal-mask modal-open" bindtap="closeProfileEdit" catchtouchmove="noop">
+    <scroll-view scroll-y="true" class="modal modal-scroll card create-modal" catchtap="noop">
+      <view class="modal-head">
+        <view class="section-title">{{strings.profile.nicknameModalTitle}}</view>
+      </view>
+      <input class="input" placeholder="{{strings.profile.nicknamePlaceholder}}" value="{{nicknameDraft}}" bindinput="onNicknameDraftInput" />
+      <button hover-class="button-press" hover-stay-time="90" class="primary-button" loading="{{actionLoading === 'saveProfile'}}" disabled="{{loading && actionLoading !== 'saveProfile'}}" bindtap="saveProfile">{{strings.profile.save}}</button>
+    </scroll-view>
+  </view>
+
+  <view wx:if="{{error}}" class="error {{errorCollapsed ? 'error-collapsed' : 'error-expanded'}}">
+    <view class="error-head" bindtap="toggleErrorCollapse">
+      <view class="error-toggle-stack">
+        <view class="error-toggle-arrow up {{errorCollapsed ? 'hidden' : 'shown'}}">{{strings.icons.arrowUp}}</view>
+        <view class="error-toggle-arrow down {{errorCollapsed ? 'shown' : 'hidden'}}">{{strings.icons.arrowDown}}</view>
+      </view>
+    </view>
+    <view class="error-body {{errorCollapsed ? 'error-body-hidden' : 'error-body-visible'}}">{{error}}</view>
+  </view>

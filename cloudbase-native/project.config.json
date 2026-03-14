@@ -1,0 +1,41 @@
+{
+  "appid": "wx4ad8b140b76fb6a2",
+  "projectname": "task-mate-cloudbase-native",
+  "miniprogramRoot": "miniprogram/",
+  "cloudfunctionRoot": "cloudfunctions/",
+  "compileType": "miniprogram",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "minifyJS": true,
+    "ignoreUploadUnusedFiles": true,
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {},
+  "cloudfunctionTemplateRoot": "cloudfunctionTemplate/"
+}
