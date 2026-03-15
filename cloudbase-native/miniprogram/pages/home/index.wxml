@@ -6,7 +6,9 @@
   refresher-enabled="true"
   refresher-triggered="{{refreshing}}"
   bindrefresherrefresh="onPullDownRefresh"
+  bindscroll="onPageScrollView"
 >
+<view class="page-scroll-content">
 <view class="page-shell">
   <view class="hero card {{heroCollapsed ? 'collapsed' : ''}} {{onboarding.visible && onboarding.target === 'hero' ? 'guide-target' : ''}}">
     <view class="hero-toolbar">
@@ -235,9 +237,12 @@
     </block>
   </view>
   </view>
+</view>
 </scroll-view>
   <view wx:if="{{detailMounted && selectedTask}}" class="modal-mask {{detailVisible ? 'modal-open' : ''}} {{detailClosing ? 'modal-closing' : ''}}" bindtap="closeTaskModal" catchtouchmove="noop">
-    <scroll-view scroll-y="true" class="modal modal-scroll card" catchtap="noop">
+    <view class="modal-stack">
+    <scroll-view scroll-y="true" class="modal modal-scroll detail-scroll card" catchtap="noop" bindscroll="onDetailScroll">
+      <view class="detail-scroll-content">
       <view class="modal-head">
         <view class="section-title">{{selectedTask.title}}</view>
         <view class="task-status">{{selectedTask.statusText}}</view>
@@ -318,11 +323,19 @@
       <view class="actions" wx:if="{{selectedTask.isArchive}}">
         <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canDelete}}" class="ghost-button {{onboarding.visible && onboarding.target === 'archive-delete' ? 'guide-target' : ''}}" loading="{{actionLoading === 'deleteTask'}}" data-operation="deleteTask" data-title="{{strings.detail.deleteArchiveTitle}}" data-content="{{strings.detail.deleteArchiveContent}}" bindtap="confirmAndRun">{{strings.detail.deleteArchiveTitle}}</button>
       </view>
+      </view>
     </scroll-view>
+    <view wx:if="{{scrollHints.detail}}" class="scroll-hint scroll-hint-modal">
+      <view class="scroll-hint-fade"></view>
+      <view class="scroll-hint-arrow">{{strings.icons.arrowDown}}</view>
+    </view>
+    </view>
   </view>
 
   <view wx:if="{{create.visible}}" class="modal-mask create-mask {{createModalVisible ? 'modal-open' : ''}} {{createModalClosing ? 'modal-closing' : ''}}" bindtap="closeCreateModal" catchtouchmove="noop">
-    <scroll-view scroll-y="true" class="modal modal-scroll card create-modal" catchtap="noop">
+    <view class="modal-stack modal-stack-create">
+    <scroll-view scroll-y="true" class="modal modal-scroll create-scroll card create-modal" catchtap="noop" bindscroll="onCreateScroll">
+      <view class="create-scroll-content">
       <view class="modal-head">
         <view class="section-title">{{create.mode === 'rework' ? strings.create.titleRework : strings.create.titleCreate}}</view>
       </view>
@@ -366,17 +379,31 @@
         <button hover-class="button-press" hover-stay-time="90" class="ghost-button create-footer-button" bindtap="addSubtask">{{strings.actions.addStep}}</button>
         <button hover-class="button-press" hover-stay-time="90" class="primary-button create-footer-button {{onboarding.visible && onboarding.target === 'create-submit' ? 'guide-target' : ''}}" loading="{{actionLoading === 'submitCreateTask'}}" bindtap="submitCreateTask">{{create.mode === 'rework' ? strings.create.submitRework : strings.create.submitCreate}}</button>
       </view>
+      </view>
     </scroll-view>
+    <view wx:if="{{scrollHints.create}}" class="scroll-hint scroll-hint-modal">
+      <view class="scroll-hint-fade"></view>
+      <view class="scroll-hint-arrow">{{strings.icons.arrowDown}}</view>
+    </view>
+    </view>
   </view>
 
   <view wx:if="{{profileEditVisible}}" class="modal-mask modal-open" bindtap="closeProfileEdit" catchtouchmove="noop">
-    <scroll-view scroll-y="true" class="modal modal-scroll card create-modal" catchtap="noop">
+    <view class="modal-stack">
+    <scroll-view scroll-y="true" class="modal modal-scroll profile-scroll card create-modal" catchtap="noop" bindscroll="onProfileScroll">
+      <view class="profile-scroll-content">
       <view class="modal-head">
         <view class="section-title">{{strings.profile.nicknameModalTitle}}</view>
       </view>
       <input class="input" placeholder="{{strings.profile.nicknamePlaceholder}}" value="{{nicknameDraft}}" bindinput="onNicknameDraftInput" />
       <button hover-class="button-press" hover-stay-time="90" class="primary-button" loading="{{actionLoading === 'saveProfile'}}" bindtap="saveProfile">{{strings.profile.save}}</button>
+      </view>
     </scroll-view>
+    <view wx:if="{{scrollHints.profile}}" class="scroll-hint scroll-hint-modal">
+      <view class="scroll-hint-fade"></view>
+      <view class="scroll-hint-arrow">{{strings.icons.arrowDown}}</view>
+    </view>
+    </view>
   </view>
 
   <view wx:if="{{onboarding.visible}}" class="guide-overlay">
@@ -407,4 +434,9 @@
       </view>
     </view>
     <view class="error-body {{errorCollapsed ? 'error-body-hidden' : 'error-body-visible'}}">{{error}}</view>
+  </view>
+
+  <view wx:if="{{scrollHints.page && !detailMounted && !create.visible && !profileEditVisible && !onboarding.visible}}" class="scroll-hint scroll-hint-page">
+    <view class="scroll-hint-fade"></view>
+    <view class="scroll-hint-arrow">{{strings.icons.arrowDown}}</view>
   </view>

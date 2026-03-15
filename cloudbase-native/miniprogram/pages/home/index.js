@@ -44,6 +44,15 @@ function buildOnboardingState() {
   }
 }
 
+function buildScrollHints() {
+  return {
+    page: false,
+    detail: false,
+    create: false,
+    profile: false,
+  }
+}
+
 function getOnboardingTab(step) {
   if (step <= 4) return 'home'
   if (step <= 6) return 'collab'
@@ -586,9 +595,11 @@ Page({
     profileEditVisible: false,
     nicknameDraft: '',
     create: buildCreateState(),
+    scrollHints: buildScrollHints(),
   },
 
   onLoad(options) {
+    this._scrollMetrics = {}
     const openTaskId = options && options.openTaskId ? String(options.openTaskId) : ''
     if (openTaskId) {
       this.setData({ pendingOpenTaskId: openTaskId })
@@ -607,6 +618,64 @@ Page({
     } finally {
       this.setData({ refreshing: false })
     }
+  },
+
+  onPageScrollView(event) {
+    this.updateScrollHintByEvent('page', event)
+  },
+
+  onDetailScroll(event) {
+    this.updateScrollHintByEvent('detail', event)
+  },
+
+  onCreateScroll(event) {
+    this.updateScrollHintByEvent('create', event)
+  },
+
+  onProfileScroll(event) {
+    this.updateScrollHintByEvent('profile', event)
+  },
+
+  updateScrollHintByEvent(type, event) {
+    const detail = event && event.detail ? event.detail : {}
+    const scrollTop = Number(detail.scrollTop || 0)
+    const metrics = this._scrollMetrics && this._scrollMetrics[type] ? this._scrollMetrics[type] : {}
+    const scrollHeight = Number(detail.scrollHeight || metrics.contentHeight || 0)
+    const viewportHeight = Number(detail.clientHeight || detail.height || metrics.containerHeight || 0)
+    if (!scrollHeight || !viewportHeight) return
+    const threshold = 56
+    const canScroll = scrollHeight > viewportHeight + threshold
+    const hasMoreBelow = scrollTop + viewportHeight < scrollHeight - threshold
+    this.setData({ [`scrollHints.${type}`]: Boolean(canScroll && hasMoreBelow) })
+  },
+
+  measureScrollHint(type) {
+    const selectors = {
+      page: { container: '.page-scroll', content: '.page-scroll-content' },
+      detail: { container: '.detail-scroll', content: '.detail-scroll-content' },
+      create: { container: '.create-scroll', content: '.create-scroll-content' },
+      profile: { container: '.profile-scroll', content: '.profile-scroll-content' },
+    }
+    const current = selectors[type]
+    if (!current) return
+    const query = this.createSelectorQuery()
+    query.select(current.container).boundingClientRect()
+    query.select(current.content).boundingClientRect()
+    query.exec((result) => {
+      const container = result && result[0]
+      const content = result && result[1]
+      if (!container || !content) return
+      const containerHeight = Number(container.height || 0)
+      const contentHeight = Number(content.height || 0)
+      this._scrollMetrics = Object.assign({}, this._scrollMetrics, {
+        [type]: {
+          containerHeight,
+          contentHeight,
+        },
+      })
+      const canScroll = contentHeight > containerHeight + 56
+      this.setData({ [`scrollHints.${type}`]: Boolean(canScroll) })
+    })
   },
 
   applyDashboard(payload, selectedTaskId, selectedSource) {
@@ -648,6 +717,7 @@ Page({
       this.setData({
         detailVisible: true,
       })
+      wx.nextTick(() => this.measureScrollHint('detail'))
       this._detailOpenTimer = null
     }, 16)
   },
@@ -723,6 +793,12 @@ Page({
       this.setError(error.message || strings.errors.loadFailed)
     } finally {
       this.setData({ loading: false, actionLoading: '' })
+      wx.nextTick(() => {
+        this.measureScrollHint('page')
+        if (this.data.detailMounted) this.measureScrollHint('detail')
+        if (this.data.create && this.data.create.visible) this.measureScrollHint('create')
+        if (this.data.profileEditVisible) this.measureScrollHint('profile')
+      })
     }
   },
 
@@ -841,6 +917,11 @@ Page({
       nicknameDraft: '',
       tabAnimation: null,
     })
+    wx.nextTick(() => {
+      this.measureScrollHint('page')
+      if (detailMounted) this.measureScrollHint('detail')
+      if (nextCreate.visible) this.measureScrollHint('create')
+    })
   },
 
   setTab(event) {
@@ -868,6 +949,7 @@ Page({
       this.setData({ activeTab: tab })
       fadeIn.opacity(1).translateY(0).step()
       this.setData({ tabAnimation: fadeIn.export() })
+      wx.nextTick(() => this.measureScrollHint('page'))
       this._tabSwitchTimer = null
     }, 120)
   },
@@ -890,6 +972,7 @@ Page({
       profileEditVisible: true,
       nicknameDraft: (this.data.profile && this.data.profile.nickname) || '',
     })
+    wx.nextTick(() => this.measureScrollHint('profile'))
   },
 
   openOnboarding() {
@@ -948,6 +1031,7 @@ Page({
     this.setData({
       profileEditVisible: false,
       nicknameDraft: '',
+      'scrollHints.profile': false,
     })
   },
 
@@ -1003,6 +1087,7 @@ Page({
     })
     this._createOpenTimer = setTimeout(() => {
       this.setData({ createModalVisible: true })
+      wx.nextTick(() => this.measureScrollHint('create'))
       this._createOpenTimer = null
     }, 16)
   },
@@ -1044,6 +1129,7 @@ Page({
     })
     this._createOpenTimer = setTimeout(() => {
       this.setData({ createModalVisible: true })
+      wx.nextTick(() => this.measureScrollHint('create'))
       this._createOpenTimer = null
     }, 16)
   },
@@ -1061,6 +1147,7 @@ Page({
     this.setData({
       createModalVisible: false,
       createModalClosing: true,
+      'scrollHints.create': false,
     })
     this._createCloseTimer = setTimeout(() => {
       this.setData({
@@ -1119,6 +1206,7 @@ Page({
     this.setData({
       'create.subtasks': this.data.create.subtasks.concat([{ title: '', total: 1 }]),
     })
+    wx.nextTick(() => this.measureScrollHint('create'))
   },
 
   removeSubtask(event) {
@@ -1128,6 +1216,7 @@ Page({
     this.setData({
       'create.subtasks': this.data.create.subtasks.filter((_, current) => current !== index),
     })
+    wx.nextTick(() => this.measureScrollHint('create'))
   },
 
   async onGenerateCreateDraft() {
@@ -1160,6 +1249,7 @@ Page({
         'create.dateValue': suggestion.dueAt ? formatDateInput(suggestion.dueAt) : this.data.create.dateValue,
         'create.timeValue': suggestion.dueAt ? formatTimeInput(suggestion.dueAt) : this.data.create.timeValue,
       })
+      wx.nextTick(() => this.measureScrollHint('create'))
     } catch (error) {
       this.setError(error.message || strings.errors.aiGenerateFailed)
     } finally {
@@ -1322,6 +1412,7 @@ Page({
         selectedTask: null,
         selectedTaskDraftSubtasks: [],
         selectedTaskHasDraftChanges: false,
+        'scrollHints.detail': false,
       })
       this._detailCloseTimer = null
     }, 280)
@@ -1377,6 +1468,9 @@ Page({
           selectedTaskHasDraftChanges: false,
           detailVisible: Boolean(refreshed),
         })
+        wx.nextTick(() => {
+          if (refreshed) this.measureScrollHint('detail')
+        })
       } else if (result && result.ok) {
         const refreshed = this.findTaskById(task._id, this.data.dashboard, task.source)
         this.setData({
@@ -1386,6 +1480,9 @@ Page({
           selectedTaskDraftSubtasks: refreshed ? cloneSubtasks(refreshed.subtasks) : [],
           selectedTaskHasDraftChanges: false,
           detailVisible: Boolean(refreshed),
+        })
+        wx.nextTick(() => {
+          if (refreshed) this.measureScrollHint('detail')
         })
       }
     } catch (error) {
@@ -1547,6 +1644,9 @@ Page({
         selectedTaskDraftSubtasks: refreshed ? cloneSubtasks(refreshed.subtasks) : [],
         selectedTaskHasDraftChanges: false,
         detailVisible: Boolean(refreshed),
+      })
+      wx.nextTick(() => {
+        if (refreshed) this.measureScrollHint('detail')
       })
     } catch (error) {
       if (error && error.code === 'CONFLICT_REFRESH' && error.detail && error.detail.dashboard) {

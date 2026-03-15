@@ -73,6 +73,23 @@ function normalizeReward(reward) {
   return { type, value }
 }
 
+function normalizePreferences(preferences) {
+  const scenes = ['todo', 'taskUpdate', 'review', 'work']
+  const source = preferences && typeof preferences === 'object' ? preferences : {}
+  const result = {}
+  scenes.forEach((scene) => {
+    const current = source[scene] && typeof source[scene] === 'object' ? source[scene] : {}
+    result[scene] = {
+      templateId: String(current.templateId || '').trim(),
+      status: String(current.status || ''),
+      updatedAt: toIso(current.updatedAt),
+      authorizedAt: toIso(current.authorizedAt),
+      lastSentAt: toIso(current.lastSentAt),
+    }
+  })
+  return result
+}
+
 function inferCategory(task) {
   const seedKey = String(task && task.seedKey ? task.seedKey : '')
   const creatorId = String(task && task.creatorId ? task.creatorId : '')
@@ -81,15 +98,46 @@ function inferCategory(task) {
   return 'normal'
 }
 
+function normalizeStatus(value, fallback) {
+  const allowed = ['pending', 'in_progress', 'review_pending', 'pending_confirmation', 'completed', 'closed', 'refactored']
+  const status = String(value || fallback || '').trim()
+  if (!fallback && !status) return null
+  return allowed.includes(status) ? status : fallback
+}
+
+function normalizeArchiveStatus(value) {
+  const allowed = ['completed', 'review_pending']
+  const status = String(value || 'completed').trim()
+  return allowed.includes(status) ? status : 'completed'
+}
+
+function buildUserNameMap(users) {
+  return users.reduce((map, user) => {
+    map[user.userId] = user.nickname || `旅者-${String(user.userId).slice(-4)}`
+    map[`sys:${user.userId}`] = map[user.userId]
+    return map
+  }, { 'sys:system': '星旅系统' })
+}
+
 function mapUser(doc) {
   const userId = normalizeUserId(doc.userId || doc._openid || doc.openid)
   if (!userId) return null
   return {
     _id: toIdString(doc._id),
     userId,
-    nickname: String(doc.nickname || '').trim() || `旅者-${userId.slice(-4)}`,
+    nickname: String(doc.nickname || '').trim() || `Traveler-${userId.slice(-4)}`,
     avatar: String(doc.avatar || '').trim(),
-    subscribePreferences: doc.subscribePreferences && typeof doc.subscribePreferences === 'object' ? doc.subscribePreferences : {},
+    onboarding:
+      doc.onboarding && typeof doc.onboarding === 'object'
+        ? {
+            seen: Boolean(doc.onboarding.seen),
+            seenAt: toIso(doc.onboarding.seenAt),
+          }
+        : {
+            seen: false,
+            seenAt: null,
+          },
+    subscribePreferences: normalizePreferences(doc.subscribePreferences),
     stars: Number(doc.stars || 0),
     wisdom: Number(doc.wisdom || 0),
     strength: Number(doc.strength || 0),
@@ -103,18 +151,20 @@ function mapTask(doc) {
   const creatorId = normalizeUserId(doc.creatorId)
   const assigneeId = normalizeUserId(doc.assigneeId)
   if ((doc.creatorId && !creatorId) || (doc.assigneeId && !assigneeId)) return null
+
+  const category = inferCategory(doc)
   return {
     _id: toIdString(doc._id),
     title: String(doc.title || '').trim(),
     detail: String(doc.detail || '').trim(),
-    icon: String(doc.icon || '✨').trim(),
-    status: String(doc.status || 'pending'),
-    category: inferCategory(doc),
+    icon: String(doc.icon || '').trim(),
+    status: normalizeStatus(doc.status, 'pending'),
+    category,
     creatorId,
-    creatorName: '',
+    creatorName: String(doc.creatorName || '').trim(),
     assigneeId,
-    assigneeName: '',
-    ownerScope: '',
+    assigneeName: String(doc.assigneeName || '').trim(),
+    ownerScope: String(doc.ownerScope || (category === 'normal' ? 'personal' : '')).trim(),
     dueAt: toIso(doc.dueAt),
     startAt: toIso(doc.startAt),
     submittedAt: toIso(doc.submittedAt),
@@ -123,7 +173,7 @@ function mapTask(doc) {
     deleteAt: toIso(doc.deleteAt),
     originalDueAt: toIso(doc.originalDueAt),
     originalStartAt: toIso(doc.originalStartAt),
-    originalStatus: doc.originalStatus || null,
+    originalStatus: normalizeStatus(doc.originalStatus, null),
     previousTaskId: toIdString(doc.previousTaskId),
     seedKey: String(doc.seedKey || ''),
     dueSoonNotifiedAt: toIso(doc.dueSoonNotifiedAt),
@@ -144,18 +194,19 @@ function mapArchive(doc) {
   if ((doc.creatorId && !creatorId) || (doc.assigneeId && !assigneeId)) return null
 
   const sourceTaskId = toIdString(doc.sourceTaskId || doc._id)
+  const category = inferCategory(doc)
   const snapshot = {
     _id: sourceTaskId,
     title: String(doc.title || '').trim(),
     detail: String(doc.detail || '').trim(),
-    icon: String(doc.icon || '✨').trim(),
-    status: String(doc.status || 'completed'),
-    category: inferCategory(doc),
+    icon: String(doc.icon || '').trim(),
+    status: normalizeStatus(doc.status, 'completed'),
+    category,
     creatorId,
-    creatorName: '',
+    creatorName: String(doc.creatorName || '').trim(),
     assigneeId,
-    assigneeName: '',
-    ownerScope: '',
+    assigneeName: String(doc.assigneeName || '').trim(),
+    ownerScope: String(doc.ownerScope || (category === 'normal' ? 'personal' : '')).trim(),
     dueAt: toIso(doc.dueAt),
     startAt: toIso(doc.startAt),
     submittedAt: toIso(doc.submittedAt),
@@ -164,7 +215,7 @@ function mapArchive(doc) {
     deleteAt: toIso(doc.deleteAt),
     originalDueAt: toIso(doc.originalDueAt),
     originalStartAt: toIso(doc.originalStartAt),
-    originalStatus: doc.originalStatus || null,
+    originalStatus: normalizeStatus(doc.originalStatus, null),
     previousTaskId: toIdString(doc.previousTaskId),
     seedKey: String(doc.seedKey || ''),
     dueSoonNotifiedAt: toIso(doc.dueSoonNotifiedAt),
@@ -180,7 +231,7 @@ function mapArchive(doc) {
     _id: toIdString(doc._id),
     ownerId,
     sourceTaskId,
-    status: String(doc.status || 'completed'),
+    status: normalizeArchiveStatus(doc.status),
     completedAt: toIso(doc.completedAt),
     submittedAt: toIso(doc.submittedAt),
     deleteAt: toIso(doc.deleteAt),
@@ -219,8 +270,31 @@ async function main() {
     const archivesRaw = rawData.completedtasks || rawData.completedTasks || []
 
     const users = usersRaw.map(mapUser).filter(Boolean)
-    const tasks = tasksRaw.map(mapTask).filter(Boolean)
-    const taskArchives = archivesRaw.map(mapArchive).filter(Boolean)
+    const nameMap = buildUserNameMap(users)
+    const tasks = tasksRaw
+      .map(mapTask)
+      .filter(Boolean)
+      .map((task) =>
+        Object.assign({}, task, {
+          creatorName: task.creatorName || nameMap[task.creatorId] || '',
+          assigneeName: task.assigneeId ? task.assigneeName || nameMap[task.assigneeId] || '' : '',
+          ownerScope: task.ownerScope || 'personal',
+        })
+      )
+    const taskArchives = archivesRaw
+      .map(mapArchive)
+      .filter(Boolean)
+      .map((archive) =>
+        Object.assign({}, archive, {
+          snapshot: Object.assign({}, archive.snapshot, {
+            creatorName: archive.snapshot.creatorName || nameMap[archive.snapshot.creatorId] || '',
+            assigneeName: archive.snapshot.assigneeId
+              ? archive.snapshot.assigneeName || nameMap[archive.snapshot.assigneeId] || ''
+              : '',
+            ownerScope: archive.snapshot.ownerScope || 'personal',
+          }),
+        })
+      )
 
     const report = {
       exportedAt: new Date().toISOString(),
@@ -241,6 +315,7 @@ async function main() {
         'System IDs are normalized too: sys:wx:OPENID -> sys:OPENID.',
         'dev:* users and records pointing to dev:* IDs are dropped.',
         'CloudBase target collections: users, tasks, task_archives.',
+        'Users are padded with onboarding and normalized subscribePreferences.',
       ],
     }
 
