@@ -252,6 +252,31 @@
   line-height: 1.5;
 }
 
+.modal .task-meta {
+  margin-top: 10rpx;
+}
+
+.modal .task-meta + .task-meta {
+  margin-top: 12rpx;
+}
+
+.detail-summary {
+  margin-top: 14rpx;
+  display: grid;
+  gap: 14rpx;
+  padding: 4rpx 0;
+}
+
+.detail-group {
+  display: grid;
+  gap: 6rpx;
+}
+
+.detail-line {
+  margin-top: 0 !important;
+  padding: 0;
+}
+
 .inline-actions {
   margin-top: 10rpx;
 }

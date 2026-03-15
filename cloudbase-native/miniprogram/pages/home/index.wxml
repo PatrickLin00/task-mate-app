@@ -147,9 +147,6 @@
             </view>
             <view class="task-meta">{{item.assigneeName ? (strings.collab.assigneePrefix + item.assigneeName) : strings.collab.waitingAccept}}</view>
             <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}</view>
-            <view class="inline-actions">
-              <button hover-class="button-press" hover-stay-time="90" wx:if="{{item.canOpenHistory}}" size="mini" class="ghost-button mini-button" catchtap="openPreviousVersion" data-task-id="{{item.previousTaskId}}">{{strings.collab.previousVersionShort}}</button>
-            </view>
           </view>
         </view>
         <view class="empty" wx:else>{{strings.collab.empty}}</view>
@@ -248,14 +245,24 @@
         <view class="task-status">{{selectedTask.statusText}}</view>
       </view>
 
-      <view wx:if="{{selectedTask.detail}}" class="task-meta">{{selectedTask.detail}}</view>
-      <view class="task-meta">{{strings.detail.dueAt}} {{selectedTask.dueText}}</view>
-      <view class="task-meta">{{strings.detail.reward}} {{selectedTask.rewardText}}</view>
-      <view class="task-meta">{{strings.detail.creator}} {{selectedTask.creatorName || strings.common.system}}</view>
-      <view wx:if="{{selectedTask.assigneeName}}" class="task-meta">{{strings.detail.assignee}} {{selectedTask.assigneeName}}</view>
-      <view wx:if="{{selectedTask.completedText && !selectedTask.isArchive}}" class="task-meta">{{strings.detail.completedAt}} {{selectedTask.completedText}}</view>
-      <view wx:if="{{selectedTask.closedText && !selectedTask.isArchive}}" class="task-meta">{{strings.detail.closedAt}} {{selectedTask.closedText}}</view>
-      <view wx:if="{{selectedTask.finishedText && selectedTask.isArchive}}" class="task-meta">{{strings.detail.recordedAt}} {{selectedTask.finishedText}}</view>
+      <view class="detail-summary">
+        <view wx:if="{{selectedTask.detail}}" class="task-meta detail-line">{{selectedTask.detail}}</view>
+        <view class="detail-group">
+          <view class="task-meta detail-line">{{strings.detail.dueAt}} {{selectedTask.dueText}}</view>
+          <view class="task-meta detail-line">{{strings.detail.reward}} {{selectedTask.rewardText}}</view>
+        </view>
+        <view class="detail-group">
+          <view class="task-meta detail-line">{{strings.detail.creator}} {{selectedTask.creatorName || strings.common.system}}</view>
+          <view wx:if="{{selectedTask.assigneeName}}" class="task-meta detail-line">{{strings.detail.assignee}} {{selectedTask.assigneeName}}</view>
+        </view>
+        <view wx:if="{{selectedTask.finishedText && selectedTask.isArchive}}" class="detail-group">
+          <view class="task-meta detail-line">{{strings.detail.recordedAt}} {{selectedTask.finishedText}}</view>
+        </view>
+        <view wx:if="{{!selectedTask.isArchive && (selectedTask.completedText || selectedTask.closedText)}}" class="detail-group">
+          <view wx:if="{{selectedTask.completedText}}" class="task-meta detail-line">{{strings.detail.completedAt}} {{selectedTask.completedText}}</view>
+          <view wx:if="{{selectedTask.closedText}}" class="task-meta detail-line">{{strings.detail.closedAt}} {{selectedTask.closedText}}</view>
+        </view>
+      </view>
 
       <view wx:if="{{selectedTaskDraftSubtasks.length}}" class="subtasks">
         <view wx:for="{{selectedTaskDraftSubtasks}}" wx:key="index" class="subtask-row">

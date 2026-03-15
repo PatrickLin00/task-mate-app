@@ -19,6 +19,7 @@
     "uploadWithSourceMap": true,
     "packNpmManually": false,
     "packNpmRelationList": [],
+    "lazyCodeLoading": "requiredComponents",
     "localPlugins": false,
     "disableUseStrict": false,
     "useCompilerPlugins": false,
