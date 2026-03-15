@@ -105,7 +105,7 @@
               <view class="task-meta">{{item.detail}}</view>
               <view class="task-meta">{{strings.home.challengeReward}} {{item.rewardText}}</view>
               <view class="task-actions">
-                <button hover-class="button-press" hover-stay-time="90" wx:if="{{item.isVirtual}}" size="mini" class="primary-button mini-button" loading="{{actionLoading === 'acceptChallenge'}}" disabled="{{loading && actionLoading !== 'acceptChallenge'}}" data-seed-key="{{item.seedKey}}" bindtap="onAcceptChallenge">{{strings.home.challengeAccept}}</button>
+                <button hover-class="button-press" hover-stay-time="90" wx:if="{{item.isVirtual}}" size="mini" class="primary-button mini-button" loading="{{actionLoading === 'acceptChallenge'}}" data-seed-key="{{item.seedKey}}" bindtap="onAcceptChallenge">{{strings.home.challengeAccept}}</button>
                 <button hover-class="button-press" hover-stay-time="90" wx:else size="mini" class="ghost-button mini-button" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">{{strings.home.challengeView}}</button>
               </view>
             </view>
@@ -263,31 +263,31 @@
       <view class="actions" wx:if="{{!selectedTask.isArchive}}">
         <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canShare}}" class="ghost-button" open-type="share" data-taskid="{{selectedTask._id}}" data-tasktitle="{{selectedTask.title}}">{{strings.actions.shareTask}}</button>
         <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canOpenHistory}}" class="ghost-button" data-task-id="{{selectedTask.previousTaskId}}" bindtap="openPreviousVersion">{{strings.actions.viewPreviousVersion}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRework}}" class="ghost-button" disabled="{{loading}}" bindtap="startReworkFromSelectedTask">{{strings.actions.reworkTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAcceptTask}}" class="primary-button" loading="{{actionLoading === 'acceptTask'}}" disabled="{{loading && actionLoading !== 'acceptTask'}}" bindtap="onAcceptTask">{{strings.actions.acceptTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAcceptRework}}" class="primary-button" loading="{{actionLoading === 'acceptReworkTask'}}" disabled="{{loading && actionLoading !== 'acceptReworkTask'}}" bindtap="onAcceptReworkTask">{{strings.actions.acceptRework}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRejectRework}}" class="ghost-button" loading="{{actionLoading === 'rejectReworkTask'}}" disabled="{{loading && actionLoading !== 'rejectReworkTask'}}" bindtap="onRejectReworkTask">{{strings.actions.rejectRework}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canCancelRework}}" class="ghost-button" loading="{{actionLoading === 'cancelReworkTask'}}" disabled="{{loading && actionLoading !== 'cancelReworkTask'}}" bindtap="onCancelReworkTask">{{strings.actions.cancelRework}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRework}}" class="ghost-button" bindtap="startReworkFromSelectedTask">{{strings.actions.reworkTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAcceptTask}}" class="primary-button" loading="{{actionLoading === 'acceptTask'}}" bindtap="onAcceptTask">{{strings.actions.acceptTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAcceptRework}}" class="primary-button" loading="{{actionLoading === 'acceptReworkTask'}}" bindtap="onAcceptReworkTask">{{strings.actions.acceptRework}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRejectRework}}" class="ghost-button" loading="{{actionLoading === 'rejectReworkTask'}}" bindtap="onRejectReworkTask">{{strings.actions.rejectRework}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canCancelRework}}" class="ghost-button" loading="{{actionLoading === 'cancelReworkTask'}}" bindtap="onCancelReworkTask">{{strings.actions.cancelRework}}</button>
 
         <view wx:if="{{selectedTask.canAdjustProgress && (selectedTask.canSubmitReview || selectedTask.canComplete || selectedTask.canAbandon)}}" class="progress-action-row">
-          <button hover-class="button-press" hover-stay-time="90" class="ghost-button progress-action-button" loading="{{actionLoading === 'applyProgress'}}" disabled="{{!selectedTaskHasDraftChanges || (loading && actionLoading !== 'applyProgress')}}" bindtap="onApplyProgress">{{strings.actions.updateProgress}}</button>
-          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canSubmitReview}}" class="primary-button progress-action-button" loading="{{actionLoading === 'submitReview'}}" disabled="{{loading && actionLoading !== 'submitReview'}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
-          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canComplete}}" class="primary-button progress-action-button" loading="{{actionLoading === 'completeTask'}}" disabled="{{loading && actionLoading !== 'completeTask'}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
-          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAbandon}}" class="ghost-button progress-action-button" loading="{{actionLoading === 'abandonTask'}}" disabled="{{loading && actionLoading !== 'abandonTask'}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
+          <button hover-class="button-press" hover-stay-time="90" class="ghost-button progress-action-button" loading="{{actionLoading === 'applyProgress'}}" disabled="{{loading || !selectedTaskHasDraftChanges}}" bindtap="onApplyProgress">{{strings.actions.updateProgress}}</button>
+          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canSubmitReview}}" class="primary-button progress-action-button" loading="{{actionLoading === 'submitReview'}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
+          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canComplete}}" class="primary-button progress-action-button" loading="{{actionLoading === 'completeTask'}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
+          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAbandon}}" class="ghost-button progress-action-button" loading="{{actionLoading === 'abandonTask'}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
         </view>
 
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canSubmitReview && !selectedTask.canAdjustProgress}}" class="primary-button" loading="{{actionLoading === 'submitReview'}}" disabled="{{loading && actionLoading !== 'submitReview'}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canContinueReview}}" class="ghost-button" loading="{{actionLoading === 'continueReview'}}" disabled="{{loading && actionLoading !== 'continueReview'}}" bindtap="onContinueReview">{{strings.actions.continueReview}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canComplete && !selectedTask.canAdjustProgress}}" class="primary-button" loading="{{actionLoading === 'completeTask'}}" disabled="{{loading && actionLoading !== 'completeTask'}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAbandon && !selectedTask.canAdjustProgress}}" class="ghost-button" loading="{{actionLoading === 'abandonTask'}}" disabled="{{loading && actionLoading !== 'abandonTask'}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canClose}}" class="ghost-button" loading="{{actionLoading === 'closeTask'}}" disabled="{{loading && actionLoading !== 'closeTask'}}" data-operation="closeTask" data-title="{{strings.dialogs.closeTaskTitle}}" data-content="{{strings.dialogs.closeTaskContent}}" bindtap="confirmAndRun">{{strings.actions.closeTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRestart}}" class="primary-button" loading="{{actionLoading === 'restartTask'}}" disabled="{{loading && actionLoading !== 'restartTask'}}" bindtap="onRestartTask">{{strings.actions.restartTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRefreshSchedule}}" class="ghost-button" loading="{{actionLoading === 'refreshTaskSchedule'}}" disabled="{{loading && actionLoading !== 'refreshTaskSchedule'}}" bindtap="onRefreshTaskSchedule">{{strings.actions.refreshSchedule}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canDelete}}" class="ghost-button" loading="{{actionLoading === 'deleteTask'}}" disabled="{{loading && actionLoading !== 'deleteTask'}}" data-operation="deleteTask" data-title="{{strings.dialogs.deleteTaskTitle}}" data-content="{{strings.dialogs.deleteTaskContent}}" bindtap="confirmAndRun">{{strings.actions.deleteTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canSubmitReview && !selectedTask.canAdjustProgress}}" class="primary-button" loading="{{actionLoading === 'submitReview'}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canContinueReview}}" class="ghost-button" loading="{{actionLoading === 'continueReview'}}" bindtap="onContinueReview">{{strings.actions.continueReview}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canComplete && !selectedTask.canAdjustProgress}}" class="primary-button" loading="{{actionLoading === 'completeTask'}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAbandon && !selectedTask.canAdjustProgress}}" class="ghost-button" loading="{{actionLoading === 'abandonTask'}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canClose}}" class="ghost-button" loading="{{actionLoading === 'closeTask'}}" data-operation="closeTask" data-title="{{strings.dialogs.closeTaskTitle}}" data-content="{{strings.dialogs.closeTaskContent}}" bindtap="confirmAndRun">{{strings.actions.closeTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRestart}}" class="primary-button" loading="{{actionLoading === 'restartTask'}}" bindtap="onRestartTask">{{strings.actions.restartTask}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRefreshSchedule}}" class="ghost-button" loading="{{actionLoading === 'refreshTaskSchedule'}}" bindtap="onRefreshTaskSchedule">{{strings.actions.refreshSchedule}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canDelete}}" class="ghost-button" loading="{{actionLoading === 'deleteTask'}}" data-operation="deleteTask" data-title="{{strings.dialogs.deleteTaskTitle}}" data-content="{{strings.dialogs.deleteTaskContent}}" bindtap="confirmAndRun">{{strings.actions.deleteTask}}</button>
       </view>
 
       <view class="actions" wx:if="{{selectedTask.isArchive}}">
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canDelete}}" class="ghost-button" loading="{{actionLoading === 'deleteTask'}}" disabled="{{loading && actionLoading !== 'deleteTask'}}" data-operation="deleteTask" data-title="{{strings.detail.deleteArchiveTitle}}" data-content="{{strings.detail.deleteArchiveContent}}" bindtap="confirmAndRun">{{strings.detail.deleteArchiveTitle}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canDelete}}" class="ghost-button" loading="{{actionLoading === 'deleteTask'}}" data-operation="deleteTask" data-title="{{strings.detail.deleteArchiveTitle}}" data-content="{{strings.detail.deleteArchiveContent}}" bindtap="confirmAndRun">{{strings.detail.deleteArchiveTitle}}</button>
       </view>
     </scroll-view>
   </view>
@@ -299,7 +299,7 @@
       </view>
 
       <textarea class="input area" placeholder="{{strings.create.aiPromptPlaceholder}}" value="{{create.aiPrompt}}" bindinput="onAiPromptInput" />
-      <button hover-class="button-press" hover-stay-time="90" class="ghost-button" loading="{{actionLoading === 'generateCreateDraft'}}" disabled="{{loading && actionLoading !== 'generateCreateDraft'}}" bindtap="onGenerateCreateDraft">{{strings.create.aiGenerate}}</button>
+      <button hover-class="button-press" hover-stay-time="90" class="ghost-button" loading="{{actionLoading === 'generateCreateDraft'}}" bindtap="onGenerateCreateDraft">{{strings.create.aiGenerate}}</button>
 
       <input class="input" placeholder="{{strings.create.titlePlaceholder}}" value="{{create.title}}" bindinput="onCreateTitleInput" />
       <textarea class="input area" placeholder="{{strings.create.detailPlaceholder}}" value="{{create.detail}}" bindinput="onCreateDetailInput" />
@@ -335,7 +335,7 @@
 
       <view class="create-footer-actions">
         <button hover-class="button-press" hover-stay-time="90" class="ghost-button create-footer-button" bindtap="addSubtask">{{strings.actions.addStep}}</button>
-        <button hover-class="button-press" hover-stay-time="90" class="primary-button create-footer-button" loading="{{actionLoading === 'submitCreateTask'}}" disabled="{{loading && actionLoading !== 'submitCreateTask'}}" bindtap="submitCreateTask">{{create.mode === 'rework' ? strings.create.submitRework : strings.create.submitCreate}}</button>
+        <button hover-class="button-press" hover-stay-time="90" class="primary-button create-footer-button" loading="{{actionLoading === 'submitCreateTask'}}" bindtap="submitCreateTask">{{create.mode === 'rework' ? strings.create.submitRework : strings.create.submitCreate}}</button>
       </view>
     </scroll-view>
   </view>
@@ -346,7 +346,7 @@
         <view class="section-title">{{strings.profile.nicknameModalTitle}}</view>
       </view>
       <input class="input" placeholder="{{strings.profile.nicknamePlaceholder}}" value="{{nicknameDraft}}" bindinput="onNicknameDraftInput" />
-      <button hover-class="button-press" hover-stay-time="90" class="primary-button" loading="{{actionLoading === 'saveProfile'}}" disabled="{{loading && actionLoading !== 'saveProfile'}}" bindtap="saveProfile">{{strings.profile.save}}</button>
+      <button hover-class="button-press" hover-stay-time="90" class="primary-button" loading="{{actionLoading === 'saveProfile'}}" bindtap="saveProfile">{{strings.profile.save}}</button>
     </scroll-view>
   </view>
 

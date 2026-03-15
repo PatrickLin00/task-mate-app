@@ -30,6 +30,8 @@ const LOCAL_BLOCKLIST = [
   'nmsl',
 ]
 
+const META_ALLOWLIST = new Set(['敏感', '敏感词', '敏感内容', '违规词', '违规内容'])
+
 function success(data) {
   return { ok: true, data }
 }
@@ -55,15 +57,12 @@ function collapseNoise(text) {
 }
 
 function pickProvider() {
-  if (process.env.HUNYUAN_API_KEY) {
-    return {
-      apiKey: process.env.HUNYUAN_API_KEY,
-      baseURL: process.env.HUNYUAN_BASE_URL || 'https://api.hunyuan.cloud.tencent.com/v1',
-      model: process.env.AI_MODERATION_MODEL || process.env.HUNYUAN_MODEL || 'hunyuan-lite',
-      provider: 'hunyuan',
-    }
+  if (!process.env.HUNYUAN_API_KEY) return null
+  return {
+    apiKey: process.env.HUNYUAN_API_KEY,
+    baseURL: process.env.HUNYUAN_BASE_URL || 'https://api.hunyuan.cloud.tencent.com/v1',
+    model: process.env.HUNYUAN_MODEL || 'hunyuan-2.0-instruct-20251111',
   }
-  return null
 }
 
 function requestJson(url, payload, headers) {
@@ -104,10 +103,15 @@ function requestJson(url, payload, headers) {
 }
 
 function parseDecision(content) {
-  const raw = normalize(content).toUpperCase()
+  const raw = normalize(content)
   if (!raw) return false
-  if (raw.includes('BLOCK')) return true
-  if (raw.includes('ALLOW')) return false
+  const upper = raw.toUpperCase()
+  if (upper.includes('BLOCK')) return true
+  if (upper.includes('ALLOW')) return false
+  if (raw.includes('不违规') || raw.includes('未违规') || raw.includes('合规') || raw.includes('安全')) return false
+  if (raw.includes('违规') || raw.includes('不通过') || raw.includes('禁止')) return true
+  if (raw.includes('边缘') || raw.includes('低俗') || raw.includes('色情') || raw.includes('赌博')) return true
+  if (raw.includes('毒品') || raw.includes('暴力') || raw.includes('恐怖') || raw.includes('政治')) return true
   return false
 }
 
@@ -133,33 +137,31 @@ function buildMessages(text) {
   return [
     {
       role: 'system',
-      content: [
-        'You are a safety moderation assistant for a productivity mini program.',
-        'Only block clearly disallowed content such as pornography, prostitution, gambling, drugs, violent extremism, terrorism, or explicit hateful abuse.',
-        'If the text is ordinary task management, harmless slang-free profile text, or neutral discussion, return ALLOW.',
-        'Return exactly one token: ALLOW or BLOCK.',
-      ].join(' '),
+      content:
+        '你是内容安全审核，只对黄赌毒、涉政、暴力恐怖、辱骂人身攻击判定为 BLOCK，其他一律 ALLOW。' +
+        '遇到“敏感/敏感词/敏感内容/违规词”等自指词不要判定 BLOCK。只能输出 ALLOW 或 BLOCK。',
     },
     {
       role: 'user',
-      content: text,
+      content: `文本: ${text}`,
     },
   ]
 }
 
 async function aiModerate(text) {
   const provider = pickProvider()
-  if (!provider || String(process.env.AI_MODERATION_ENABLED || '').toLowerCase() !== 'true') {
-    return null
-  }
+  if (!provider) return null
+  const input = normalize(text)
+  if (!input || META_ALLOWLIST.has(input)) return null
 
   const response = await requestJson(
     `${provider.baseURL.replace(/\/$/, '')}/chat/completions`,
     {
       model: provider.model,
-      messages: buildMessages(text),
+      messages: buildMessages(input),
       temperature: 0,
       max_tokens: 2,
+      top_p: 1,
     },
     {
       Authorization: `Bearer ${provider.apiKey}`,
@@ -167,17 +169,13 @@ async function aiModerate(text) {
   )
 
   const content =
-    response &&
-    response.choices &&
-    response.choices[0] &&
-    response.choices[0].message &&
-    response.choices[0].message.content
+    response && response.choices && response.choices[0] && response.choices[0].message
       ? response.choices[0].message.content
       : ''
 
   return {
     blocked: parseDecision(content),
-    strategy: `ai:${provider.provider}`,
+    strategy: 'ai:hunyuan',
     reason: normalize(content),
   }
 }

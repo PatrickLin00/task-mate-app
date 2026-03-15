@@ -432,6 +432,7 @@ Page({
   },
 
   async onRequestSubscribe() {
+    if (this.data.loading) return
     await requestTaskSubscribeAuth({ force: true })
     await this.refresh()
   },
@@ -448,12 +449,13 @@ Page({
   },
 
   async saveProfile() {
+    if (this.data.loading) return
     const nickname = String(this.data.nicknameDraft || '').trim()
     if (!nickname) {
       this.setError(strings.errors.nicknameRequired)
       return
     }
-    this.setData({ loading: true, actionLoading: 'generateCreateDraft' })
+    this.setData({ loading: true, actionLoading: 'saveProfile' })
     this.clearError()
     try {
       const payload = await updateProfile({ nickname })
@@ -472,6 +474,7 @@ Page({
   },
 
   openCreateModal() {
+    if (this.data.loading) return
     if (this._createOpenTimer) {
       clearTimeout(this._createOpenTimer)
       this._createOpenTimer = null
@@ -492,6 +495,7 @@ Page({
   },
 
   startReworkFromSelectedTask() {
+    if (this.data.loading) return
     const task = this.data.selectedTask
     if (!task || task.isArchive) return
     if (this._createOpenTimer) {
@@ -597,12 +601,14 @@ Page({
   },
 
   addSubtask() {
+    if (this.data.loading) return
     this.setData({
       'create.subtasks': this.data.create.subtasks.concat([{ title: '', total: 1 }]),
     })
   },
 
   removeSubtask(event) {
+    if (this.data.loading) return
     if (this.data.create.subtasks.length <= 1) return
     const index = Number(event.currentTarget.dataset.index)
     this.setData({
@@ -611,6 +617,7 @@ Page({
   },
 
   async onGenerateCreateDraft() {
+    if (this.data.loading) return
     const prompt = String(this.data.create.aiPrompt || '').trim()
     if (!prompt) {
       this.setError(strings.errors.aiPromptRequired)
@@ -641,6 +648,7 @@ Page({
   },
 
   async submitCreateTask() {
+    if (this.data.loading) return
     const payload = this.data.create
     const title = String(payload.title || '').trim()
     const detail = String(payload.detail || '').trim()
@@ -657,7 +665,7 @@ Page({
       return
     }
 
-    this.setData({ loading: true })
+    this.setData({ loading: true, actionLoading: 'submitCreateTask' })
     this.clearError()
     try {
       const requestPayload = {
@@ -725,7 +733,7 @@ Page({
       }
       this.setError(error.message || strings.errors.saveTaskFailed)
     } finally {
-      this.setData({ loading: false })
+      this.setData({ loading: false, actionLoading: '' })
     }
   },
 
@@ -782,6 +790,7 @@ Page({
   noop() {},
 
   async onAcceptChallenge(event) {
+    if (this.data.loading) return
     const seedKey = event.currentTarget.dataset.seedKey
     if (!seedKey) return
     this.setData({ loading: true, actionLoading: 'acceptChallenge' })
@@ -800,6 +809,7 @@ Page({
   },
 
   async runTaskOperation(operation, extraPayload, loadingKey) {
+    if (this.data.loading) return
     const task = this.data.selectedTask
     if (!task) return
     this.setData({ loading: true, actionLoading: loadingKey || operation || '' })
@@ -852,6 +862,7 @@ Page({
   },
 
   async confirmAndRun(event) {
+    if (this.data.loading) return
     const operation = event.currentTarget.dataset.operation
     const title = event.currentTarget.dataset.title || strings.dialogs.confirmOperationTitle
     const content = event.currentTarget.dataset.content || strings.dialogs.confirmOperationContent
@@ -948,6 +959,7 @@ Page({
   },
 
   async onApplyProgress() {
+    if (this.data.loading) return
     const task = this.data.selectedTask
     if (!task || !this.hasProgressChanges()) return
     const original = safeArray(task.subtasks)

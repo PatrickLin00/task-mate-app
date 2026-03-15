@@ -29,6 +29,7 @@ const STATUS = {
 }
 const REWARD_TYPES = ['wisdom', 'strength', 'agility']
 const ACTIVE_ASSIGNEE_STATUS = [STATUS.IN_PROGRESS, STATUS.PENDING_CONFIRMATION]
+const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000
 const SENSITIVE_HINT = '内容包含敏感词，请调整后再试'
 const SENSITIVE_WORDS = [
   '赌博',
@@ -187,15 +188,60 @@ function pickDailyChallengeTemplates(userId, dayKey, count) {
 
 function buildChallengeSeeds(userId, date) {
   const reference = date || now()
-  const dayKey = formatYmd(reference)
-  const start = startOfDay(reference)
-  const end = endOfDay(reference)
+  const dayKey = formatUtc8Ymd(reference)
+  const start = startOfUtc8Day(reference)
+  const end = endOfUtc8Day(reference)
   const creatorId = buildChallengeSystemId(userId)
   const seeds = pickDailyChallengeTemplates(userId, dayKey, 3).map((template) => ({
     template,
     seedKey: buildChallengeSeedKey(userId, dayKey, template.id),
   }))
   return { dayKey, start, end, creatorId, seeds }
+}
+
+function formatUtc8Ymd(date) {
+  const reference = date instanceof Date ? date : new Date(date)
+  const shifted = new Date(reference.getTime() + UTC8_OFFSET_MS)
+  const yyyy = String(shifted.getUTCFullYear())
+  const mm = String(shifted.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(shifted.getUTCDate()).padStart(2, '0')
+  return `${yyyy}${mm}${dd}`
+}
+
+function startOfUtc8Day(date) {
+  const reference = date instanceof Date ? date : new Date(date)
+  const shifted = new Date(reference.getTime() + UTC8_OFFSET_MS)
+  shifted.setUTCHours(0, 0, 0, 0)
+  return new Date(shifted.getTime() - UTC8_OFFSET_MS)
+}
+
+function endOfUtc8Day(date) {
+  const reference = date instanceof Date ? date : new Date(date)
+  const shifted = new Date(reference.getTime() + UTC8_OFFSET_MS)
+  shifted.setUTCHours(23, 59, 59, 999)
+  return new Date(shifted.getTime() - UTC8_OFFSET_MS)
+}
+
+function isChallengeTask(task) {
+  return Boolean(task && (task.category === 'challenge' || String(task.seedKey || '').startsWith('challenge_')))
+}
+
+function isExpiredChallengeTask(task, referenceNow) {
+  if (!isChallengeTask(task)) return false
+  if (task.status === STATUS.COMPLETED) return false
+  const dueAt = task && task.dueAt ? new Date(task.dueAt) : null
+  if (!dueAt || Number.isNaN(dueAt.getTime())) return false
+  return dueAt.getTime() < referenceNow.getTime()
+}
+
+async function cleanupExpiredChallengeTasks(userId, referenceNow) {
+  const creatorId = buildChallengeSystemId(userId)
+  const current = referenceNow || now()
+  const result = await db.collection(TASKS).where({ creatorId, category: 'challenge' }).get()
+  const expired = (result.data || []).filter((task) => isExpiredChallengeTask(task, current))
+  if (!expired.length) return []
+  await Promise.all(expired.map((task) => db.collection(TASKS).doc(task._id).remove().catch(() => null)))
+  return expired
 }
 
 function normalizeSubtasks(subtasks) {
@@ -557,6 +603,7 @@ async function listArchivesByWhere(where) {
 }
 
 async function buildDashboard(userId) {
+  await cleanupExpiredChallengeTasks(userId, now())
   const { seeds, start, end, creatorId } = buildChallengeSeeds(userId, now())
   const seedKeys = seeds.map((item) => item.seedKey)
 
@@ -1159,6 +1206,7 @@ async function restartTask(payload) {
 
 async function getAllTasks() {
   const userId = await getCurrentUserId()
+  await cleanupExpiredChallengeTasks(userId, now())
   const [creatorTasks, assigneeTasks] = await Promise.all([
     listTasksByWhere({ creatorId: userId }, 'dueAt', 'asc'),
     listTasksByWhere({ assigneeId: userId }, 'dueAt', 'asc'),
@@ -1181,6 +1229,7 @@ async function getAllTasks() {
 
 async function getMissionTasks() {
   const userId = await getCurrentUserId()
+  await cleanupExpiredChallengeTasks(userId, now())
   const tasks = await listTasksByWhere({ assigneeId: userId }, 'dueAt', 'asc')
   const filtered = tasks.filter((task) => ACTIVE_ASSIGNEE_STATUS.includes(task.status))
   const nameMap = await getUserNameMap(filtered.map((item) => [item.creatorId, item.assigneeId]).flat().filter(Boolean))
@@ -1216,6 +1265,7 @@ async function getArchivedTasks() {
 
 async function getChallengeTasks() {
   const userId = await getCurrentUserId()
+  await cleanupExpiredChallengeTasks(userId, now())
   const { seeds, start, end, creatorId } = buildChallengeSeeds(userId, now())
   const seedKeys = seeds.map((item) => item.seedKey)
   const existingRes = seedKeys.length
@@ -1257,6 +1307,7 @@ async function getChallengeTasks() {
 
 async function getTodayTasks() {
   const userId = await getCurrentUserId()
+  await cleanupExpiredChallengeTasks(userId, now())
   const tasks = await listTasksByWhere({ assigneeId: userId }, 'dueAt', 'asc')
   const today = buildTodayTasks(tasks)
   const nameMap = await getUserNameMap(today.tasks.map((item) => [item.creatorId, item.assigneeId]).flat().filter(Boolean))

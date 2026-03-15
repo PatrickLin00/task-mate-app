@@ -91,6 +91,10 @@ async function markTaskField(taskId, field) {
   })
 }
 
+async function removeTask(taskId) {
+  await db.collection(TASKS).doc(taskId).remove()
+}
+
 async function runHourly(referenceNow) {
   const current = referenceNow || now()
   const soonEnd = new Date(current.getTime() + HOUR_MS)
@@ -187,7 +191,10 @@ async function runDaily(referenceNow) {
       },
       { event: 'challenge_expired', taskId: task._id }
     )
-    if (sent) await markTaskField(task._id, 'challengeExpiredNotifiedAt')
+    if (sent) {
+      await markTaskField(task._id, 'challengeExpiredNotifiedAt')
+    }
+    await removeTask(task._id)
   }
   return {
     challengeExpired: expiredChallenges.length,
