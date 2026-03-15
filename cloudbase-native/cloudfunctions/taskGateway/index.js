@@ -439,6 +439,10 @@ async function ensureUser(userId) {
       nickname: `旅者-${String(userId).slice(-4)}`,
       userId,
       avatar: '',
+      onboarding: {
+        seen: false,
+        seenAt: null,
+      },
       subscribePreferences: {},
       stars: 0,
       wisdom: 0,
@@ -711,6 +715,10 @@ async function bootstrap() {
       wisdom: Number(user.wisdom || 0),
       strength: Number(user.strength || 0),
       agility: Number(user.agility || 0),
+      onboarding: {
+        seen: Boolean(user.onboarding && user.onboarding.seen),
+        seenAt: toIso(user.onboarding && user.onboarding.seenAt),
+      },
       subscribePreferences: normalizePreferences(user.subscribePreferences, templates),
       subscribeTemplates: templates,
       createdAt: toIso(user.createdAt),
@@ -748,6 +756,25 @@ async function saveSubscribeSettings(payload) {
   return success({
     preferences: nextPreferences,
     templates,
+  })
+}
+
+async function completeOnboarding() {
+  const userId = await getCurrentUserId()
+  const user = await ensureUser(userId)
+  const completedAt = now()
+  await db.collection(USERS).doc(user._id).update({
+    data: {
+      onboarding: {
+        seen: true,
+        seenAt: completedAt,
+      },
+      updatedAt: completedAt,
+    },
+  })
+  return success({
+    seen: true,
+    seenAt: toIso(completedAt),
   })
 }
 
@@ -1161,19 +1188,21 @@ async function closeTask(payload) {
     await removeArchive(task.assigneeId, task._id)
   }
   const updated = await refreshTask(task._id)
-  await sendSceneNotification(
-    updated.creatorId,
-    SCENES.review,
-    buildSubscribeData({
-      reviewType: '任务变更',
-      reviewResult: '已接受',
-      notifyTime: formatDateTime(current),
-      reviewer: updated.assigneeName || '',
-      status: '已接受',
-      tip: updated.assigneeName ? `${updated.assigneeName}已接受变更` : '变更已接受',
-    }),
-    { event: 'task_rework_accepted', actorId: userId, taskId: updated._id }
-  ).catch(() => null)
+  if (task.assigneeId) {
+    await sendSceneNotification(
+      task.assigneeId,
+      SCENES.work,
+      buildSubscribeData({
+        taskName: updated.title || '任务提醒',
+        assignee: task.assigneeName || '',
+        startTime: formatDateTime(task.originalStartAt || task.startAt || task.createdAt),
+        dueTime: formatDateTime(task.originalDueAt || task.dueAt || closedAt),
+        status: '已关闭',
+        tip: '任务已被关闭',
+      }),
+      { event: 'task_closed', actorId: userId, taskId: updated._id }
+    ).catch(() => null)
+  }
   return success(normalizeTask(updated, await getUserNameMap([updated.creatorId, updated.assigneeId])))
 }
 
@@ -1239,11 +1268,9 @@ async function getMissionTasks() {
 async function getCollabTasks() {
   const userId = await getCurrentUserId()
   const tasks = await listTasksByWhere({ creatorId: userId }, 'dueAt', 'asc')
-  const current = now().getTime()
   const filtered = tasks.filter((task) => {
     if (task.status === STATUS.REFACTORED) return false
     if (task.assigneeId && task.assigneeId === userId) return false
-    if (task.status === STATUS.CLOSED && task.dueAt && new Date(task.dueAt).getTime() < current) return false
     if (task.status === STATUS.COMPLETED && (!task.assigneeId || task.assigneeId === userId)) return false
     return true
   })
@@ -1362,7 +1389,7 @@ async function deleteTask(payload) {
   const stale = await ensureTaskFresh(task, payload, userId)
   if (stale) return stale
   assert(task.creatorId === userId, 'Forbidden', 'FORBIDDEN')
-  assert(!task.assigneeId, 'Task has assignee', 'BAD_REQUEST')
+  assert(task.status === STATUS.CLOSED, 'Only closed tasks can be deleted', 'BAD_REQUEST')
   await db.collection(TASKS).doc(task._id).remove()
   if (task.previousTaskId) {
     await deleteRefactoredChain(task.previousTaskId, userId)
@@ -1653,6 +1680,8 @@ async function route(action, payload) {
       return updateProfile(payload)
     case 'saveSubscribeSettings':
       return saveSubscribeSettings(payload)
+    case 'completeOnboarding':
+      return completeOnboarding()
     case 'createTask':
       return createTask(payload)
     case 'getTask':

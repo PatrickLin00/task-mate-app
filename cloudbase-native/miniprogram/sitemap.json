@@ -1,3 +1,9 @@
 {
-  "rules": []
+  "desc": "Task Mate sitemap",
+  "rules": [
+    {
+      "action": "allow",
+      "page": "*"
+    }
+  ]
 }

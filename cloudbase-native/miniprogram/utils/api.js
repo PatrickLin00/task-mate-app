@@ -44,6 +44,10 @@ async function saveSubscribeSettings(payload) {
   return requestTask('saveSubscribeSettings', payload)
 }
 
+async function completeOnboarding() {
+  return requestTask('completeOnboarding')
+}
+
 async function operateTask(operation, payload) {
   return requestTask(operation, payload)
 }
@@ -64,6 +68,7 @@ module.exports = {
   createTask,
   updateProfile,
   saveSubscribeSettings,
+  completeOnboarding,
   operateTask,
   acceptChallengeTask,
   generateTaskByAI,
