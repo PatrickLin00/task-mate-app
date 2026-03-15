@@ -1,6 +1,8 @@
 {
   "pages": [
-    "pages/home/index"
+    "pages/home/index",
+    "pages/legal-terms/index",
+    "pages/legal-privacy/index"
   ],
   "window": {
     "navigationBarTitleText": "Task Mate",
@@ -9,6 +11,7 @@
     "backgroundColor": "#f4ead9",
     "backgroundTextStyle": "light"
   },
+  "lazyCodeLoading": "requiredComponents",
   "style": "v2",
   "sitemapLocation": "sitemap.json"
 }

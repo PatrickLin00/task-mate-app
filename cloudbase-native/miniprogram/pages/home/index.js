@@ -979,6 +979,14 @@ Page({
     this.applyOnboardingScene(0)
   },
 
+  openTermsPage() {
+    wx.navigateTo({ url: '/pages/legal-terms/index' })
+  },
+
+  openPrivacyPage() {
+    wx.navigateTo({ url: '/pages/legal-privacy/index' })
+  },
+
   nextOnboardingStep() {
     const step = Number(this.data.onboarding && this.data.onboarding.step ? this.data.onboarding.step : 0)
     this.applyOnboardingScene(step + 1)

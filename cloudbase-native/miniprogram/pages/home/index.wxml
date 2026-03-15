@@ -229,6 +229,10 @@
           <view class="task-meta">{{strings.profile.sync1}}</view>
           <view class="task-meta">{{strings.profile.sync2}}</view>
           <view class="task-meta">{{strings.profile.sync3}}</view>
+          <view class="legal-link-list">
+            <text class="legal-link" bindtap="openTermsPage">{{strings.profile.legalTerms}}</text>
+            <text class="legal-link" bindtap="openPrivacyPage">{{strings.profile.legalPrivacy}}</text>
+          </view>
         </view>
       </view>
     </block>

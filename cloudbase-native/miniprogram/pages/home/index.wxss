@@ -870,6 +870,19 @@
   color: var(--ink);
 }
 
+.legal-link-list {
+  margin-top: 18rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18rpx 28rpx;
+}
+
+.legal-link {
+  color: #2f6fd6;
+  font-size: 26rpx;
+  line-height: 1.5;
+}
+
 @keyframes guideGlow {
   0% {
     box-shadow:
