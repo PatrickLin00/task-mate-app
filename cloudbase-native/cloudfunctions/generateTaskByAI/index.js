@@ -79,32 +79,25 @@ function parseJsonSafe(text) {
 
 function buildSystemPrompt(nowText) {
   return [
-    '你是一个轻松游戏风格的任务生成器.',
-    '根据用户的一句话,生成清晰易懂的任务方案.',
+    '你是任务整理助手，根据用户一句话生成任务草案。',
     `当前时间(Asia/Shanghai): ${nowText}`,
-    '只返回JSON对象,不要额外文字.结构:',
+    '只返回 JSON，不要额外文字。结构如下：',
     '{',
     '  "title": "...",',
     '  "description": "...",',
     '  "subtasks": [{"title": "...", "total": 1}],',
-    '  "attributeReward": {"type": "wisdom" | "strength" | "agility", "value": number},',
-    '  "dueAt": "ISO-8601 datetime string (optional)"',
+    '  "attributeReward": {"type": "wisdom" | "strength" | "agility", "value": 1},',
+    '  "dueAt": "ISO-8601 datetime string (optional)",',
+    '  "offlineRewardPromise": "optional"',
     '}',
-    '要求:',
-    '- 标题和描述用口语化,轻松语气,不要文言文或生僻词.',
-    '- 游戏化氛围适度,表达直白易懂.',
-    '- 描述不绕口,尽量一到两句话,点明做什么与目标.',
-    '- subtasks 只给关键目标,不要拆得太细.',
-    '- 若用户明确列出多个关键事项(如“买A和B和C”“先...再...然后...” ),可对应增加.',
-    '- 若用户在说购物/食材清单,subtasks 直接列出物品,用“购买X”形式,不要写处理或分类.',
-    '- 每条步骤以动词开头,尽量在12字以内.',
-    '- total 为正整数,默认 1.',
-    '- attributeReward.type 根据语义选择: 学习思考类=wisdom, 运动力量类=strength, 执行效率或灵活类=agility.',
-    '- attributeReward.value 固定为 1.',
-    '- 如果用户输入包含日期或时间,请输出 dueAt,使用 ISO 8601 (例如 2025-12-28T18:00:00+08:00).',
-    '- “今天/明天/后天”要按当前时间生成,不要写成过去日期.',
-    '- 如果没有明确时间,不要输出 dueAt.',
-    '- 标题与描述不要出现“今天/明天/后天/昨晚”等相对时间词,用更通用的表达.',
+    '要求：',
+    '- title 简短清楚，像任务名。',
+    '- description 自然直白，说明做什么和目标。',
+    '- subtasks 只保留关键步骤。',
+    '- 购物或清单场景，subtasks 直接写物品项。',
+    '- 有明确日期时间才输出 dueAt；title 和 description 不要保留今天、明天、后天、昨晚这类相对时间词。',
+    '- 如果用户表达了会给对方线下奖励、请客、请喝、请吃、红包、礼物、交换条件、完成后给好处等承诺，请把承诺内容提炼到 offlineRewardPromise。',
+    '- 如果没有这类承诺，offlineRewardPromise 返回空字符串。',
   ].join('\n')
 }
 
@@ -149,6 +142,32 @@ function extractShoppingItems(text) {
   return unique
 }
 
+function extractOfflineRewardPromise(text) {
+  const source = String(text || '').trim()
+  if (!source) return ''
+
+  const patterns = [
+    /(?:线下奖励|额外奖励|奖励|奖品|报酬|酬劳)[：:是为给\s]*([^，。；;\n]{2,32})/,
+    /(?:换取|兑换|换成)[^\S\r\n]*([^，。；;\n]{2,24})/,
+    /((?:请|送|给)[^，。；;\n]{0,8}(?:喝|吃|拿|送)[^，。；;\n]{1,24})/,
+    /((?:请|带|陪)(?:你|你们|对方|Ta|ta)?去[^，。；;\n]{1,24})/,
+    /((?:一起去|去)[^，。；;\n]{2,18})/,
+    /((?:奶茶|咖啡|红包|请客|饮料|零食|甜品|吃饭)[^，。；;\n]{0,18})/,
+  ]
+
+  for (let index = 0; index < patterns.length; index += 1) {
+    const matched = source.match(patterns[index])
+    if (!matched) continue
+    const value = String(matched[1] || '')
+      .replace(/^(作为)?(?:线下奖励|额外奖励|奖励|奖品|报酬|酬劳|换取|兑换|换成)[：:\s]*/u, '')
+      .replace(/[,.，。；;!！?？]+$/u, '')
+      .trim()
+    if (value.length >= 2) return value
+  }
+
+  return ''
+}
+
 function fallbackDraft(prompt) {
   return {
     title: '整理任务草案',
@@ -162,6 +181,7 @@ function fallbackDraft(prompt) {
       type: 'wisdom',
       value: 1,
     },
+    offlineRewardPromise: extractOfflineRewardPromise(prompt),
   }
 }
 
@@ -195,6 +215,7 @@ function normalizeDraft(data, prompt) {
         : 'wisdom',
     value: 1,
   }
+  normalized.offlineRewardPromise = String(normalized.offlineRewardPromise || '').trim() || extractOfflineRewardPromise(prompt)
   return normalized
 }
 

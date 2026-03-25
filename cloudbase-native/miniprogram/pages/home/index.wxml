@@ -88,7 +88,7 @@
                 <view class="task-title">{{item.title}}</view>
                 <view class="task-status">{{item.statusText}}</view>
               </view>
-              <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}</view>
+              <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}<text wx:if="{{item.overdueDaysText}}" class="task-overdue-text"> {{item.overdueDaysText}}</text></view>
               <view class="task-meta">{{strings.archive.progress}} {{item.progressText}}</view>
             </view>
           </view>
@@ -128,7 +128,7 @@
               <view class="task-status">{{item.statusText}}</view>
             </view>
             <view class="task-meta">{{item.creatorName || strings.common.system}}{{strings.mission.creatorJoin}}{{item.progressText}}</view>
-            <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}</view>
+            <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}<text wx:if="{{item.overdueDaysText}}" class="task-overdue-text"> {{item.overdueDaysText}}</text></view>
           </view>
         </view>
         <view class="empty" wx:else>{{strings.mission.empty}}</view>
@@ -139,17 +139,69 @@
       <view class="card section-card tab-pane {{onboarding.visible && onboarding.target === 'collab-list' ? 'guide-target' : ''}}">
         <view class="section-title">{{strings.collab.title}}</view>
         <view class="section-subtitle">{{strings.collab.subtitle}}</view>
-        <view class="task-list" wx:if="{{view.collabTasks.length}}">
+        <view wx:if="{{view.reviewPendingTasks.length}}" class="history-block">
+          <view class="section-subtitle">{{strings.collab.reviewPendingTitle || '待检视'}}</view>
+          <view class="task-list">
+            <view wx:for="{{view.reviewPendingTasks}}" wx:key="_id" class="task-item" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
+              <view class="task-head">
+                <view class="task-title">{{item.title}}</view>
+                <view class="task-status">{{item.statusText}}</view>
+              </view>
+              <view class="task-meta">{{item.assigneeName ? (strings.collab.assigneePrefix + item.assigneeName) : strings.collab.waitingAccept}}</view>
+              <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}<text wx:if="{{item.overdueDaysText}}" class="task-overdue-text"> {{item.overdueDaysText}}</text></view>
+            </view>
+          </view>
+        </view>
+        <view wx:if="{{view.pendingConfirmationTasks.length}}" class="history-block">
+          <view class="section-subtitle">{{strings.collab.pendingConfirmationTitle || '待确认'}}</view>
+          <view class="task-list">
+            <view wx:for="{{view.pendingConfirmationTasks}}" wx:key="_id" class="task-item" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
+              <view class="task-head">
+                <view class="task-title">{{item.title}}</view>
+                <view class="task-status">{{item.statusText}}</view>
+              </view>
+              <view class="task-meta">{{item.assigneeName ? (strings.collab.assigneePrefix + item.assigneeName) : strings.collab.waitingAccept}}</view>
+              <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}<text wx:if="{{item.overdueDaysText}}" class="task-overdue-text"> {{item.overdueDaysText}}</text></view>
+            </view>
+          </view>
+        </view>
+        <view wx:if="{{view.waitingAcceptTasks.length}}" class="history-block">
+          <view class="section-subtitle">{{strings.collab.waitingAcceptTitle || '待接取'}}</view>
+          <view class="task-list">
+            <view wx:for="{{view.waitingAcceptTasks}}" wx:key="_id" class="task-item {{onboarding.visible && onboarding.target === 'collab-list' && item._id === 'guide-collab-task' ? 'guide-target' : ''}}" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
+              <view class="task-head">
+                <view class="task-title">{{item.title}}</view>
+                <view class="task-status">{{item.statusText}}</view>
+              </view>
+              <view class="task-meta">{{item.assigneeName ? (strings.collab.assigneePrefix + item.assigneeName) : strings.collab.waitingAccept}}</view>
+              <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}<text wx:if="{{item.overdueDaysText}}" class="task-overdue-text"> {{item.overdueDaysText}}</text></view>
+            </view>
+          </view>
+        </view>
+        <view wx:if="{{view.inProgressCollabTasks.length}}" class="history-block">
+          <view class="section-subtitle">{{strings.collab.inProgressTitle || '进行中'}}</view>
+          <view class="task-list">
+            <view wx:for="{{view.inProgressCollabTasks}}" wx:key="_id" class="task-item" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
+              <view class="task-head">
+                <view class="task-title">{{item.title}}</view>
+                <view class="task-status">{{item.statusText}}</view>
+              </view>
+              <view class="task-meta">{{item.assigneeName ? (strings.collab.assigneePrefix + item.assigneeName) : strings.collab.waitingAccept}}</view>
+              <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}<text wx:if="{{item.overdueDaysText}}" class="task-overdue-text"> {{item.overdueDaysText}}</text></view>
+            </view>
+          </view>
+        </view>
+        <view class="task-list" wx:if="{{!view.reviewPendingTasks.length && !view.pendingConfirmationTasks.length && !view.waitingAcceptTasks.length && !view.inProgressCollabTasks.length && view.collabTasks.length}}">
           <view wx:for="{{view.collabTasks}}" wx:key="_id" class="task-item {{onboarding.visible && onboarding.target === 'collab-list' && item._id === 'guide-collab-task' ? 'guide-target' : ''}}" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
             <view class="task-head">
               <view class="task-title">{{item.title}}</view>
               <view class="task-status">{{item.statusText}}</view>
             </view>
             <view class="task-meta">{{item.assigneeName ? (strings.collab.assigneePrefix + item.assigneeName) : strings.collab.waitingAccept}}</view>
-            <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}</view>
+            <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}<text wx:if="{{item.overdueDaysText}}" class="task-overdue-text"> {{item.overdueDaysText}}</text></view>
           </view>
         </view>
-        <view class="empty" wx:else>{{strings.collab.empty}}</view>
+        <view class="empty" wx:if="{{!view.reviewPendingTasks.length && !view.pendingConfirmationTasks.length && !view.waitingAcceptTasks.length && !view.inProgressCollabTasks.length && !view.historyTasks.length}}">{{strings.collab.empty}}</view>
 
         <view wx:if="{{view.historyTasks.length}}" class="history-block">
           <view class="section-subtitle">{{strings.collab.historyTitle}}</view>
@@ -252,8 +304,9 @@
       <view class="detail-summary">
         <view wx:if="{{selectedTask.detail}}" class="task-meta detail-line">{{selectedTask.detail}}</view>
         <view class="detail-group">
-          <view class="task-meta detail-line">{{strings.detail.dueAt}} {{selectedTask.dueText}}</view>
+          <view class="task-meta detail-line">{{strings.detail.dueAt}} {{selectedTask.dueText}}<text wx:if="{{selectedTask.overdueDaysText}}" class="task-overdue-text"> {{selectedTask.overdueDaysText}}</text></view>
           <view class="task-meta detail-line">{{strings.detail.reward}} {{selectedTask.rewardText}}</view>
+          <view wx:if="{{selectedTask.offlineRewardPromise}}" class="task-meta detail-line detail-offline-reward">发起者承诺线下奖励：{{selectedTask.offlineRewardPromise}}</view>
         </view>
         <view class="detail-group">
           <view class="task-meta detail-line">{{strings.detail.creator}} {{selectedTask.creatorName || strings.common.system}}</view>
@@ -272,23 +325,65 @@
         <view wx:for="{{selectedTaskDraftSubtasks}}" wx:key="index" class="subtask-row">
           <view class="subtask-main">
             <view class="subtask-title">{{item.title}}</view>
-            <view class="task-meta">{{item.current}} / {{item.total}}</view>
-          </view>
-          <view wx:if="{{selectedTask.canAdjustProgress}}" class="subtask-actions">
-            <button hover-class="button-press" hover-stay-time="90" size="mini" class="ghost-button mini-button" data-index="{{index}}" bindtap="onDecreaseProgress">-1</button>
-            <button hover-class="button-press" hover-stay-time="90" size="mini" class="primary-button mini-button" data-index="{{index}}" bindtap="onIncreaseProgress">+1</button>
+            <view wx:if="{{selectedTask.canAdjustProgress}}" class="subtask-progress-row">
+              <view
+                id="progress-track-{{index}}"
+                class="subtask-slider-wrap"
+                data-index="{{index}}"
+                bindtap="onProgressTrackTap"
+                catchtouchstart="onProgressTrackTouchStart"
+                catchtouchmove="onProgressTrackTouchMove"
+                catchtouchend="onProgressTrackTouchEnd"
+                catchtouchcancel="onProgressTrackTouchCancel"
+              >
+                <view class="subtask-slider-rail"></view>
+                <view class="subtask-slider-fill" style="width: {{item.previewPercent}}%;"></view>
+                <view class="subtask-slider-thumb" style="left: calc({{item.previewPercent}}% - 18rpx);">{{strings.icons.progressThumb}}</view>
+              </view>
+              <view class="task-meta subtask-progress-value">{{item.previewCurrent}} / {{item.total}}</view>
+            </view>
+            <view wx:else class="task-meta">{{item.current}} / {{item.total}}</view>
           </view>
         </view>
       </view>
 
       <view class="actions" wx:if="{{!selectedTask.isArchive}}">
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canShare}}" class="ghost-button" open-type="share" data-taskid="{{selectedTask._id}}" data-tasktitle="{{selectedTask.title}}">{{strings.actions.shareTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canOpenHistory}}" class="ghost-button" data-task-id="{{selectedTask.previousTaskId}}" bindtap="openPreviousVersion">{{strings.actions.viewPreviousVersion}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRework && !selectedTask.canAdjustProgress}}" class="ghost-button" bindtap="startReworkFromSelectedTask">{{strings.actions.reworkTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAcceptTask}}" class="primary-button {{onboarding.visible && onboarding.target === 'collab-accept' ? 'guide-target' : ''}}" loading="{{actionLoading === 'acceptTask'}}" bindtap="onAcceptTask">{{strings.actions.acceptTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAcceptRework}}" class="primary-button" loading="{{actionLoading === 'acceptReworkTask'}}" bindtap="onAcceptReworkTask">{{strings.actions.acceptRework}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRejectRework}}" class="ghost-button" loading="{{actionLoading === 'rejectReworkTask'}}" bindtap="onRejectReworkTask">{{strings.actions.rejectRework}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canCancelRework}}" class="ghost-button" loading="{{actionLoading === 'cancelReworkTask'}}" bindtap="onCancelReworkTask">{{strings.actions.cancelRework}}</button>
+        <view wx:if="{{selectedTask.isSharedPreviewLocked}}" class="secondary-action-row">
+          <button hover-class="button-press" hover-stay-time="90" class="ghost-button" bindtap="closeTaskModal">{{strings.actions.sharedTaskUnavailable}}</button>
+        </view>
+        <view wx:if="{{selectedTask.isHistory}}" class="secondary-action-row">
+          <button hover-class="button-press" hover-stay-time="90" class="ghost-button" bindtap="openCurrentVersion">返回当前任务</button>
+        </view>
+        <block wx:if="{{!selectedTask.canAdjustProgress}}">
+          <view wx:for="{{selectedTask.nonProgressActionRows}}" wx:key="index" class="secondary-action-row {{item.length >= 3 ? 'secondary-action-row-triple' : ''}}">
+            <block wx:for="{{item}}" wx:key="key" wx:for-item="action">
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'refreshSchedule'}}" class="primary-button" loading="{{actionLoading === 'refreshTaskSchedule'}}" bindtap="onRefreshTaskSchedule">{{strings.actions.refreshSchedule}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'acceptTask'}}" class="primary-button {{onboarding.visible && onboarding.target === 'collab-accept' ? 'guide-target' : ''}}" loading="{{actionLoading === 'acceptTask'}}" bindtap="onAcceptTask">{{strings.actions.acceptTask}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'acceptRework'}}" class="primary-button" loading="{{actionLoading === 'acceptReworkTask'}}" bindtap="onAcceptReworkTask">{{strings.actions.acceptRework}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'rejectRework'}}" class="ghost-button" loading="{{actionLoading === 'rejectReworkTask'}}" bindtap="onRejectReworkTask">{{strings.actions.rejectRework}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'cancelRework'}}" class="ghost-button" loading="{{actionLoading === 'cancelReworkTask'}}" bindtap="onCancelReworkTask">{{strings.actions.cancelRework}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'submitReview'}}" class="primary-button" loading="{{actionLoading === 'submitReview'}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'continueReview'}}" class="ghost-button" loading="{{actionLoading === 'continueReview'}}" bindtap="onContinueReview">{{strings.actions.continueReview}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'completeTask'}}" class="primary-button {{onboarding.visible && onboarding.target === 'mission-complete' ? 'guide-target' : ''}}" loading="{{actionLoading === 'completeTask'}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'abandonTask'}}" class="ghost-button" loading="{{actionLoading === 'abandonTask'}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'restartTask'}}" class="primary-button" loading="{{actionLoading === 'restartTask'}}" bindtap="onRestartTask">{{strings.actions.restartTask}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'shareTask'}}" class="ghost-button" open-type="share" data-taskid="{{selectedTask._id}}" data-tasktitle="{{selectedTask.title}}">{{strings.actions.shareTask}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'viewPreviousVersion'}}" class="ghost-button" data-task-id="{{selectedTask.previousTaskId}}" bindtap="openPreviousVersion">{{strings.actions.viewPreviousVersion}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'reworkTask'}}" class="ghost-button" bindtap="startReworkFromSelectedTask">{{strings.actions.reworkTask}}</button>
+              <button
+                hover-class="button-press"
+                hover-stay-time="90"
+                wx:if="{{action.key === 'closeTask' || action.key === 'deleteTask'}}"
+                class="ghost-button"
+                loading="{{actionLoading === action.loadingKey}}"
+                data-operation="{{action.key === 'deleteTask' ? 'deleteTask' : 'closeTask'}}"
+                data-title="{{action.key === 'deleteTask' ? strings.dialogs.deleteTaskTitle : strings.dialogs.closeTaskTitle}}"
+                data-content="{{action.key === 'deleteTask' ? strings.dialogs.deleteTaskContent : strings.dialogs.closeTaskContent}}"
+                bindtap="confirmAndRun"
+              >{{action.key === 'deleteTask' ? strings.actions.deleteTask : strings.actions.closeTask}}</button>
+            </block>
+          </view>
+        </block>
 
         <view wx:if="{{selectedTask.canAdjustProgress && (selectedTask.canSubmitReview || selectedTask.canComplete || selectedTask.canAbandon)}}" class="progress-action-row">
           <button hover-class="button-press" hover-stay-time="90" class="ghost-button progress-action-button" loading="{{actionLoading === 'applyProgress'}}" disabled="{{loading || !selectedTaskHasDraftChanges}}" bindtap="onApplyProgress">{{strings.actions.updateProgress}}</button>
@@ -297,38 +392,24 @@
           <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAbandon}}" class="ghost-button progress-action-button" loading="{{actionLoading === 'abandonTask'}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
         </view>
 
-        <view wx:if="{{selectedTask.canAdjustProgress && (selectedTask.canRework || selectedTask.canClose || selectedTask.canDelete)}}" class="secondary-action-row">
-          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRework}}" class="ghost-button" bindtap="startReworkFromSelectedTask">{{strings.actions.reworkTask}}</button>
-          <button
-            hover-class="button-press"
-            hover-stay-time="90"
-            wx:if="{{selectedTask.canClose || selectedTask.canDelete}}"
-            class="ghost-button"
-            loading="{{actionLoading === (selectedTask.canDelete ? 'deleteTask' : 'closeTask')}}"
-            data-operation="{{selectedTask.canDelete ? 'deleteTask' : 'closeTask'}}"
-            data-title="{{selectedTask.canDelete ? strings.dialogs.deleteTaskTitle : strings.dialogs.closeTaskTitle}}"
-            data-content="{{selectedTask.canDelete ? strings.dialogs.deleteTaskContent : strings.dialogs.closeTaskContent}}"
-            bindtap="confirmAndRun"
-          >{{selectedTask.canDelete ? strings.actions.deleteTask : strings.actions.closeTask}}</button>
+        <view wx:if="{{selectedTask.canAdjustProgress}}" wx:for="{{selectedTask.progressExtraActionRows}}" wx:key="index" class="secondary-action-row {{item.length >= 3 ? 'secondary-action-row-triple' : ''}}">
+          <block wx:for="{{item}}" wx:key="key" wx:for-item="action">
+            <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'viewPreviousVersion'}}" class="ghost-button" data-task-id="{{selectedTask.previousTaskId}}" bindtap="openPreviousVersion">{{strings.actions.viewPreviousVersion}}</button>
+            <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'reworkTask'}}" class="ghost-button" bindtap="startReworkFromSelectedTask">{{strings.actions.reworkTask}}</button>
+            <button
+              hover-class="button-press"
+              hover-stay-time="90"
+              wx:if="{{action.key === 'closeTask' || action.key === 'deleteTask'}}"
+              class="ghost-button"
+              loading="{{actionLoading === action.loadingKey}}"
+              data-operation="{{action.key === 'deleteTask' ? 'deleteTask' : 'closeTask'}}"
+              data-title="{{action.key === 'deleteTask' ? strings.dialogs.deleteTaskTitle : strings.dialogs.closeTaskTitle}}"
+              data-content="{{action.key === 'deleteTask' ? strings.dialogs.deleteTaskContent : strings.dialogs.closeTaskContent}}"
+              bindtap="confirmAndRun"
+            >{{action.key === 'deleteTask' ? strings.actions.deleteTask : strings.actions.closeTask}}</button>
+          </block>
         </view>
 
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canSubmitReview && !selectedTask.canAdjustProgress}}" class="primary-button" loading="{{actionLoading === 'submitReview'}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canContinueReview}}" class="ghost-button" loading="{{actionLoading === 'continueReview'}}" bindtap="onContinueReview">{{strings.actions.continueReview}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canComplete && !selectedTask.canAdjustProgress}}" class="primary-button {{onboarding.visible && onboarding.target === 'mission-complete' ? 'guide-target' : ''}}" loading="{{actionLoading === 'completeTask'}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAbandon && !selectedTask.canAdjustProgress}}" class="ghost-button" loading="{{actionLoading === 'abandonTask'}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRestart}}" class="primary-button" loading="{{actionLoading === 'restartTask'}}" bindtap="onRestartTask">{{strings.actions.restartTask}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canRefreshSchedule}}" class="ghost-button" loading="{{actionLoading === 'refreshTaskSchedule'}}" bindtap="onRefreshTaskSchedule">{{strings.actions.refreshSchedule}}</button>
-        <button
-          hover-class="button-press"
-          hover-stay-time="90"
-          wx:if="{{(selectedTask.canClose || selectedTask.canDelete) && !selectedTask.canAdjustProgress}}"
-          class="ghost-button"
-          loading="{{actionLoading === (selectedTask.canDelete ? 'deleteTask' : 'closeTask')}}"
-          data-operation="{{selectedTask.canDelete ? 'deleteTask' : 'closeTask'}}"
-          data-title="{{selectedTask.canDelete ? strings.dialogs.deleteTaskTitle : strings.dialogs.closeTaskTitle}}"
-          data-content="{{selectedTask.canDelete ? strings.dialogs.deleteTaskContent : strings.dialogs.closeTaskContent}}"
-          bindtap="confirmAndRun"
-        >{{selectedTask.canDelete ? strings.actions.deleteTask : strings.actions.closeTask}}</button>
       </view>
 
       <view class="actions" wx:if="{{selectedTask.isArchive}}">
@@ -372,6 +453,7 @@
         <view class="reward-chip {{create.rewardType === 'agility' ? 'active' : ''}}" data-type="agility" bindtap="onRewardTypeChange">{{strings.create.rewardAgility}}</view>
       </view>
       <view class="reward-fixed">{{strings.detail.reward}} {{create.rewardType === 'strength' ? strings.create.rewardStrength : (create.rewardType === 'agility' ? strings.create.rewardAgility : strings.create.rewardWisdom)}} +1</view>
+      <input class="input offline-reward-input" placeholder="发起者承诺线下奖励：例如请喝奶茶 / 请吃饭" value="{{create.offlineRewardPromise}}" bindinput="onOfflineRewardPromiseInput" />
 
       <checkbox-group bindchange="onSelfAssignChange" wx:if="{{create.mode !== 'rework'}}">
         <label class="check-line"><checkbox value="self" checked="{{create.selfAssign}}" /> {{strings.create.selfAssign}}</label>

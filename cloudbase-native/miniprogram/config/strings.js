@@ -261,8 +261,8 @@ module.exports = {
   create: {
     titleCreate: '创建任务',
     titleRework: '重构任务',
-    aiPromptPlaceholder: '一句话描述你想做的任务，交给 AI 帮你起草',
-    aiGenerate: '用 AI 生成草案',
+    aiPromptPlaceholder: '一句话描述你想做的任务，系统会帮你先整理出任务草案',
+    aiGenerate: '一键填充任务',
     titlePlaceholder: '标题',
     detailPlaceholder: '说明',
     rewardWisdom: '智慧',
@@ -292,8 +292,8 @@ module.exports = {
     loadFailed: '加载失败',
     nicknameRequired: '昵称不能为空',
     updateNicknameFailed: '更新昵称失败',
-    aiPromptRequired: '请先输入 AI 提示词',
-    aiGenerateFailed: 'AI 生成失败',
+    aiPromptRequired: '请先输入任务描述',
+    aiGenerateFailed: '填充任务失败',
     titleRequired: '标题不能为空',
     subtaskRequired: '至少保留一个步骤',
     saveTaskFailed: '保存任务失败',
@@ -326,3 +326,6 @@ module.exports = {
     guideClose: '关闭',
   },
 }
+
+module.exports.icons.progressThumb = '▸'
+module.exports.actions.sharedTaskUnavailable = '任务已被接取'

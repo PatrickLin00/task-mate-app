@@ -334,6 +334,7 @@ function normalizeTask(task, nameMap) {
     _id: task._id,
     title: task.title || '',
     detail: task.detail || '',
+    offlineRewardPromise: task.offlineRewardPromise || '',
     icon: task.icon || '',
     status: task.status || STATUS.PENDING,
     category: task.category || 'normal',
@@ -554,11 +555,14 @@ function buildTodayTasks(tasks) {
   const current = now()
   const todayStart = startOfDay(current)
   const todayEnd = endOfDay(current)
-  const active = (tasks || []).filter((task) => ACTIVE_ASSIGNEE_STATUS.includes(task.status))
-  const overdue = active.filter((task) => task.dueAt && new Date(task.dueAt) < todayStart)
-  const dueToday = active.filter((task) => task.dueAt && new Date(task.dueAt) >= todayStart && new Date(task.dueAt) <= todayEnd)
-  const upcoming = active.filter((task) => task.dueAt && new Date(task.dueAt) > todayEnd)
-  const selected = overdue.concat(dueToday).concat(upcoming).slice(0, 5)
+  const active = (tasks || [])
+    .filter((task) => ACTIVE_ASSIGNEE_STATUS.includes(task.status))
+    .filter((task) => task && task.dueAt)
+    .sort((left, right) => new Date(left.dueAt).getTime() - new Date(right.dueAt).getTime())
+  const overdue = active.filter((task) => new Date(task.dueAt) < todayStart)
+  const dueToday = active.filter((task) => new Date(task.dueAt) >= todayStart && new Date(task.dueAt) <= todayEnd)
+  const upcoming = active.filter((task) => new Date(task.dueAt) > todayEnd).slice(0, 5)
+  const selected = overdue.concat(dueToday, upcoming).sort((left, right) => new Date(left.dueAt).getTime() - new Date(right.dueAt).getTime())
   return {
     dueTodayCount: dueToday.length,
     tasks: selected,
@@ -783,6 +787,7 @@ async function createTask(payload) {
   const user = await ensureUser(userId)
   const title = String(payload && payload.title ? payload.title : '').trim()
   const detail = String(payload && payload.detail ? payload.detail : '').trim()
+  const offlineRewardPromise = String(payload && payload.offlineRewardPromise ? payload.offlineRewardPromise : '').trim()
   const dueAt = new Date(payload && payload.dueAt ? payload.dueAt : '')
   const subtasks = normalizeSubtasks(payload && payload.subtasks)
   const attributeReward = normalizeReward(payload && payload.attributeReward)
@@ -791,12 +796,13 @@ async function createTask(payload) {
   assert(title, 'Title is required', 'INVALID_TITLE')
   assert(!Number.isNaN(dueAt.getTime()), 'Valid dueAt is required', 'INVALID_DUE_AT')
   assert(subtasks.length > 0, 'At least one subtask is required', 'INVALID_SUBTASKS')
-  assert(!containsSensitiveTask({ title, detail, subtasks }), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
-  assert(!(await moderateWithAI([title, detail].concat(subtasks.map((item) => item.title)).filter(Boolean).join(' '))), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
+  assert(!containsSensitiveTask({ title, detail, offlineRewardPromise, subtasks }), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
+  assert(!(await moderateWithAI([title, detail, offlineRewardPromise].concat(subtasks.map((item) => item.title)).filter(Boolean).join(' '))), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
 
   const record = {
     title,
     detail,
+    offlineRewardPromise,
     icon: payload && payload.icon ? String(payload.icon) : '',
     status: payload && payload.selfAssign ? STATUS.IN_PROGRESS : STATUS.PENDING,
     category: 'normal',
@@ -868,13 +874,25 @@ async function getTask(payload) {
   }
 
   if (task) {
-    assert(
-      task.creatorId === userId || task.assigneeId === userId || String(task.creatorId || '').startsWith(SYSTEM_PREFIX),
-      'Forbidden',
-      'FORBIDDEN'
-    )
+    const isVisible =
+      task.creatorId === userId ||
+      task.assigneeId === userId ||
+      String(task.creatorId || '').startsWith(SYSTEM_PREFIX)
+    const isSharePreviewAllowed = task.status === STATUS.PENDING && !task.assigneeId
     const nameMap = await getUserNameMap([task.creatorId, task.assigneeId])
-    return success(normalizeTask(task, nameMap))
+    const normalized = normalizeTask(task, nameMap)
+    if (isVisible || isSharePreviewAllowed) {
+      return success(normalized)
+    }
+    return success(
+      Object.assign({}, normalized, {
+        sharedPreviewLocked: true,
+        title: normalized.title || '分享任务',
+        detail: '任务已被接取',
+        sharedPreviewMessage: '任务已被接取',
+        assigneeName: '',
+      })
+    )
   }
 
   const archiveRes = await db.collection(ARCHIVES).where({ sourceTaskId: taskId, ownerId: userId }).limit(1).get()
@@ -1408,6 +1426,7 @@ async function reworkTask(payload) {
 
   const title = String(payload && payload.title ? payload.title : '').trim()
   const detail = String(payload && payload.detail ? payload.detail : '').trim()
+  const offlineRewardPromise = String(payload && payload.offlineRewardPromise ? payload.offlineRewardPromise : '').trim()
   const dueAt = new Date(payload && payload.dueAt ? payload.dueAt : '')
   const subtasks = normalizeSubtasks(payload && payload.subtasks)
   const attributeReward = normalizeReward(payload && payload.attributeReward)
@@ -1415,12 +1434,13 @@ async function reworkTask(payload) {
   assert(title, 'Title is required', 'INVALID_TITLE')
   assert(!Number.isNaN(dueAt.getTime()), 'Valid dueAt is required', 'INVALID_DUE_AT')
   assert(subtasks.length > 0, 'At least one subtask is required', 'INVALID_SUBTASKS')
-  assert(!containsSensitiveTask({ title, detail, subtasks }), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
-  assert(!(await moderateWithAI([title, detail].concat(subtasks.map((item) => item.title)).filter(Boolean).join(' '))), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
+  assert(!containsSensitiveTask({ title, detail, offlineRewardPromise, subtasks }), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
+  assert(!(await moderateWithAI([title, detail, offlineRewardPromise].concat(subtasks.map((item) => item.title)).filter(Boolean).join(' '))), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
 
   const isSame =
     title === String(task.title || '').trim() &&
     detail === String(task.detail || '').trim() &&
+    offlineRewardPromise === String(task.offlineRewardPromise || '').trim() &&
     Number(dueAt.getTime()) === Number(new Date(task.dueAt).getTime()) &&
     attributeReward.type === (task.attributeReward && task.attributeReward.type) &&
     Number(attributeReward.value) === Number(task.attributeReward && task.attributeReward.value) &&
@@ -1436,7 +1456,8 @@ async function reworkTask(payload) {
     })
   }
 
-  if (task.previousTaskId && !payload.confirmDeletePrevious) {
+  const isSelfAssigned = Boolean(task.creatorId && task.assigneeId && task.creatorId === task.assigneeId)
+  if (task.previousTaskId && !payload.confirmDeletePrevious && !isSelfAssigned) {
     return fail('confirm required', 'REWORK_CONFIRM_REQUIRED', {
       previousTaskId: task.previousTaskId,
     })
@@ -1460,6 +1481,7 @@ async function reworkTask(payload) {
     data: {
       title,
       detail,
+      offlineRewardPromise,
       icon,
       dueAt,
       startAt: current,
@@ -1486,7 +1508,7 @@ async function reworkTask(payload) {
     },
   })
 
-  if (task.previousTaskId && payload.confirmDeletePrevious && !task.assigneeId) {
+  if (task.previousTaskId && (payload.confirmDeletePrevious || isSelfAssigned) && !task.assigneeId) {
     await deletePreviousTask(task)
   }
 

@@ -23,6 +23,7 @@ function buildCreateState() {
     timeValue: '21:00',
     rewardType: 'wisdom',
     rewardValue: 1,
+    offlineRewardPromise: '',
     selfAssign: false,
     subtasks: [
       { title: '', total: 1 },
@@ -51,6 +52,96 @@ function buildScrollHints() {
     create: false,
     profile: false,
   }
+}
+
+function getSecondaryActionColumns(task) {
+  let count = 0
+  if (task && task.canOpenHistory) count += 1
+  if (task && task.canRework) count += 1
+  if (task && (task.canClose || task.canDelete)) count += 1
+  return count >= 3 ? 3 : 2
+}
+
+function splitActionRows(actions) {
+  const visible = safeArray(actions).filter(Boolean)
+  if (visible.length >= 5) return [visible.slice(0, 3), visible.slice(3)]
+  if (visible.length === 4) return [visible.slice(0, 2), visible.slice(2)]
+  if (visible.length) return [visible]
+  return []
+}
+
+function buildNonProgressActionRows(task) {
+  if (!task) return []
+  const actions = []
+
+  if (task.isHistory) return []
+
+  if (task.status === 'review_pending') {
+    if (task.canComplete) actions.push({ key: 'completeTask', variant: 'primary', loadingKey: 'completeTask' })
+    if (task.canContinueReview) actions.push({ key: 'continueReview', variant: 'ghost', loadingKey: 'continueReview' })
+    return splitActionRows(actions)
+  }
+
+  if (task.status === 'pending_confirmation') {
+    if (task.canAcceptRework) actions.push({ key: 'acceptRework', variant: 'primary', loadingKey: 'acceptReworkTask' })
+    if (task.canRejectRework) actions.push({ key: 'rejectRework', variant: 'ghost', loadingKey: 'rejectReworkTask' })
+    if (task.canCancelRework) actions.push({ key: 'cancelRework', variant: 'ghost', loadingKey: 'cancelReworkTask' })
+    return splitActionRows(actions)
+  }
+
+  if (task.status === 'closed') {
+    if (task.canRestart) actions.push({ key: 'restartTask', variant: 'primary', loadingKey: 'restartTask' })
+    if (task.canDelete) actions.push({ key: 'deleteTask', variant: 'ghost', loadingKey: 'deleteTask' })
+    return splitActionRows(actions)
+  }
+
+  if (task.status === 'pending' && !task.hasAssignee) {
+    if (task.canAcceptTask) {
+      actions.push({ key: 'acceptTask', variant: 'primary', loadingKey: 'acceptTask' })
+    } else if (task.canRefreshSchedule) {
+      actions.push({ key: 'refreshSchedule', variant: 'primary', loadingKey: 'refreshTaskSchedule' })
+    }
+    if (task.canShare) actions.push({ key: 'shareTask', variant: 'ghost' })
+    if (task.canOpenHistory) actions.push({ key: 'viewPreviousVersion', variant: 'ghost' })
+    if (task.canRework) actions.push({ key: 'reworkTask', variant: 'ghost' })
+    if (task.canClose) actions.push({ key: 'closeTask', variant: 'ghost', loadingKey: 'closeTask' })
+    return splitActionRows(actions)
+  }
+
+  if (task.canRestart) actions.push({ key: 'restartTask', variant: 'primary', loadingKey: 'restartTask' })
+  if (task.canAcceptTask) actions.push({ key: 'acceptTask', variant: 'primary', loadingKey: 'acceptTask' })
+  if (task.canRefreshSchedule) actions.push({ key: 'refreshSchedule', variant: 'primary', loadingKey: 'refreshTaskSchedule' })
+  if (task.canShare) actions.push({ key: 'shareTask', variant: 'ghost' })
+  if (task.canOpenHistory) actions.push({ key: 'viewPreviousVersion', variant: 'ghost' })
+  if (task.canRework) actions.push({ key: 'reworkTask', variant: 'ghost' })
+  if (task.canClose) actions.push({ key: 'closeTask', variant: 'ghost', loadingKey: 'closeTask' })
+  if (task.canDelete) actions.push({ key: 'deleteTask', variant: 'ghost', loadingKey: 'deleteTask' })
+  return splitActionRows(actions)
+}
+
+function buildProgressExtraActionRows(task) {
+  return splitActionRows([
+    task && task.canOpenHistory ? { key: 'viewPreviousVersion', variant: 'ghost' } : null,
+    task && task.canRework ? { key: 'reworkTask', variant: 'ghost' } : null,
+    task && (task.canClose || task.canDelete)
+      ? { key: task.canDelete ? 'deleteTask' : 'closeTask', variant: 'ghost', loadingKey: task.canDelete ? 'deleteTask' : 'closeTask' }
+      : null,
+  ])
+}
+
+function getPrimaryActionColumns(task) {
+  let count = 0
+  if (task && task.canAcceptTask) count += 1
+  if (task && task.canAcceptRework) count += 1
+  if (task && task.canRejectRework) count += 1
+  if (task && task.canCancelRework) count += 1
+  if (task && task.canSubmitReview && !task.canAdjustProgress) count += 1
+  if (task && task.canContinueReview) count += 1
+  if (task && task.canComplete && !task.canAdjustProgress) count += 1
+  if (task && task.canAbandon && !task.canAdjustProgress) count += 1
+  if (task && task.canRestart) count += 1
+  if (task && task.canRefreshSchedule) count += 1
+  return count >= 3 ? 3 : 2
 }
 
 function getOnboardingTab(step) {
@@ -174,6 +265,10 @@ function buildGuideHomeView(profile) {
     todayTasks: [todayTask],
     challengeTasks: [challengeTask],
     missionTasks: [],
+    reviewPendingTasks: [],
+    pendingConfirmationTasks: [],
+    waitingAcceptTasks: [],
+    inProgressCollabTasks: [],
     collabTasks: [],
     historyTasks: [],
     archiveTasks: [],
@@ -248,11 +343,11 @@ function getOnboardingMeta(step) {
       }
     case 3:
       return {
-        title: '先生成草案',
+        title: '先填充任务',
         segments: [
-          { text: '这里已经帮你填好一句示例提示词。点 ' },
-          { text: '用 AI 生成草案', strong: true },
-          { text: '，先看看任务草案会怎么落下来。' },
+          { text: '这里已经帮你填好一句示例描述。点 ' },
+          { text: '一键填充任务', strong: true },
+          { text: '，先看看任务草案会怎么整理出来。' },
         ],
         hint: '请点击高亮按钮继续',
         target: 'create-ai',
@@ -398,6 +493,29 @@ function safeArray(list) {
   return Array.isArray(list) ? list.filter(Boolean) : []
 }
 
+function extractOfflineRewardPromiseFromPrompt(text) {
+  const source = String(text || '').trim()
+  if (!source) return ''
+  const patterns = [
+    /(?:线下奖励|额外奖励|奖励|奖品|报酬|酬劳)[：:是为给\s]*([^，。；;\n]{2,32})/,
+    /(?:换取|兑换|换成)[^\S\r\n]*([^，。；;\n]{2,24})/,
+    /((?:请|送|给)[^，。；;\n]{0,8}(?:喝|吃|拿|送)[^，。；;\n]{1,24})/,
+    /((?:请|带|陪)(?:你|你们|对方|Ta|ta)?去[^，。；;\n]{1,24})/,
+    /((?:一起去|去)[^，。；;\n]{2,18})/,
+    /((?:奶茶|咖啡|红包|请客|饮料|零食|甜品)[^，。；;\n]{0,18})/,
+  ]
+  for (let index = 0; index < patterns.length; index += 1) {
+    const matched = source.match(patterns[index])
+    if (!matched) continue
+    const value = String(matched[1] || '')
+      .replace(/^(作为)?(?:线下奖励|额外奖励|奖励|奖品|报酬|酬劳|换取|兑换|换成)[：:\s]*/u, '')
+      .replace(/[,.，。；;!！?？]+$/u, '')
+      .trim()
+    if (value.length >= 2) return value
+  }
+  return ''
+}
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
 }
@@ -416,6 +534,19 @@ function cloneSubtasks(list) {
     title: item && item.title ? item.title : '',
     current: Number(item && item.current ? item.current : 0),
     total: Number(item && item.total ? item.total : 1),
+    previewCurrent: Number(item && item.previewCurrent >= 0 ? item.previewCurrent : (item && item.current ? item.current : 0)),
+    sliderValue:
+      typeof (item && item.sliderValue) === 'number'
+        ? Number(item.sliderValue)
+        : Math.round(
+            (Number(item && item.current ? item.current : 0) / Math.max(1, Number(item && item.total ? item.total : 1))) * 1000
+          ),
+    previewPercent:
+      typeof (item && item.previewPercent) === 'number'
+        ? Number(item.previewPercent)
+        : Math.round(
+            (Number(item && item.current ? item.current : 0) / Math.max(1, Number(item && item.total ? item.total : 1))) * 100
+          ),
   }))
 }
 
@@ -428,6 +559,18 @@ function computeProgress(task) {
     }),
     { current: 0, total: 0 }
   )
+}
+
+function getOverdueDaysText(dueAt, status) {
+  if (!dueAt || status !== 'in_progress') return ''
+  const due = new Date(dueAt)
+  if (Number.isNaN(due.getTime())) return ''
+  const now = new Date()
+  const dueDate = new Date(due.getFullYear(), due.getMonth(), due.getDate())
+  const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const diffDays = Math.floor((nowDate.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000))
+  if (diffDays <= 0) return ''
+  return `已过期${diffDays}天`
 }
 
 function shouldHideTask(task, supersededIds) {
@@ -458,6 +601,7 @@ function enrichArchive(archive) {
     assigneeName: snapshot.assigneeName || '',
     dueText: formatDateTime(snapshot.dueAt),
     rewardText: `${rewardLabel(snapshot.attributeReward && snapshot.attributeReward.type)} +${snapshot.attributeReward && snapshot.attributeReward.value ? snapshot.attributeReward.value : 0}`,
+    offlineRewardPromise: snapshot.offlineRewardPromise || '',
     finishedText: formatDateTime(archive.completedAt || archive.submittedAt || archive.updatedAt),
     progressText: `${progress.current}/${progress.total || 1}`,
     subtasks: safeArray(snapshot.subtasks),
@@ -473,6 +617,7 @@ function enrichTask(task, profile, source) {
   const isAssignee = Boolean(task && userId && task.assigneeId === userId)
   const isHistory = source === 'history' || task.status === 'refactored'
   const isChallenge = task && task.category === 'challenge'
+  const isSharedPreviewLocked = Boolean(task && task.sharedPreviewLocked)
   const now = Date.now()
   const dueAt = task && task.dueAt ? new Date(task.dueAt).getTime() : NaN
   const isOverdue = Number.isFinite(dueAt) ? dueAt < now : false
@@ -481,10 +626,12 @@ function enrichTask(task, profile, source) {
     statusText: statusLabel(task.status),
     rewardName: rewardLabel(task.attributeReward && task.attributeReward.type),
     rewardText: `${rewardLabel(task.attributeReward && task.attributeReward.type)} +${task.attributeReward && task.attributeReward.value ? task.attributeReward.value : 0}`,
+    offlineRewardPromise: task.offlineRewardPromise || '',
     dueText: formatDateTime(task.dueAt),
     submittedText: formatDateTime(task.submittedAt),
     completedText: formatDateTime(task.completedAt),
     closedText: formatDateTime(task.closedAt),
+    overdueDaysText: getOverdueDaysText(task.dueAt, task.status),
     progressText: `${progress.current}/${progress.total || 1}`,
     progressCurrent: progress.current,
     progressTotal: progress.total || 1,
@@ -492,8 +639,9 @@ function enrichTask(task, profile, source) {
     isAssignee,
     isHistory,
     isArchive: false,
-    canOpenHistory: Boolean(task.previousTaskId),
-    canAcceptTask: task.status === 'pending' && !task.assigneeId,
+    isSharedPreviewLocked,
+    canOpenHistory: !isHistory && Boolean(task.previousTaskId) && !(task.status === 'pending' && !task.assigneeId && isOverdue),
+    canAcceptTask: !isSharedPreviewLocked && task.status === 'pending' && !task.assigneeId && !isOverdue,
     canAcceptRework: isAssignee && task.status === 'pending_confirmation',
     canRejectRework: isAssignee && task.status === 'pending_confirmation',
     canCancelRework: isCreator && task.status === 'pending_confirmation',
@@ -505,14 +653,96 @@ function enrichTask(task, profile, source) {
         (isChallenge && isAssignee && task.status === 'in_progress') ||
         (!isChallenge && isCreator && task.status === 'review_pending')
       ),
-    canAbandon: isAssignee && (task.status === 'in_progress' || task.status === 'review_pending'),
-    canShare: isCreator && !isChallenge && !isHistory && !isAssignee && task.status !== 'closed',
-    canClose: isCreator && task.status !== 'closed' && task.status !== 'completed' && task.status !== 'refactored',
+    canAbandon: !isSharedPreviewLocked && isAssignee && task.status === 'in_progress',
+    canShare: isCreator && !isChallenge && !isHistory && task.status === 'pending' && !task.assigneeId && !isOverdue,
+    canClose:
+      isCreator &&
+      task.status !== 'closed' &&
+      task.status !== 'completed' &&
+      task.status !== 'refactored' &&
+      task.status !== 'review_pending' &&
+      task.status !== 'pending_confirmation',
     canRestart: isCreator && task.status === 'closed',
     canRefreshSchedule: isCreator && task.status === 'pending' && !task.assigneeId && isOverdue,
     canDelete: isCreator && task.status === 'closed' && !isHistory,
-    canRework: isCreator && task.status !== 'completed' && task.status !== 'refactored',
-    canAdjustProgress: isAssignee && task.status === 'in_progress',
+    canRework:
+      isCreator &&
+      task.status !== 'completed' &&
+      task.status !== 'refactored' &&
+      task.status !== 'review_pending' &&
+      task.status !== 'pending_confirmation',
+    canAdjustProgress: !isSharedPreviewLocked && isAssignee && task.status === 'in_progress',
+    primaryActionColumns: getPrimaryActionColumns({
+      canAcceptTask: !isSharedPreviewLocked && task.status === 'pending' && !task.assigneeId,
+      canAcceptRework: isAssignee && task.status === 'pending_confirmation',
+      canRejectRework: isAssignee && task.status === 'pending_confirmation',
+      canCancelRework: isCreator && task.status === 'pending_confirmation',
+      canSubmitReview: isAssignee && task.status === 'in_progress' && !isChallenge,
+      canContinueReview: isCreator && task.status === 'review_pending',
+      canComplete:
+        !isHistory &&
+        (
+          (isChallenge && isAssignee && task.status === 'in_progress') ||
+          (!isChallenge && isCreator && task.status === 'review_pending')
+        ),
+      canAbandon: !isSharedPreviewLocked && isAssignee && task.status === 'in_progress',
+      canRestart: isCreator && task.status === 'closed',
+      canRefreshSchedule: isCreator && task.status === 'pending' && !task.assigneeId && isOverdue,
+      canAdjustProgress: isAssignee && task.status === 'in_progress',
+    }),
+    nonProgressActionRows: buildNonProgressActionRows({
+      status: task.status,
+      hasAssignee: Boolean(task.assigneeId),
+      isHistory,
+      canRefreshSchedule: isCreator && task.status === 'pending' && !task.assigneeId && isOverdue,
+      canAcceptTask: !isSharedPreviewLocked && task.status === 'pending' && !task.assigneeId && !isOverdue,
+      canAcceptRework: isAssignee && task.status === 'pending_confirmation',
+      canRejectRework: isAssignee && task.status === 'pending_confirmation',
+      canCancelRework: isCreator && task.status === 'pending_confirmation',
+      canSubmitReview: isAssignee && task.status === 'in_progress' && !isChallenge,
+      canContinueReview: isCreator && task.status === 'review_pending',
+      canComplete:
+        !isHistory &&
+        (
+          (isChallenge && isAssignee && task.status === 'in_progress') ||
+          (!isChallenge && isCreator && task.status === 'review_pending')
+        ),
+      canAbandon: !isSharedPreviewLocked && isAssignee && task.status === 'in_progress',
+      canRestart: isCreator && task.status === 'closed',
+      canShare: isCreator && !isChallenge && !isHistory && task.status === 'pending' && !task.assigneeId && !isOverdue,
+      canOpenHistory: !isHistory && Boolean(task.previousTaskId) && !(task.status === 'pending' && !task.assigneeId && isOverdue),
+      canRework:
+        isCreator &&
+        task.status !== 'completed' &&
+        task.status !== 'refactored' &&
+        task.status !== 'review_pending' &&
+        task.status !== 'pending_confirmation',
+      canClose:
+        isCreator &&
+        task.status !== 'closed' &&
+        task.status !== 'completed' &&
+        task.status !== 'refactored' &&
+        task.status !== 'review_pending' &&
+        task.status !== 'pending_confirmation',
+      canDelete: isCreator && task.status === 'closed' && !isHistory,
+    }),
+    progressExtraActionRows: buildProgressExtraActionRows({
+      canOpenHistory: !isHistory && Boolean(task.previousTaskId) && !(task.status === 'pending' && !task.assigneeId && isOverdue),
+      canRework:
+        isCreator &&
+        task.status !== 'completed' &&
+        task.status !== 'refactored' &&
+        task.status !== 'review_pending' &&
+        task.status !== 'pending_confirmation',
+      canClose:
+        isCreator &&
+        task.status !== 'closed' &&
+        task.status !== 'completed' &&
+        task.status !== 'refactored' &&
+        task.status !== 'review_pending' &&
+        task.status !== 'pending_confirmation',
+      canDelete: isCreator && task.status === 'closed' && !isHistory,
+    }),
     source,
   })
 }
@@ -531,9 +761,31 @@ function buildDashboardView(dashboard, profile) {
     (task) => ACTIVE_ASSIGNEE_STATUS.includes(task.status) && !shouldHideTask(task, supersededIds)
   )
 
-  const collabSource = creatorRaw.filter((task) => {
+  const reviewPendingSource = creatorRaw.filter((task) => {
+    if (shouldHideTask(task, supersededIds)) return false
+    if (task.status !== 'review_pending') return false
+    return true
+  })
+
+  const pendingConfirmationSource = creatorRaw.filter((task) => {
+    if (shouldHideTask(task, supersededIds)) return false
+    if (task.status !== 'pending_confirmation') return false
+    return true
+  })
+
+  const waitingAcceptSource = creatorRaw.filter((task) => {
+    if (shouldHideTask(task, supersededIds)) return false
+    if (task.status !== 'pending') return false
+    if (task.assigneeId) return false
+    return true
+  })
+
+  const inProgressCollabSource = creatorRaw.filter((task) => {
     if (shouldHideTask(task, supersededIds)) return false
     if (task.status === 'refactored') return false
+    if (task.status === 'review_pending') return false
+    if (task.status === 'pending_confirmation') return false
+    if (task.status === 'pending' && !task.assigneeId) return false
     if (task.assigneeId && task.creatorId === task.assigneeId) return false
     if (task.status === 'completed' && (!task.assigneeId || task.assigneeId === task.creatorId)) return false
     return true
@@ -545,7 +797,11 @@ function buildDashboardView(dashboard, profile) {
     todayTasks: todayRaw.map((task) => enrichTask(task, profile, 'today')),
     challengeTasks: challengeRaw.map((task) => enrichTask(task, profile, 'challenge')),
     missionTasks: missionSource.map((task) => enrichTask(task, profile, 'mission')),
-    collabTasks: collabSource.map((task) => enrichTask(task, profile, 'collab')),
+    reviewPendingTasks: reviewPendingSource.map((task) => enrichTask(task, profile, 'collab')),
+    pendingConfirmationTasks: pendingConfirmationSource.map((task) => enrichTask(task, profile, 'collab')),
+    waitingAcceptTasks: waitingAcceptSource.map((task) => enrichTask(task, profile, 'collab')),
+    inProgressCollabTasks: inProgressCollabSource.map((task) => enrichTask(task, profile, 'collab')),
+    collabTasks: inProgressCollabSource.map((task) => enrichTask(task, profile, 'collab')),
     historyTasks: historySource.map((task) => enrichTask(task, profile, 'history')),
     archiveTasks: completedRaw.map((archive) => enrichArchive(archive)),
   }
@@ -578,6 +834,10 @@ Page({
       challengeTasks: [],
       missionTasks: [],
       collabTasks: [],
+      reviewPendingTasks: [],
+      pendingConfirmationTasks: [],
+      waitingAcceptTasks: [],
+      inProgressCollabTasks: [],
       historyTasks: [],
       archiveTasks: [],
     },
@@ -754,6 +1014,83 @@ Page({
     return Boolean(profile && profile.userId && !(profile.onboarding && profile.onboarding.seen))
   },
 
+  async openPendingSharedTask(taskId, dashboard) {
+    const sharedTaskId = String(taskId || '')
+    if (!sharedTaskId) return false
+
+    const existing = this.findTaskById(sharedTaskId, dashboard)
+    if (existing) {
+      this.setData({
+        detailMounted: true,
+        detailClosing: false,
+        detailVisible: true,
+        selectedTask: existing,
+        selectedTaskDraftSubtasks: cloneSubtasks(existing.subtasks),
+        selectedTaskHasDraftChanges: false,
+        pendingOpenTaskId: '',
+        activeTab: existing.source === 'collab' || existing.source === 'history' ? 'collab' : existing.source === 'archive' ? 'archive' : 'home',
+      })
+      return true
+    }
+
+    try {
+      const payload = await require('../../utils/api').getTask(sharedTaskId)
+      const sharedTask =
+        payload && payload.archive && payload.data
+          ? enrichArchive(payload.data)
+          : enrichTask(payload, this.data.profile, 'shared')
+      this.setData({
+        detailMounted: true,
+        detailClosing: false,
+        detailVisible: true,
+        selectedTask: sharedTask,
+        selectedTaskDraftSubtasks: cloneSubtasks(sharedTask.subtasks),
+        selectedTaskHasDraftChanges: false,
+        pendingOpenTaskId: '',
+        activeTab: 'home',
+      })
+      return true
+    } catch (error) {
+      if (error && error.code === 'FORBIDDEN') {
+        const sharedTask = enrichTask(
+          {
+            _id: sharedTaskId,
+            title: strings.share.taskDetailFallback || '分享任务',
+            detail: '任务已被接取',
+            status: 'in_progress',
+            category: 'normal',
+            creatorId: '',
+            creatorName: '',
+            assigneeId: '',
+            assigneeName: '',
+            dueAt: '',
+            subtasks: [],
+            attributeReward: { type: 'wisdom', value: 0 },
+            createdAt: '',
+            updatedAt: '',
+            sharedPreviewLocked: true,
+          },
+          this.data.profile,
+          'shared'
+        )
+        this.setData({
+          detailMounted: true,
+          detailClosing: false,
+          detailVisible: true,
+          selectedTask: sharedTask,
+          selectedTaskDraftSubtasks: [],
+          selectedTaskHasDraftChanges: false,
+          pendingOpenTaskId: '',
+          activeTab: 'home',
+        })
+        return true
+      }
+      this.setData({ pendingOpenTaskId: '' })
+      this.setError((error && error.message) || strings.errors.sharedTaskOpenFailed || strings.errors.loadFailed)
+      return false
+    }
+  },
+
   async refresh() {
     this.setData({ loading: true, actionLoading: '' })
     this.clearError()
@@ -775,19 +1112,7 @@ Page({
         return
       }
       if (this.data.pendingOpenTaskId) {
-        const sharedTask = this.findTaskById(this.data.pendingOpenTaskId, payload.dashboard)
-        if (sharedTask) {
-          this.setData({
-            detailMounted: true,
-            detailClosing: false,
-            detailVisible: true,
-            selectedTask: sharedTask,
-            selectedTaskDraftSubtasks: cloneSubtasks(sharedTask.subtasks),
-            selectedTaskHasDraftChanges: false,
-            pendingOpenTaskId: '',
-            activeTab: sharedTask.source === 'collab' || sharedTask.source === 'history' ? 'collab' : sharedTask.source === 'archive' ? 'archive' : 'home',
-          })
-        }
+        await this.openPendingSharedTask(this.data.pendingOpenTaskId, payload.dashboard)
       }
     } catch (error) {
       this.setError(error.message || strings.errors.loadFailed)
@@ -810,20 +1135,22 @@ Page({
       : ['today', 'mission', 'collab', 'history', 'challenge', 'archive']
     for (let index = 0; index < order.length; index += 1) {
       const source = order[index]
-      const listKey =
+      const listKeys =
         source === 'today'
-          ? 'todayTasks'
+          ? ['todayTasks']
           : source === 'mission'
-            ? 'missionTasks'
+            ? ['missionTasks']
             : source === 'collab'
-              ? 'collabTasks'
+              ? ['reviewPendingTasks', 'pendingConfirmationTasks', 'waitingAcceptTasks', 'inProgressCollabTasks', 'collabTasks']
               : source === 'history'
-                ? 'historyTasks'
+                ? ['historyTasks']
                 : source === 'challenge'
-                  ? 'challengeTasks'
-                  : 'archiveTasks'
-      const match = safeArray(view[listKey]).find((item) => String(item._id) === String(taskId))
-      if (match) return match
+                  ? ['challengeTasks']
+                  : ['archiveTasks']
+      for (let listIndex = 0; listIndex < listKeys.length; listIndex += 1) {
+        const match = safeArray(view[listKeys[listIndex]]).find((item) => String(item._id) === String(taskId))
+        if (match) return match
+      }
     }
     return null
   },
@@ -846,6 +1173,10 @@ Page({
       challengeTasks: clone(homeView.challengeTasks),
       missionTasks: [],
       collabTasks: [],
+      reviewPendingTasks: [],
+      pendingConfirmationTasks: [],
+      waitingAcceptTasks: [],
+      inProgressCollabTasks: [],
       historyTasks: [],
       archiveTasks: [],
     }
@@ -1125,6 +1456,7 @@ Page({
         timeValue: formatTimeInput(task.dueAt),
         rewardType: task.attributeReward && task.attributeReward.type ? task.attributeReward.type : 'wisdom',
         rewardValue: 1,
+        offlineRewardPromise: task.offlineRewardPromise || '',
         selfAssign: false,
         subtasks:
           safeArray(task.subtasks).length > 0
@@ -1191,6 +1523,10 @@ Page({
     this.setData({ 'create.rewardType': event.currentTarget.dataset.type || 'wisdom' })
   },
 
+  onOfflineRewardPromiseInput(event) {
+    this.setData({ 'create.offlineRewardPromise': event.detail.value || '' })
+  },
+
   onSelfAssignChange(event) {
     this.setData({ 'create.selfAssign': Boolean(event.detail.value && event.detail.value.length) })
   },
@@ -1244,12 +1580,14 @@ Page({
     this.clearError()
     try {
       const suggestion = await generateTaskByAI(prompt)
+      const extractedOfflineRewardPromise = extractOfflineRewardPromiseFromPrompt(prompt)
       this.setData({
         'create.title': suggestion.title || '',
         'create.detail': suggestion.description || '',
         'create.rewardType':
           suggestion.attributeReward && suggestion.attributeReward.type ? suggestion.attributeReward.type : 'wisdom',
         'create.rewardValue': 1,
+        'create.offlineRewardPromise': suggestion.offlineRewardPromise || extractedOfflineRewardPromise || this.data.create.offlineRewardPromise || '',
         'create.subtasks':
           safeArray(suggestion.subtasks).length > 0
             ? suggestion.subtasks.map((item) => ({ title: item.title || '', total: Number(item.total || 1) }))
@@ -1289,6 +1627,17 @@ Page({
       return
     }
 
+    const offlineRewardPromise = String(payload.offlineRewardPromise || '').trim()
+    if (payload.mode !== 'rework' && offlineRewardPromise) {
+      const confirmReward = await wx.showModal({
+        title: '线下奖励提醒',
+        content: '任务有承诺的线下奖励，发起者需自行按照承诺给实施者对应奖励。',
+        confirmText: '同意',
+        cancelText: '拒绝',
+      })
+      if (!confirmReward.confirm) return
+    }
+
     this.setData({ loading: true, actionLoading: 'submitCreateTask' })
     this.clearError()
     try {
@@ -1301,6 +1650,7 @@ Page({
           type: payload.rewardType,
           value: 1,
         },
+        offlineRewardPromise,
         selfAssign: payload.selfAssign,
       }
       const result =
@@ -1310,7 +1660,14 @@ Page({
               Object.assign({}, requestPayload, {
                 taskId: payload.reworkTaskId,
                 clientUpdatedAt: this.data.selectedTask && this.data.selectedTask.updatedAt ? this.data.selectedTask.updatedAt : '',
-                confirmDeletePrevious: payload.confirmDeletePrevious,
+                confirmDeletePrevious:
+                  payload.confirmDeletePrevious ||
+                  Boolean(
+                    this.data.selectedTask &&
+                    this.data.selectedTask.creatorId &&
+                    this.data.selectedTask.assigneeId &&
+                    this.data.selectedTask.creatorId === this.data.selectedTask.assigneeId
+                  ),
               })
             )
           : await createTask(requestPayload)
@@ -1397,6 +1754,28 @@ Page({
       return
     }
     this.showTaskDetail(task)
+  },
+
+  openCurrentVersion() {
+    const selectedTask = this.data.selectedTask
+    if (!selectedTask || !selectedTask.isHistory) return
+    const dashboard = this.data.dashboard || {}
+    const view = buildDashboardView(dashboard, this.data.profile)
+    const candidates = []
+      .concat(safeArray(view.reviewPendingTasks))
+      .concat(safeArray(view.pendingConfirmationTasks))
+      .concat(safeArray(view.waitingAcceptTasks))
+      .concat(safeArray(view.inProgressCollabTasks))
+      .concat(safeArray(view.missionTasks))
+      .concat(safeArray(view.collabTasks))
+      .concat(safeArray(view.challengeTasks))
+      .concat(safeArray(view.todayTasks))
+    const currentTask = candidates.find((item) => String(item.previousTaskId || '') === String(selectedTask._id))
+    if (!currentTask) {
+      this.setError('未找到当前任务')
+      return
+    }
+    this.showTaskDetail(currentTask)
   },
 
   closeTaskModal() {
@@ -1541,7 +1920,16 @@ Page({
   },
 
   onSubmitReview() {
-    return this.runTaskOperation('submitReview', null, 'submitReview')
+    if (this.data.loading) return
+    wx.showModal({
+      title: '提交检视',
+      content: '是否已经完成全部任务，并准备提交检视？',
+      confirmText: strings.dialogs.confirmContinue,
+      cancelText: strings.dialogs.confirmCancel,
+    }).then((result) => {
+      if (!result.confirm) return null
+      return this.runTaskOperation('submitReview', null, 'submitReview')
+    }).catch(() => null)
   },
 
   onContinueReview() {
@@ -1590,22 +1978,77 @@ Page({
     return this.runTaskOperation('cancelReworkTask', null, 'cancelReworkTask')
   },
 
-  onIncreaseProgress(event) {
-    const index = Number(event.currentTarget.dataset.index)
+  updateProgressDraftByRatio(index, ratio, commit) {
     const subtasks = clone(this.data.selectedTaskDraftSubtasks || [])
     if (!subtasks[index]) return
     const total = Math.max(1, Number(subtasks[index].total || 1))
-    subtasks[index].current = Math.min(total, Number(subtasks[index].current || 0) + 1)
-    this.updateSelectedTaskDraft(subtasks)
+    const safeRatio = Math.max(0, Math.min(1, Number(ratio || 0)))
+    const snappedCurrent = Math.max(0, Math.min(total, Math.round(safeRatio * total)))
+    subtasks[index].previewCurrent = snappedCurrent
+    subtasks[index].previewPercent = safeRatio * 100
+    if (commit) {
+      subtasks[index].current = snappedCurrent
+      subtasks[index].sliderValue = total > 0 ? Math.round((snappedCurrent / total) * 1000) : 0
+      subtasks[index].previewPercent = total > 0 ? (snappedCurrent / total) * 100 : 0
+      this.updateSelectedTaskDraft(subtasks)
+      return
+    }
+    subtasks[index].sliderValue = Math.round(safeRatio * 1000)
+    this.setData({
+      selectedTaskDraftSubtasks: subtasks,
+    })
   },
 
-  onDecreaseProgress(event) {
-    const index = Number(event.currentTarget.dataset.index)
-    const subtasks = clone(this.data.selectedTaskDraftSubtasks || [])
-    if (!subtasks[index]) return
-    subtasks[index].current = Math.max(0, Number(subtasks[index].current || 0) - 1)
-    this.updateSelectedTaskDraft(subtasks)
+  getProgressRatioFromTouch(index, pageX, callback) {
+    const query = this.createSelectorQuery()
+    query.select(`#progress-track-${index}`).boundingClientRect()
+    query.exec((result) => {
+      const rect = result && result[0]
+      if (!rect || !rect.width) return
+      const ratio = (Number(pageX || 0) - rect.left) / rect.width
+      callback(Math.max(0, Math.min(1, ratio)))
+    })
   },
+
+  onProgressTrackTap(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    const touch = event.changedTouches && event.changedTouches[0]
+    if (!touch) return
+    this.getProgressRatioFromTouch(index, touch.pageX, (ratio) => {
+      this.updateProgressDraftByRatio(index, ratio, true)
+    })
+  },
+
+  onProgressTrackTouchStart(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    const touch = event.touches && event.touches[0]
+    if (!touch) return
+    this.getProgressRatioFromTouch(index, touch.pageX, (ratio) => {
+      this.updateProgressDraftByRatio(index, ratio, false)
+    })
+  },
+
+  onProgressTrackTouchMove(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    const touch = event.touches && event.touches[0]
+    if (!touch) return
+    this.getProgressRatioFromTouch(index, touch.pageX, (ratio) => {
+      this.updateProgressDraftByRatio(index, ratio, false)
+    })
+  },
+
+  onProgressTrackTouchEnd(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    const touch =
+      (event.changedTouches && event.changedTouches[0]) ||
+      (event.touches && event.touches[0])
+    if (!touch) return
+    this.getProgressRatioFromTouch(index, touch.pageX, (ratio) => {
+      this.updateProgressDraftByRatio(index, ratio, true)
+    })
+  },
+
+  onProgressTrackTouchCancel() {},
 
   hasProgressChanges() {
     const original = safeArray(this.data.selectedTask && this.data.selectedTask.subtasks)
@@ -1629,6 +2072,7 @@ Page({
     if (!task || !this.hasProgressChanges()) return
     const original = safeArray(task.subtasks)
     const draft = safeArray(this.data.selectedTaskDraftSubtasks)
+    let latestUpdatedAt = task.updatedAt || ''
     this.setData({ loading: true, actionLoading: 'applyProgress' })
     this.clearError()
     try {
@@ -1636,12 +2080,13 @@ Page({
         if (Number((original[index] && original[index].current) || 0) === Number(draft[index].current || 0)) {
           continue
         }
-        await operateTask('updateProgress', {
+        const updatedTask = await operateTask('updateProgress', {
           taskId: task._id,
-          clientUpdatedAt: task.updatedAt || '',
+          clientUpdatedAt: latestUpdatedAt,
           subtaskIndex: index,
           current: Number(draft[index].current || 0),
         })
+        latestUpdatedAt = updatedTask && updatedTask.updatedAt ? updatedTask.updatedAt : latestUpdatedAt
       }
       await this.refresh()
       const refreshed = this.findTaskById(task._id, this.data.dashboard, task.source)

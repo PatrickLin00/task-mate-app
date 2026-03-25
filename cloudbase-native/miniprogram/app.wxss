@@ -5,6 +5,10 @@ page {
   --bg-base: #f4ead9;
   --bg-card: rgba(255, 250, 242, 0.92);
   --bg-soft: #fff6e9;
+  --bg-task: #e6ceb0;
+  --bg-task-strong: #d9bc97;
+  --bg-task-alt: #f8efe2;
+  --bg-task-alt-strong: #f1e2cf;
   --ink-main: #1f1a14;
   --ink-subtle: #5c5145;
   --line-soft: rgba(62, 40, 15, 0.08);
