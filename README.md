@@ -173,19 +173,19 @@ Chinese and English documentation are both available in paired `_cn.md` and
 
 Home dashboard overview:
 
-![Home Dashboard](./assets/screenshots/home-dashboard.png)
+![Home Dashboard](./assets/screenshots/create-task.png)
 
 Task detail modal with subtasks and state-aware actions:
 
-![Task Detail](./assets/screenshots/task-detail.png)
+![Task Detail](./assets/screenshots/collab-in-progress.png)
 
 Create task modal:
 
-![Create Task](./assets/screenshots/create-task.png)
+![Create Task](./assets/screenshots/home-dashboard.png)
 
-Collaborative task in progress:
+Collaboration board and published tasks:
 
-![Collaborative Task In Progress](./assets/screenshots/collab-in-progress.png)
+![Collaboration Board](./assets/screenshots/task-detail.png)
 
 Review or rework state:
 
@@ -195,9 +195,9 @@ Archive tab:
 
 ![Archive View](./assets/screenshots/archive-view.png)
 
-Profile and settings view:
+Mission tab and active tasks:
 
-![Profile Settings](./assets/screenshots/profile-settings.png)
+![Mission Tab](./assets/screenshots/profile-settings.png)
 
 Optional follow-up screenshots worth adding later:
 
