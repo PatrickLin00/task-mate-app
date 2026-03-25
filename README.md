@@ -1,12 +1,12 @@
-# Task Mate
+﻿# Task Mate
 
 Task Mate is a WeChat Mini Program for lightweight collaborative task
 execution. It combines a compact task workflow with a small progression layer
 so that shared tasks feel structured, visible, and rewarding without becoming
 heavy project management.
 
-This repository contains the current CloudBase-native implementation that is
-intended to become the public mainline version of the project.
+The current repository presents the production-facing CloudBase-native version
+of the product.
 
 ## Product Positioning
 
@@ -48,6 +48,22 @@ The app also includes:
 - AI-assisted task draft generation
 - text moderation for nicknames and task content
 
+## Product Evolution
+
+The original idea started from a broader architecture with a separate frontend,
+a standalone backend service, and real-time refresh through WebSocket.
+
+As the product direction became more clearly WeChat-first, the implementation
+was narrowed and simplified around the actual target environment:
+
+- native WeChat Mini Program instead of a cross-platform abstraction layer
+- Cloud Functions instead of a standalone always-on server
+- Cloud Database instead of separately managed backend persistence
+- dashboard refresh plus conflict-safe writes instead of persistent socket sync
+
+The result is a version that is cheaper to operate, easier to deploy, and more
+aligned with the current product scope.
+
 ## Typical User Flow
 
 1. A user opens the Mini Program and gets a profile plus dashboard bootstrap.
@@ -58,21 +74,6 @@ The app also includes:
 6. The assignee submits work for review or completes directly when allowed.
 7. The creator reviews, sends it back for changes, or finishes the task.
 8. Historical results move into archive snapshots for later browsing.
-
-## Why This Version Exists
-
-The older project used a more complex stack with a separate frontend framework,
-a standalone backend service, and WebSocket-driven refresh logic.
-
-The current version intentionally simplifies that model:
-
-- native WeChat Mini Program instead of a cross-platform abstraction layer
-- Cloud Functions instead of a standalone always-on server
-- Cloud Database instead of separate backend database infrastructure
-- pull refresh plus conflict-safe writes instead of persistent socket sync
-
-The result is easier to deploy, easier to reason about, and better aligned with
-the real target platform.
 
 ## Technical Summary
 
@@ -202,9 +203,9 @@ Optional follow-up screenshots worth adding later:
 
 - `assets/screenshots/shared-task-open.png`
 
-## Legacy Archive
+## Archive Reference
 
-The old Taro + Express + MongoDB implementation is archived in the branch
+The older Taro + Express + MongoDB implementation is preserved in the branch
 [`archive/legacy-express-taro`](https://github.com/PatrickLin00/task-mate-app/tree/archive/legacy-express-taro).
 
 ## Public Repository Notes
@@ -212,8 +213,3 @@ The old Taro + Express + MongoDB implementation is archived in the branch
 - one-off migration artifacts are intentionally excluded
 - private deployment files remain ignored by `.gitignore`
 - this branch documents only the current CloudBase-native runtime
-
-## Status
-
-This branch is being prepared as the candidate public `main` branch and as the
-portfolio-facing version of the project.

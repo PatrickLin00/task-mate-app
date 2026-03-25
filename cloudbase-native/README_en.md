@@ -10,17 +10,21 @@ This directory contains the current production-facing codebase for Task Mate.
 - Pull-based refresh instead of WebSocket push
 - Server-side AI generation and moderation boundaries
 
-The older Taro + Express + MongoDB implementation is archived in the Git
-branch `archive/legacy-express-taro` and is no longer part of this branch.
+## Product Evolution
 
-## Why This Version Exists
+The project started from a broader architecture with a separate frontend,
+standalone backend, and socket-driven refresh flow.
 
-The project intentionally favors:
+As the product became more clearly WeChat-first, the implementation was
+simplified around that delivery target:
 
-- low deployment complexity inside the WeChat ecosystem
+- lower deployment complexity inside the WeChat ecosystem
 - one-shell interaction flow for fast task actions
 - simpler data consistency through full dashboard refresh
 - clear backend boundaries for AI and subscribe messaging
+
+The older Taro + Express + MongoDB implementation remains available in the Git
+branch `archive/legacy-express-taro` for historical reference.
 
 ## Current Runtime Layout
 
@@ -71,4 +75,3 @@ Read in this order if you are new here:
 5. `docs/maintenance/maintainer-guide_en.md`
 
 Chinese documentation is available in the corresponding `_cn.md` files.
-
