@@ -8,6 +8,10 @@ heavy project management.
 The current repository presents the production-facing CloudBase-native version
 of the product.
 
+You can find the Mini Program in WeChat by searching for `星愿同行`.
+
+The current Mini Program experience is Chinese-only.
+
 ## Product Positioning
 
 Task Mate is designed for short-cycle collaboration between people who already
