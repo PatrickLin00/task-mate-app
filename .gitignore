@@ -2,17 +2,11 @@
 node_modules/
 
 # build outputs
-client/dist/
-server/dist/
+dist/
 
-# env files (keep examples only)
-# ignore all env files by default (keep examples)
-server/.env
-server/.env.*
-!server/.env.example
-client/.env
-client/.env.*
-!client/.env.example
+# local env files
+.env
+.env.*
 
 # OS/editor
 .DS_Store
@@ -20,5 +14,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.key
+cloudbase-native/project.private.config.json
 
 private

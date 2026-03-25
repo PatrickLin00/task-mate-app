@@ -1,0 +1,78 @@
+page {
+  background: #f4ead9;
+  color: #1f1a14;
+  font-family: "PingFang SC", "Helvetica Neue", sans-serif;
+  --bg-base: #f4ead9;
+  --bg-card: rgba(255, 250, 242, 0.92);
+  --bg-soft: #fff6e9;
+  --bg-task: #e6ceb0;
+  --bg-task-strong: #d9bc97;
+  --bg-task-alt: #f8efe2;
+  --bg-task-alt-strong: #f1e2cf;
+  --ink-main: #1f1a14;
+  --ink-subtle: #5c5145;
+  --line-soft: rgba(62, 40, 15, 0.08);
+  --accent: #b86b24;
+  --accent-strong: #8f4713;
+  --danger: #b34832;
+  height: 100%;
+}
+
+.shell {
+  min-height: 100%;
+}
+
+.page-shell {
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: 16rpx 20rpx 16rpx;
+  background:
+    radial-gradient(circle at top left, rgba(214, 163, 74, 0.26), transparent 34%),
+    linear-gradient(180deg, #f4ead9 0%, #ecd9bb 100%);
+}
+
+.page-scroll {
+  height: 100vh;
+}
+
+.card {
+  padding: 24rpx;
+  border: 2rpx solid var(--line-soft);
+  border-radius: 28rpx;
+  background: var(--bg-card);
+  box-shadow: 0 18rpx 48rpx rgba(67, 42, 16, 0.08);
+}
+
+.section-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.section-subtitle {
+  margin-top: 8rpx;
+  color: var(--ink-subtle);
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.primary-button {
+  background: var(--accent);
+  color: #fff8ef;
+  border-radius: 999rpx;
+  transition: transform 0.12s ease, opacity 0.12s ease, filter 0.12s ease;
+}
+
+.ghost-button {
+  border: 2rpx solid rgba(150, 95, 35, 0.22);
+  background: rgba(255, 248, 238, 0.92);
+  color: var(--accent-strong);
+  border-radius: 999rpx;
+  transition: transform 0.12s ease, opacity 0.12s ease, filter 0.12s ease;
+}
+
+.button-press {
+  transform: scale(0.97);
+  opacity: 0.92;
+  filter: brightness(0.97);
+}
