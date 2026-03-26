@@ -89,6 +89,45 @@ aligned with the current product scope.
 
 Core runtime lives in `cloudbase-native/`.
 
+## Private Setup
+
+The public repository intentionally does not include the real private Mini
+Program runtime config.
+
+Required private file:
+
+- `cloudbase-native/miniprogram/config/private.js`
+- optional: `cloudbase-native/project.private.config.json`
+
+If that file is missing, cloud initialization and cloud-function calls are
+intentionally blocked.
+
+Recommended restore workflow:
+
+1. keep your private package zip outside Git
+2. extract it at the repository root
+3. confirm `cloudbase-native/miniprogram/config/private.js` exists
+4. optionally restore `cloudbase-native/project.private.config.json`
+5. continue development and testing normally
+
+After extraction, the project should behave the same way as a normal private
+checkout. The existing development workflow, DevTools usage, and testing flow
+do not need a separate "secure mode" path.
+
+To rebuild the private package from a configured local checkout:
+
+```bash
+cd cloudbase-native
+node scripts/build-private-package.js
+```
+
+That script creates:
+
+- `cloudbase-native/private-package/task-mate-private-package.zip`
+
+The zip preserves original paths, so extracting it at the repository root
+restores the private files directly into place.
+
 ## Engineering Focus
 
 This codebase is centered around stateful task collaboration under WeChat

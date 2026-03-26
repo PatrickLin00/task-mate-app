@@ -7,7 +7,13 @@
 - `miniprogram/app.js`
   - cloud initialization
 - `miniprogram/config/cloud.js`
-  - active CloudBase `envId`
+  - public cloud bootstrap wrapper that reads private config
+- `miniprogram/config/private.js`
+  - real private CloudBase `envId`, not committed
+- `miniprogram/config/private.template.js`
+  - example private config shape
+- `project.private.config.json`
+  - optional local WeChat DevTools private settings, not committed
 - `miniprogram/config/strings.js`
   - main product copy
 - `miniprogram/config/legal-strings.js`
@@ -84,15 +90,16 @@ Recommended indexes:
 ## Local Helper Script
 
 - `scripts/set-cloud-env.js`
-  - updates `miniprogram/config/cloud.js`
+  - updates `miniprogram/config/private.js`
+- `scripts/build-private-package.js`
+  - builds a restorable private zip package for repository-root extraction
 
 ## Troubleshooting Order
 
 When runtime behavior looks wrong after an environment switch, check:
 
-1. `miniprogram/config/cloud.js`
+1. `miniprogram/config/private.js`
 2. deployed function env vars
 3. subscribe template IDs
 4. collection shape
 5. indexes
-

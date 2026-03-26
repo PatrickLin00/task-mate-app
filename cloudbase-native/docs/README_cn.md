@@ -71,6 +71,11 @@ English:
 - `maintenance/troubleshooting_cn.md`
 - `maintenance/troubleshooting_en.md`
 
+公开仓库相关说明：
+
+- `maintenance/development-workflows_cn.md`
+  中记录了如何通过本地私有 zip 恢复运行配置，并保证恢复后仍按原开发流程工作。
+
 ## Reference
 
 - `reference/sample-data-reference_cn.md`

@@ -1,4 +1,4 @@
-# Development Workflows
+﻿# Development Workflows
 
 ## Purpose
 
@@ -38,9 +38,63 @@ Use this when moving between test and production CloudBase environments.
 Steps:
 
 1. run `node scripts/set-cloud-env.js <envId>` inside `cloudbase-native/`
-2. verify `miniprogram/config/cloud.js`
+2. verify `miniprogram/config/private.js`
 3. confirm the same environment is selected in DevTools
 4. deploy functions to that exact environment
+
+### 3.2. Private Setup Restore
+
+The public repository intentionally does not include the real private Mini
+Program config file.
+
+Required private file:
+
+- `miniprogram/config/private.js`
+
+Optional private file:
+
+- `project.private.config.json`
+
+Expected restore flow:
+
+1. generate or obtain `cloudbase-native/private-package/task-mate-private-package.zip`
+2. extract that zip at the repository root
+3. confirm `cloudbase-native/miniprogram/config/private.js` now exists
+4. optionally restore `cloudbase-native/project.private.config.json`
+5. continue development exactly as usual
+
+Once the zip is extracted at the repository root, the project should behave the
+same way as a non-redacted local checkout. That includes:
+
+- `node scripts/set-cloud-env.js <envId>`
+- WeChat DevTools preview and upload
+- normal cloud-function deployment
+- dual-account testing and manual smoke tests
+
+### 3.3. Private Package Build
+
+Use this when you want to export the current private config into a restorable
+local package.
+
+Run:
+
+```bash
+cd cloudbase-native
+node scripts/build-private-package.js
+```
+
+Output:
+
+- `cloudbase-native/private-package/task-mate-private-package.zip`
+
+This zip preserves the original relative paths, so extracting it at the
+repository root restores the private files directly into place.
+
+If you already have the private zip, the expected usage is simple:
+
+1. clone the public repository
+2. extract the zip at the repository root
+3. continue using the project exactly like a pre-redaction local checkout
 
 ### 3.5. Cloud Data Integrity Check
 
@@ -99,7 +153,7 @@ Check:
 
 Check:
 
-1. `miniprogram/config/cloud.js`
+1. `miniprogram/config/private.js`
 2. selected CloudBase environment in DevTools
 3. whether the changed function was actually uploaded
 

@@ -28,6 +28,27 @@
 - `docs/`：项目文档
 - `scripts/`：当前仍有价值的本地辅助脚本
 
+## 私有运行配置恢复
+
+公开仓库不会直接包含真实私有运行配置。
+
+必须恢复的私有文件：
+
+- `miniprogram/config/private.js`
+
+可选恢复文件：
+
+- `project.private.config.json`
+
+推荐恢复流程：
+
+1. 将私有 zip 保存在 Git 之外
+2. 在仓库根目录直接解压
+3. 确认 `miniprogram/config/private.js` 已恢复
+4. 后续继续按原来的 DevTools 和本地脚本流程开发测试
+
+这套恢复方式的目标就是：只要 zip 在仓库根目录解压成功，后续开发和测试习惯与保密改造前保持一致。
+
 ## 推荐阅读
 
 1. `docs/README_cn.md`

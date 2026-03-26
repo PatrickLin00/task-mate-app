@@ -62,10 +62,14 @@ Every document in this directory is provided in two versions:
 - `maintenance/troubleshooting_cn.md`
 - `maintenance/troubleshooting_en.md`
 
+Important for public checkouts:
+
+- `maintenance/development-workflows_en.md` explains how private runtime files
+  are restored from a local zip without changing the normal development flow.
+
 ## Reference
 
 - `reference/sample-data-reference_cn.md`
 - `reference/sample-data-reference_en.md`
-
 
 

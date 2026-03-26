@@ -5,6 +5,13 @@
 - `miniprogram/app.json`
 - `miniprogram/app.js`
 - `miniprogram/config/cloud.js`
+  - 公共云初始化包装层，从私有配置读取真实环境
+- `miniprogram/config/private.js`
+  - 真实私有 `envId`，不提交到仓库
+- `miniprogram/config/private.template.js`
+  - 私有配置模板
+- `project.private.config.json`
+  - 可选的微信开发者工具私有配置，不提交到仓库
 - `miniprogram/config/strings.js`
 - `miniprogram/config/legal-strings.js`
 - `miniprogram/config/subscribe.js`
@@ -47,3 +54,20 @@
 - `tasks.status + dueAt`
 - `task_archives.ownerId + updatedAt`
 - `task_archives.sourceTaskId`
+
+## 本地辅助脚本
+
+- `scripts/set-cloud-env.js`
+  - 更新 `miniprogram/config/private.js`
+- `scripts/build-private-package.js`
+  - 生成可在仓库根目录直接解压恢复的私有 zip 包
+
+## 排查顺序
+
+运行环境切换后如果行为异常，优先检查：
+
+1. `miniprogram/config/private.js`
+2. 云函数环境变量
+3. 模板 ID
+4. 集合结构
+5. 索引

@@ -37,6 +37,30 @@ branch `archive/legacy-express-taro` for historical reference.
 - `scripts/`
   - lightweight maintenance helpers still relevant to the current runtime
 
+## Private Runtime Restore
+
+The public repository does not ship with the real private Mini Program runtime
+config.
+
+Required private file:
+
+- `miniprogram/config/private.js`
+
+Optional private file:
+
+- `project.private.config.json`
+
+Normal restore flow:
+
+1. keep your generated private zip outside Git
+2. extract it at the repository root
+3. confirm `miniprogram/config/private.js` exists again
+4. continue working in DevTools and local scripts as usual
+
+The restore path is intentionally designed so that, once the zip is extracted
+at the repository root, development and testing behave the same way as before
+the public redaction.
+
 ## Core Cloud Functions
 
 - `taskGateway`

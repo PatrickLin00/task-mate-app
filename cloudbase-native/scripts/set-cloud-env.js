@@ -1,8 +1,8 @@
-const fs = require('fs')
+﻿const fs = require('fs')
 const path = require('path')
 
 const ROOT = path.resolve(__dirname, '..')
-const CONFIG_PATH = path.join(ROOT, 'miniprogram', 'config', 'cloud.js')
+const CONFIG_PATH = path.join(ROOT, 'miniprogram', 'config', 'private.js')
 
 function assert(condition, message) {
   if (!condition) {

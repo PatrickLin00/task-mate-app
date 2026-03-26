@@ -1,4 +1,4 @@
-# 开发工作流
+﻿# 开发工作流
 
 ## 目的
 
@@ -36,9 +36,60 @@
 步骤：
 
 1. 在 `cloudbase-native/` 下执行 `node scripts/set-cloud-env.js <envId>`
-2. 检查 `miniprogram/config/cloud.js`
+2. 检查 `miniprogram/config/private.js`
 3. 确认开发者工具当前选择的也是同一个环境
 4. 将云函数部署到这个准确环境
+
+### 3.2. 私有配置恢复
+
+公开仓库不会直接包含真实私有配置文件。
+
+当前必须恢复的私有文件：
+
+- `miniprogram/config/private.js`
+
+可选恢复文件：
+
+- `project.private.config.json`
+
+推荐恢复流程：
+
+1. 生成或取得 `cloudbase-native/private-package/task-mate-private-package.zip`
+2. 在仓库根目录直接解压这个 zip
+3. 确认 `cloudbase-native/miniprogram/config/private.js` 已恢复
+4. 如果需要，再恢复 `cloudbase-native/project.private.config.json`
+5. 后续开发与测试流程和未做保密处理前保持一致
+
+只要 zip 是在仓库根目录解压，项目的使用方式应与原来基本一致。
+这包括：
+
+- `node scripts/set-cloud-env.js <envId>`
+- 微信开发者工具预览与上传
+- 云函数部署
+- 双账号联调和手动烟测
+
+### 3.3. 私有包生成
+
+当你想把当前私有配置导出成可恢复的本地包时使用。
+
+执行：
+
+```bash
+cd cloudbase-native
+node scripts/build-private-package.js
+```
+
+输出：
+
+- `cloudbase-native/private-package/task-mate-private-package.zip`
+
+这个 zip 会保留原始相对路径，所以在仓库根目录解压后会直接恢复到正确位置。
+
+如果已经持有私有 zip，实际使用方式应尽量简单：
+
+1. clone 公开仓库
+2. 在仓库根目录解压 zip
+3. 后续按普通本地项目继续开发和测试
 
 ### 3.5. 云端数据完整性检查
 
@@ -96,7 +147,7 @@ node scripts/check-cloud-data-integrity.js <envId>
 
 优先检查：
 
-1. `miniprogram/config/cloud.js`
+1. `miniprogram/config/private.js`
 2. 开发者工具当前云环境
 3. 对应云函数是否真的重新部署
 
