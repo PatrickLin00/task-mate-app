@@ -59,7 +59,7 @@
 
 - `scripts/set-cloud-env.js`
   - 更新 `miniprogram/config/private.js`
-- `scripts/build-private-package.js`
+- `../build-private-package.js`
   - 生成可在仓库根目录直接解压恢复的私有 zip 包
 
 ## 排查顺序

@@ -91,7 +91,7 @@ Recommended indexes:
 
 - `scripts/set-cloud-env.js`
   - updates `miniprogram/config/private.js`
-- `scripts/build-private-package.js`
+- `../build-private-package.js`
   - builds a restorable private zip package for repository-root extraction
 
 ## Troubleshooting Order

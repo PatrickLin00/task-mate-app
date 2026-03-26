@@ -117,13 +117,12 @@ do not need a separate "secure mode" path.
 To rebuild the private package from a configured local checkout:
 
 ```bash
-cd cloudbase-native
-node scripts/build-private-package.js
+node build-private-package.js
 ```
 
 That script creates:
 
-- `cloudbase-native/private-package/task-mate-private-package.zip`
+- `private-package/task-mate-private-package.zip`
 
 The zip preserves original paths, so extracting it at the repository root
 restores the private files directly into place.

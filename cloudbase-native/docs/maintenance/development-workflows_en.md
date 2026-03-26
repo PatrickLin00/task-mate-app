@@ -57,7 +57,7 @@ Optional private file:
 
 Expected restore flow:
 
-1. generate or obtain `cloudbase-native/private-package/task-mate-private-package.zip`
+1. generate or obtain `private-package/task-mate-private-package.zip`
 2. extract that zip at the repository root
 3. confirm `cloudbase-native/miniprogram/config/private.js` now exists
 4. optionally restore `cloudbase-native/project.private.config.json`
@@ -79,13 +79,12 @@ local package.
 Run:
 
 ```bash
-cd cloudbase-native
-node scripts/build-private-package.js
+node build-private-package.js
 ```
 
 Output:
 
-- `cloudbase-native/private-package/task-mate-private-package.zip`
+- `private-package/task-mate-private-package.zip`
 
 This zip preserves the original relative paths, so extracting it at the
 repository root restores the private files directly into place.

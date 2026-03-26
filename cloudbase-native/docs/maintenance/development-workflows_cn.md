@@ -54,7 +54,7 @@
 
 推荐恢复流程：
 
-1. 生成或取得 `cloudbase-native/private-package/task-mate-private-package.zip`
+1. 生成或取得 `private-package/task-mate-private-package.zip`
 2. 在仓库根目录直接解压这个 zip
 3. 确认 `cloudbase-native/miniprogram/config/private.js` 已恢复
 4. 如果需要，再恢复 `cloudbase-native/project.private.config.json`
@@ -75,13 +75,12 @@
 执行：
 
 ```bash
-cd cloudbase-native
-node scripts/build-private-package.js
+node build-private-package.js
 ```
 
 输出：
 
-- `cloudbase-native/private-package/task-mate-private-package.zip`
+- `private-package/task-mate-private-package.zip`
 
 这个 zip 会保留原始相对路径，所以在仓库根目录解压后会直接恢复到正确位置。
 

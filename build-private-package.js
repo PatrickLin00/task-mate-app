@@ -1,10 +1,9 @@
-﻿const fs = require('fs')
+const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 
-const ROOT = path.resolve(__dirname, '..', '..')
-const PACKAGE_ROOT = path.join(ROOT, 'cloudbase-native')
-const OUTPUT_DIR = path.join(PACKAGE_ROOT, 'private-package')
+const ROOT = __dirname
+const OUTPUT_DIR = path.join(ROOT, 'private-package')
 const STAGING_DIR = path.join(OUTPUT_DIR, 'staging')
 const OUTPUT_ZIP = path.join(OUTPUT_DIR, 'task-mate-private-package.zip')
 

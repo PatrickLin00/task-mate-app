@@ -16,6 +16,6 @@ Thumbs.db
 *.key
 cloudbase-native/project.private.config.json
 cloudbase-native/miniprogram/config/private.js
-cloudbase-native/private-package/
+private-package/
 
 private
