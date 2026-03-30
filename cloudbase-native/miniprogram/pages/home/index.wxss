@@ -344,6 +344,161 @@
   border: 0;
 }
 
+.subscribe-settings-list {
+  display: grid;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.subscribe-mask {
+  align-items: flex-start;
+  padding-top: 120rpx;
+}
+
+.subscribe-mask .modal {
+  height: calc(100vh - 180rpx);
+  max-height: calc(100vh - 180rpx);
+  opacity: 0;
+  transform: translateY(-28rpx) scale(0.96);
+  transform-origin: center top;
+  transition:
+    transform 0.24s cubic-bezier(0.2, 0.9, 0.28, 1),
+    opacity 0.2s ease;
+}
+
+.subscribe-mask.modal-open .modal {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.subscribe-mask.modal-closing .modal {
+  opacity: 0;
+  transform: translateY(-20rpx) scale(0.96);
+}
+
+.subscribe-category {
+  margin-top: 18rpx;
+  padding-top: 18rpx;
+  border-top: 1rpx solid rgba(111, 84, 50, 0.12);
+}
+
+.subscribe-category:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.subscribe-category-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.subscribe-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-shrink: 0;
+}
+
+.subscribe-category-title {
+  margin-top: 0;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.subscribe-category-copy {
+  margin-top: 6rpx;
+}
+
+.subscribe-category-status {
+  margin-top: 6rpx;
+  color: var(--accent-strong);
+}
+
+.subscribe-add-button {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.subscribe-rule-row {
+  padding: 18rpx;
+  border-radius: 20rpx;
+  background: var(--bg-soft);
+}
+
+.subscribe-direction-group {
+  display: flex;
+  gap: 12rpx;
+}
+
+.subscribe-direction-chip {
+  flex: 1;
+  padding: 14rpx 0;
+  border: 2rpx solid rgba(150, 95, 35, 0.16);
+  border-radius: 999rpx;
+  background: rgba(255, 248, 238, 0.92);
+  color: var(--accent-strong);
+  text-align: center;
+  font-size: 26rpx;
+  line-height: 1.2;
+}
+
+.subscribe-direction-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff8ef;
+}
+
+.subscribe-reminder-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.subscribe-picker-row {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12rpx;
+}
+
+.subscribe-picker {
+  min-height: 84rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12rpx;
+  text-align: center;
+}
+
+.subscribe-delete-button {
+  min-width: 112rpx;
+  margin: 0;
+  padding: 0 22rpx;
+  border-radius: 999rpx;
+  flex-shrink: 0;
+}
+
+.subscribe-delete-button::after {
+  border: 0;
+}
+
+.subscribe-reminder-summary {
+  margin-top: 12rpx !important;
+}
+
+.subscribe-authorize-button {
+  width: 100%;
+  margin-top: 8rpx;
+}
+
+.subscribe-reminder-card,
+.subscribe-static-card {
+  padding-top: 20rpx;
+}
+
 .achievement-title {
   font-size: 26rpx;
   font-weight: 600;
@@ -857,13 +1012,13 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .guide-mask {
   position: absolute;
   inset: 0;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .guide-mask-bottom-dim {

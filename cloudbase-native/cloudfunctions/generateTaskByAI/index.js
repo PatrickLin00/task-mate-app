@@ -185,7 +185,35 @@ function fallbackDraft(prompt) {
   }
 }
 
-function normalizeDraft(data, prompt) {
+function formatOffsetFromMinutes(offsetMinutes) {
+  const localMinutes = -Number(offsetMinutes || 0)
+  const sign = localMinutes >= 0 ? '+' : '-'
+  const absMinutes = Math.abs(localMinutes)
+  const hours = Math.floor(absMinutes / 60)
+  const minutes = absMinutes % 60
+  return `${String(sign)}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+function formatClientNowText(clientNow, timezoneLabel, timezoneOffsetMinutes) {
+  const date = clientNow ? new Date(clientNow) : new Date()
+  const offsetText = formatOffsetFromMinutes(timezoneOffsetMinutes)
+  const shifted = new Date(date.getTime() - Number(timezoneOffsetMinutes || 0) * 60 * 1000)
+  const localText = `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-${String(shifted.getUTCDate()).padStart(2, '0')} ${String(shifted.getUTCHours()).padStart(2, '0')}:${String(shifted.getUTCMinutes()).padStart(2, '0')}`
+  const zoneLabel = timezoneLabel || 'user local time'
+  return `当前用户本地时间(${zoneLabel}, UTC${offsetText}): ${localText}`
+}
+
+function normalizeDueAtValue(value, timezoneOffsetMinutes) {
+  if (!value) return value
+  const text = String(value).trim()
+  if (!text) return ''
+  if (/[zZ]$/.test(text) || /[+\-]\d{2}:\d{2}$/.test(text)) return text
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text)) return `${text}:00${formatOffsetFromMinutes(timezoneOffsetMinutes)}`
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(text)) return `${text}${formatOffsetFromMinutes(timezoneOffsetMinutes)}`
+  return text
+}
+
+function normalizeDraft(data, prompt, timezoneOffsetMinutes) {
   const normalized = Object.assign({}, data)
   const shoppingItems = extractShoppingItems(prompt)
   if (shoppingItems.length >= 2) {
@@ -216,21 +244,22 @@ function normalizeDraft(data, prompt) {
     value: 1,
   }
   normalized.offlineRewardPromise = String(normalized.offlineRewardPromise || '').trim() || extractOfflineRewardPromise(prompt)
+  normalized.dueAt = normalizeDueAtValue(normalized.dueAt, timezoneOffsetMinutes)
   return normalized
 }
 
 exports.main = async (event) => {
   const prompt = String(event && event.prompt ? event.prompt : '').trim()
   if (!prompt) return fail('prompt is required', 'INVALID_PROMPT')
+  const timezoneOffsetMinutes = Number(event && typeof event.timezoneOffsetMinutes !== 'undefined' ? event.timezoneOffsetMinutes : new Date().getTimezoneOffset())
+  const timezoneLabel = String(event && event.timezoneLabel ? event.timezoneLabel : '').trim()
+  const clientNow = String(event && event.clientNow ? event.clientNow : '').trim()
 
   const provider = pickProvider()
   if (!provider) return success(fallbackDraft(prompt))
 
   try {
-    const nowText = new Date().toLocaleString('sv-SE', {
-      timeZone: 'Asia/Shanghai',
-      hour12: false,
-    })
+    const nowText = formatClientNowText(clientNow, timezoneLabel, timezoneOffsetMinutes)
 
     const response = await requestJson(
       `${provider.baseURL.replace(/\/$/, '')}/chat/completions`,
@@ -243,7 +272,7 @@ exports.main = async (event) => {
           },
           {
             role: 'user',
-            content: prompt,
+            content: `${prompt}\n\n请按用户本地时间理解相对时间表达。如果你输出 dueAt，必须带明确时区偏移，使用 ${formatOffsetFromMinutes(timezoneOffsetMinutes)}。`,
           },
         ],
         response_format: { type: 'json_object' },
@@ -264,7 +293,7 @@ exports.main = async (event) => {
       return success(fallbackDraft(prompt))
     }
 
-    return success(normalizeDraft(parsed, prompt))
+    return success(normalizeDraft(parsed, prompt, timezoneOffsetMinutes))
   } catch (error) {
     return success(fallbackDraft(prompt))
   }

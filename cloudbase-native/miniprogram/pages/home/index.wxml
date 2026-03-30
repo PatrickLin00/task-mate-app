@@ -262,15 +262,16 @@
     </block>
 
     <block wx:else>
-      <view class="card section-card tab-pane {{onboarding.visible && onboarding.target === 'profile' ? 'guide-target' : ''}}">
+      <view class="card section-card tab-pane {{onboarding.visible && (onboarding.target === 'profile' || onboarding.target === 'profile-subscribe-entry') ? 'guide-target' : ''}}">
         <view class="section-title">{{strings.profile.title}}</view>
         <view class="section-subtitle">{{strings.profile.subtitle}}</view>
         <view class="profile-block">
           <view class="task-meta">{{strings.profile.userId}}: {{profile.userId}}</view>
           <view class="task-meta">{{strings.profile.nickname}}: {{profile.nickname}}</view>
+          <view class="task-meta">任务到期提醒：已设置 {{(profile.subscribeReminderSettings && profile.subscribeReminderSettings.taskDeadline && profile.subscribeReminderSettings.taskDeadline.length) || 0}} 条</view>
           <view class="profile-action-row">
             <button hover-class="button-press" hover-stay-time="90" class="ghost-button profile-action-button" bindtap="openProfileEdit">{{strings.profile.editNickname}}</button>
-            <button hover-class="button-press" hover-stay-time="90" class="ghost-button profile-action-button" bindtap="onRequestSubscribe">{{strings.profile.subscribe}}</button>
+            <button hover-class="button-press" hover-stay-time="90" class="ghost-button profile-action-button {{onboarding.visible && onboarding.target === 'profile-subscribe-entry' ? 'guide-target' : ''}}" bindtap="openSubscribeSettings">{{strings.profile.subscribe}}</button>
           </view>
           <view class="profile-action-row single">
             <button hover-class="button-press" hover-stay-time="90" class="ghost-button profile-action-button" bindtap="openOnboarding">{{strings.profile.onboarding}}</button>
@@ -499,22 +500,211 @@
     </view>
   </view>
 
-  <view wx:if="{{onboarding.visible}}" class="guide-overlay">
+  <view wx:if="{{subscribeSettings.visible}}" class="modal-mask subscribe-mask {{subscribeSettings.visible && !subscribeSettings.closing ? 'modal-open' : ''}} {{subscribeSettings.closing ? 'modal-closing' : ''}}" bindtap="{{onboarding.visible && onboarding.target === 'subscribe-settings' ? 'noop' : 'closeSubscribeSettings'}}" catchtouchmove="noop">
+    <view class="modal-stack">
+    <scroll-view scroll-y="true" class="modal modal-scroll profile-scroll card create-modal" catchtap="noop" bindscroll="onSubscribeScroll">
+      <view class="profile-scroll-content">
+      <view class="modal-head">
+        <view class="section-title">{{strings.subscribeSettings.title}}</view>
+      </view>
+      <view class="task-meta">{{strings.subscribeSettings.intro}}</view>
+      <view class="task-meta">{{strings.subscribeSettings.authHint}}</view>
+
+      <view class="subscribe-category {{onboarding.visible && onboarding.target === 'subscribe-settings' ? 'guide-target' : ''}}">
+        <view class="subscribe-category-head">
+          <view>
+            <view class="section-subtitle subscribe-category-title">{{strings.subscribeSettings.taskDeadlineBeforeTitle}}</view>
+            <view class="task-meta subscribe-category-copy">{{strings.subscribeSettings.taskDeadlineBeforeCopy}}</view>
+            <view class="task-meta subscribe-category-status">{{subscribeSettings.statuses.taskDeadlineBefore}}</view>
+          </view>
+          <view class="subscribe-head-actions">
+            <switch color="#b86b24" checked="{{subscribeSettings.categoryEnabled.taskDeadlineBefore}}" data-category="taskDeadlineBefore" bindchange="onToggleSubscribeCategory" />
+            <button hover-class="button-press" hover-stay-time="90" size="mini" class="ghost-button mini-button subscribe-add-button" data-direction="before" bindtap="addSubscribeReminder">{{strings.subscribeSettings.addReminder}}</button>
+          </view>
+        </view>
+        <view class="task-list" wx:if="{{subscribeSettings.reminders.length}}">
+          <block wx:for="{{subscribeSettings.reminders}}" wx:key="id">
+            <view wx:if="{{item.direction === 'before'}}" class="task-item subscribe-reminder-card">
+              <view class="task-head">
+                <view class="task-title">{{item.cardTitle}}</view>
+                <view class="task-status">{{strings.subscribeSettings.editable}}</view>
+              </view>
+              <view class="subscribe-reminder-edit-row">
+                <view class="subscribe-picker-row">
+                  <picker mode="selector" range="{{subscribeOffsetOptions}}" value="{{item.optionIndex || 0}}" data-id="{{item.id}}" bindchange="onSubscribeOffsetChange">
+                    <view class="picker subscribe-picker">{{item.optionLabel || subscribeOffsetOptions[0]}}</view>
+                  </picker>
+                </view>
+                <button hover-class="button-press" hover-stay-time="90" size="mini" class="ghost-button mini-button subscribe-delete-button" data-id="{{item.id}}" bindtap="removeSubscribeReminder">{{strings.subscribeSettings.delete}}</button>
+              </view>
+              <view class="task-meta subscribe-reminder-summary">{{strings.subscribeSettings.summaryTaskBefore}} {{item.optionLabel || subscribeOffsetOptions[0]}}</view>
+            </view>
+          </block>
+        </view>
+      </view>
+
+      <view class="subscribe-category {{onboarding.visible && onboarding.target === 'subscribe-settings' ? 'guide-target' : ''}}">
+        <view class="subscribe-category-head">
+          <view>
+            <view class="section-subtitle subscribe-category-title">{{strings.subscribeSettings.taskDeadlineAfterTitle}}</view>
+            <view class="task-meta subscribe-category-copy">{{strings.subscribeSettings.taskDeadlineAfterCopy}}</view>
+            <view class="task-meta subscribe-category-status">{{subscribeSettings.statuses.taskDeadlineAfter}}</view>
+          </view>
+          <view class="subscribe-head-actions">
+            <switch color="#b86b24" checked="{{subscribeSettings.categoryEnabled.taskDeadlineAfter}}" data-category="taskDeadlineAfter" bindchange="onToggleSubscribeCategory" />
+            <button hover-class="button-press" hover-stay-time="90" size="mini" class="ghost-button mini-button subscribe-add-button" data-direction="after" bindtap="addSubscribeReminder">{{strings.subscribeSettings.addReminder}}</button>
+          </view>
+        </view>
+        <view class="task-list" wx:if="{{subscribeSettings.reminders.length}}">
+          <block wx:for="{{subscribeSettings.reminders}}" wx:key="id">
+            <view wx:if="{{item.direction === 'after'}}" class="task-item subscribe-reminder-card">
+              <view class="task-head">
+                <view class="task-title">{{item.cardTitle}}</view>
+                <view class="task-status">{{strings.subscribeSettings.editable}}</view>
+              </view>
+              <view class="subscribe-reminder-edit-row">
+                <view class="subscribe-picker-row">
+                  <picker mode="selector" range="{{subscribeOffsetOptions}}" value="{{item.optionIndex || 0}}" data-id="{{item.id}}" bindchange="onSubscribeOffsetChange">
+                    <view class="picker subscribe-picker">{{item.optionLabel || subscribeOffsetOptions[0]}}</view>
+                  </picker>
+                </view>
+                <button hover-class="button-press" hover-stay-time="90" size="mini" class="ghost-button mini-button subscribe-delete-button" data-id="{{item.id}}" bindtap="removeSubscribeReminder">{{strings.subscribeSettings.delete}}</button>
+              </view>
+              <view class="task-meta subscribe-reminder-summary">{{strings.subscribeSettings.summaryTaskAfter}} {{item.optionLabel || subscribeOffsetOptions[0]}}</view>
+            </view>
+          </block>
+        </view>
+      </view>
+
+      <view class="subscribe-category {{onboarding.visible && onboarding.target === 'subscribe-settings' ? 'guide-target' : ''}}">
+        <view class="subscribe-category-head">
+          <view>
+            <view class="section-subtitle subscribe-category-title">{{strings.subscribeSettings.taskDeadlineExactTitle}}</view>
+            <view class="task-meta subscribe-category-copy">{{strings.subscribeSettings.taskDeadlineExactCopy}}</view>
+            <view class="task-meta subscribe-category-status">{{subscribeSettings.statuses.taskDeadlineExact}}</view>
+          </view>
+          <switch color="#b86b24" checked="{{subscribeSettings.categoryEnabled.taskDeadlineExact}}" data-category="taskDeadlineExact" bindchange="onToggleSubscribeCategory" />
+        </view>
+        <view class="task-list">
+          <view class="task-item subscribe-static-card">
+            <view class="task-head">
+              <view class="task-title">{{strings.subscribeSettings.taskDeadlineExactCardTitle}}</view>
+              <view class="task-status">{{strings.subscribeSettings.fixed}}</view>
+            </view>
+            <view class="task-meta">{{strings.subscribeSettings.summaryTaskExact}} {{strings.subscribeSettings.onTimeLabel}}</view>
+          </view>
+        </view>
+      </view>
+
+      <view class="subscribe-category">
+        <view class="subscribe-category-head">
+          <view>
+            <view class="section-subtitle subscribe-category-title">{{strings.subscribeSettings.workTitle}}</view>
+            <view class="task-meta subscribe-category-copy">{{strings.subscribeSettings.workCopy}}</view>
+            <view class="task-meta subscribe-category-status">{{subscribeSettings.statuses.work}}</view>
+          </view>
+          <switch color="#b86b24" checked="{{subscribeSettings.categoryEnabled.work}}" data-category="work" bindchange="onToggleSubscribeCategory" />
+        </view>
+        <view class="task-list">
+          <view class="task-item subscribe-static-card">
+            <view class="task-head">
+              <view class="task-title">{{strings.subscribeSettings.workCardTitle}}</view>
+              <view class="task-status">{{strings.subscribeSettings.instant}}</view>
+            </view>
+            <view class="task-meta">{{strings.subscribeSettings.workCardCopy}}</view>
+          </view>
+        </view>
+      </view>
+
+      <view class="subscribe-category">
+        <view class="subscribe-category-head">
+          <view>
+            <view class="section-subtitle subscribe-category-title">{{strings.subscribeSettings.taskUpdateTitle}}</view>
+            <view class="task-meta subscribe-category-copy">{{strings.subscribeSettings.taskUpdateCopy}}</view>
+            <view class="task-meta subscribe-category-status">{{subscribeSettings.statuses.taskUpdate}}</view>
+          </view>
+          <switch color="#b86b24" checked="{{subscribeSettings.categoryEnabled.taskUpdate}}" data-category="taskUpdate" bindchange="onToggleSubscribeCategory" />
+        </view>
+        <view class="task-list">
+          <view class="task-item subscribe-static-card">
+            <view class="task-head">
+              <view class="task-title">{{strings.subscribeSettings.taskUpdateCardTitle}}</view>
+              <view class="task-status">{{strings.subscribeSettings.instant}}</view>
+            </view>
+            <view class="task-meta">{{strings.subscribeSettings.taskUpdateCardCopy}}</view>
+          </view>
+        </view>
+      </view>
+
+      <view class="subscribe-category">
+        <view class="subscribe-category-head">
+          <view>
+            <view class="section-subtitle subscribe-category-title">{{strings.subscribeSettings.reviewTitle}}</view>
+            <view class="task-meta subscribe-category-copy">{{strings.subscribeSettings.reviewCopy}}</view>
+            <view class="task-meta subscribe-category-status">{{subscribeSettings.statuses.review}}</view>
+          </view>
+          <switch color="#b86b24" checked="{{subscribeSettings.categoryEnabled.review}}" data-category="review" bindchange="onToggleSubscribeCategory" />
+        </view>
+        <view class="task-list">
+          <view class="task-item subscribe-static-card">
+            <view class="task-head">
+              <view class="task-title">{{strings.subscribeSettings.reviewCardTitle}}</view>
+              <view class="task-status">{{strings.subscribeSettings.instant}}</view>
+            </view>
+            <view class="task-meta">{{strings.subscribeSettings.reviewCardCopy}}</view>
+          </view>
+        </view>
+      </view>
+
+      <view class="subscribe-category">
+        <view class="subscribe-category-head">
+          <view>
+            <view class="section-subtitle subscribe-category-title">{{strings.subscribeSettings.challengeExpiredTitle}}</view>
+            <view class="task-meta subscribe-category-copy">{{strings.subscribeSettings.challengeExpiredCopy}}</view>
+            <view class="task-meta subscribe-category-status">{{subscribeSettings.statuses.challengeExpired}}</view>
+          </view>
+          <switch color="#b86b24" checked="{{subscribeSettings.categoryEnabled.challengeExpired}}" data-category="challengeExpired" bindchange="onToggleSubscribeCategory" />
+        </view>
+        <view class="task-list">
+          <view class="task-item subscribe-static-card">
+            <view class="task-head">
+              <view class="task-title">{{strings.subscribeSettings.challengeExpiredCardTitle}}</view>
+              <view class="task-status">{{strings.subscribeSettings.fixed}}</view>
+            </view>
+            <view class="task-meta">{{strings.subscribeSettings.challengeExpiredCardCopy}}</view>
+          </view>
+        </view>
+      </view>
+
+      <view class="create-footer-actions">
+        <button hover-class="button-press" hover-stay-time="90" class="ghost-button create-footer-button" loading="{{actionLoading === 'saveSubscribeSettings'}}" bindtap="saveSubscribeReminderSettings">{{strings.subscribeSettings.saveRules}}</button>
+        <button hover-class="button-press" hover-stay-time="90" class="primary-button create-footer-button {{onboarding.visible && onboarding.target === 'subscribe-settings' ? 'guide-target' : ''}}" bindtap="onRequestSubscribe">{{strings.subscribeSettings.authorize}}</button>
+      </view>
+      </view>
+    </scroll-view>
+    <view wx:if="{{scrollHints.subscribe}}" class="scroll-hint scroll-hint-modal">
+      <view class="scroll-hint-fade"></view>
+      <view class="scroll-hint-arrow">{{strings.icons.arrowDown}}</view>
+    </view>
+    </view>
+  </view>
+
+  <view wx:if="{{onboarding.visible}}" class="guide-overlay" bindtap="onGuideBackdropTap">
     <view class="guide-mask {{onboarding.panelPosition === 'bottom' ? 'guide-mask-bottom-dim' : 'guide-mask-top-dim'}}"></view>
-    <view class="guide-panel card {{onboarding.panelPosition === 'bottom' ? 'guide-panel-bottom' : 'guide-panel-top'}}">
+    <view class="guide-panel card {{onboarding.panelPosition === 'bottom' ? 'guide-panel-bottom' : 'guide-panel-top'}}" catchtap="noop">
       <view class="section-title">{{strings.onboarding.title}}</view>
-      <view class="task-meta">第一次进入会自动显示，之后也可以在设置里重新打开。</view>
+      <view class="task-meta">{{strings.onboardingExtra.overlayHint}}</view>
       <view class="guide-step-title">{{onboarding.title}}</view>
       <view class="task-meta">
         <text wx:for="{{onboarding.segments}}" wx:key="index" class="{{item.strong ? 'guide-strong' : ''}}">{{item.text}}</text>
       </view>
       <view class="task-meta" wx:if="{{onboarding.hint}}">{{onboarding.hint}}</view>
       <view class="guide-actions">
-        <button hover-class="button-press" hover-stay-time="90" class="ghost-button guide-action-button" bindtap="skipOnboarding">跳过</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{onboarding.step > 0}}" class="ghost-button guide-action-button" bindtap="prevOnboardingStep">上一步</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{onboarding.actionDriven && onboarding.step < 12}}" class="ghost-button guide-action-button" bindtap="nextOnboardingStep">下一步</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{!onboarding.actionDriven && onboarding.step < 12}}" class="primary-button guide-action-button" bindtap="nextOnboardingStep">下一步</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{onboarding.step === 12}}" class="primary-button guide-action-button" loading="{{actionLoading === 'completeOnboarding'}}" bindtap="finishOnboarding">完成引导</button>
+        <button hover-class="button-press" hover-stay-time="90" class="ghost-button guide-action-button" bindtap="skipOnboarding">{{strings.onboarding.skip}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{onboarding.step > 0}}" class="ghost-button guide-action-button" bindtap="prevOnboardingStep">{{strings.onboarding.prev}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{onboarding.actionDriven && onboarding.step < 13}}" class="ghost-button guide-action-button" bindtap="nextOnboardingStep">{{strings.onboarding.next}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{!onboarding.actionDriven && onboarding.step < 13}}" class="primary-button guide-action-button" bindtap="nextOnboardingStep">{{strings.onboarding.next}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{onboarding.step === 13}}" class="primary-button guide-action-button" loading="{{actionLoading === 'completeOnboarding'}}" bindtap="finishOnboarding">{{strings.onboarding.finish}}</button>
       </view>
     </view>
   </view>

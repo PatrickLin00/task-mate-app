@@ -3,7 +3,7 @@
     {
       "name": "hourly-reminder",
       "type": "timer",
-      "config": "0 0 * * * * *",
+      "config": "0 */30 * * * * *",
       "argument": "{\"mode\":\"all\"}"
     }
   ]

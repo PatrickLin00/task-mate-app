@@ -6,6 +6,7 @@
 - `generateTaskByAI`
 - `moderateContent`
 - `subscribeScheduler`
+- `adminMaintenance`
 
 ## taskGateway
 
@@ -38,6 +39,18 @@
 - 即将到期
 - 已逾期
 - 每日挑战过期清理
+
+## adminMaintenance
+
+负责后台数据库扫描与修复：
+
+- 重构链孤儿任务扫描
+- `previousTaskId` 悬空引用修复
+- 历史脏数据清理
+
+使用方式见：
+
+- `../maintenance/backend-maintenance_cn.md`
 
 ## 共通规则
 

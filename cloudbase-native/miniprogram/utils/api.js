@@ -56,8 +56,13 @@ async function acceptChallengeTask(seedKey) {
   return requestTask('acceptChallengeTask', { seedKey })
 }
 
-async function generateTaskByAI(prompt) {
-  const result = await callFunction('generateTaskByAI', { prompt })
+async function generateTaskByAI(payload) {
+  const result = await callFunction(
+    'generateTaskByAI',
+    typeof payload === 'string'
+      ? { prompt: payload }
+      : payload || {}
+  )
   return unwrap(result)
 }
 

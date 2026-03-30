@@ -15,7 +15,10 @@ const _ = db.command
 
 const USERS = 'users'
 const TASKS = 'tasks'
-const HOUR_MS = 60 * 60 * 1000
+const MINUTE_MS = 60 * 1000
+const SCAN_INTERVAL_MS = 30 * MINUTE_MS
+const TOLERANCE_MS = 15 * MINUTE_MS
+const MAX_REMINDER_MINUTES = 365 * 24 * 60
 
 function now() {
   return new Date()
@@ -33,13 +36,87 @@ function formatDateTime(value) {
 
 function formatRemain(ms) {
   if (!Number.isFinite(ms)) return ''
-  const totalMinutes = Math.max(0, Math.ceil(ms / 60000))
+  const totalMinutes = Math.max(0, Math.ceil(ms / MINUTE_MS))
   const days = Math.floor(totalMinutes / (24 * 60))
   const hours = Math.floor((totalMinutes % (24 * 60)) / 60)
   const minutes = totalMinutes % 60
   if (days > 0) return `${days}天${hours}小时`
   if (hours > 0) return `${hours}小时${minutes}分钟`
   return `${minutes}分钟`
+}
+
+function defaultReminderSettings() {
+  return {
+    categoryEnabled: {
+      taskDeadlineExact: true,
+      taskDeadlineBefore: true,
+      taskDeadlineAfter: true,
+      work: true,
+      taskUpdate: true,
+      review: true,
+      challengeExpired: true,
+    },
+    taskDeadline: [
+      { direction: 'exact', minutes: 0 },
+      { direction: 'before', minutes: 30 },
+      { direction: 'after', minutes: 60 },
+    ],
+  }
+}
+
+function dedupeReminderItems(items) {
+  const source = Array.isArray(items) ? items : []
+  const seen = new Set()
+  const unique = []
+  for (let index = 0; index < source.length; index += 1) {
+    const item = source[index]
+    const direction = item && item.direction === 'after' ? 'after' : item && item.direction === 'exact' ? 'exact' : 'before'
+    const minutes = direction === 'exact' ? 0 : Math.max(1, Math.min(MAX_REMINDER_MINUTES, Math.floor(Number(item && item.minutes ? item.minutes : 0))))
+    const key = `${direction}:${minutes}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push({ direction, minutes })
+  }
+  return unique
+}
+
+function normalizeReminderSettings(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {}
+  const defaults = defaultReminderSettings()
+  const categoryEnabledSource = source.categoryEnabled && typeof source.categoryEnabled === 'object' ? source.categoryEnabled : {}
+  const categoryEnabled = {
+    taskDeadlineExact: categoryEnabledSource.taskDeadlineExact !== false,
+    taskDeadlineBefore: categoryEnabledSource.taskDeadlineBefore !== false,
+    taskDeadlineAfter: categoryEnabledSource.taskDeadlineAfter !== false,
+    work: categoryEnabledSource.work !== false,
+    taskUpdate: categoryEnabledSource.taskUpdate !== false,
+    review: categoryEnabledSource.review !== false,
+    challengeExpired: categoryEnabledSource.challengeExpired !== false,
+  }
+  const rawTaskDeadline = Array.isArray(source.taskDeadline)
+    ? source.taskDeadline
+        .map((item) => {
+          const rawDirection = String(item && item.direction ? item.direction : '').trim()
+          const direction = rawDirection === 'after' ? 'after' : rawDirection === 'exact' ? 'exact' : 'before'
+          const rawMinutes = Math.floor(Number(item && Object.prototype.hasOwnProperty.call(item, 'minutes') ? item.minutes : 0))
+          const minutes = direction === 'exact' ? 0 : Math.max(1, Math.min(MAX_REMINDER_MINUTES, rawMinutes))
+          if (direction !== 'exact' && !minutes) return null
+          return { direction, minutes }
+        })
+        .filter(Boolean)
+    : []
+  const dedupedTaskDeadline = dedupeReminderItems(rawTaskDeadline)
+  const exactList = dedupedTaskDeadline.filter((item) => item.direction === 'exact')
+  const beforeList = dedupedTaskDeadline.filter((item) => item.direction === 'before')
+  const afterList = dedupedTaskDeadline.filter((item) => item.direction === 'after')
+  return {
+    categoryEnabled,
+    taskDeadline: []
+      .concat(exactList.length ? exactList : defaults.taskDeadline.filter((item) => item.direction === 'exact'))
+      .concat(beforeList.length ? beforeList : defaults.taskDeadline.filter((item) => item.direction === 'before'))
+      .concat(afterList.length ? afterList : defaults.taskDeadline.filter((item) => item.direction === 'after'))
+      .slice(0, 8),
+  }
 }
 
 async function listUsersByIds(ids) {
@@ -82,6 +159,20 @@ async function trySendTodo(user, task, messageFields, context) {
   return true
 }
 
+async function markTaskReminderKey(task, field, key) {
+  if (!task || !task._id || !key) return
+  const currentKeys = Array.isArray(task[field]) ? task[field].map((item) => String(item)) : []
+  if (currentKeys.includes(String(key))) return
+  const nextKeys = currentKeys.concat(String(key))
+  await db.collection(TASKS).doc(task._id).update({
+    data: {
+      [field]: nextKeys,
+      updatedAt: now(),
+    },
+  })
+  task[field] = nextKeys
+}
+
 async function markTaskField(taskId, field) {
   await db.collection(TASKS).doc(taskId).update({
     data: {
@@ -95,74 +186,97 @@ async function removeTask(taskId) {
   await db.collection(TASKS).doc(taskId).remove()
 }
 
-async function runHourly(referenceNow) {
-  const current = referenceNow || now()
-  const soonEnd = new Date(current.getTime() + HOUR_MS)
-  const result = await db.collection(TASKS).where({ status: 'in_progress', assigneeId: _.neq('') }).get()
-  const tasks = result.data || []
-  const dueSoon = tasks.filter((task) => {
-    const dueAt = task && task.dueAt ? new Date(task.dueAt) : null
-    if (!dueAt || Number.isNaN(dueAt.getTime())) return false
-    return !task.dueSoonNotifiedAt && dueAt >= current && dueAt <= soonEnd
-  })
-  const overdue = tasks.filter((task) => {
-    const dueAt = task && task.dueAt ? new Date(task.dueAt) : null
-    if (!dueAt || Number.isNaN(dueAt.getTime())) return false
-    return !task.overdueNotifiedAt && dueAt < current
-  })
-  const users = await listUsersByIds(
-    dueSoon
-      .concat(overdue)
-      .map((task) => task.assigneeId)
-      .filter(Boolean)
-  )
-  const userMap = buildUserMap(users)
-  for (let index = 0; index < dueSoon.length; index += 1) {
-    const task = dueSoon[index]
-    const user = userMap[task.assigneeId]
-    const sent = await trySendTodo(
-      user,
-      task,
-      {
-        taskName: task.title || '任务提醒',
-        assignee: user && user.nickname ? user.nickname : '',
-        dueTime: formatDateTime(task.dueAt),
-        remainTime: formatRemain(new Date(task.dueAt).getTime() - current.getTime()),
-        remindTime: formatDateTime(current),
-        status: '即将截止',
-        tip: '任务即将截止，请尽快完成',
-      },
-      { event: 'task_due_soon', taskId: task._id }
-    )
-    if (sent) await markTaskField(task._id, 'dueSoonNotifiedAt')
+function buildReminderKey(reminder) {
+  return `${reminder.direction}:${reminder.minutes}`
+}
+
+function shouldSendDeadlineReminder(task, reminder, current) {
+  const dueAt = task && task.dueAt ? new Date(task.dueAt) : null
+  if (!dueAt || Number.isNaN(dueAt.getTime())) return false
+
+  if (reminder.direction === 'exact') {
+    return Math.abs(current.getTime() - dueAt.getTime()) <= TOLERANCE_MS
   }
-  for (let index = 0; index < overdue.length; index += 1) {
-    const task = overdue[index]
-    const user = userMap[task.assigneeId]
-    const sent = await trySendTodo(
-      user,
-      task,
-      {
-        taskName: task.title || '任务提醒',
-        assignee: user && user.nickname ? user.nickname : '',
-        dueTime: formatDateTime(task.dueAt),
-        remainTime: '已过期',
-        remindTime: formatDateTime(current),
-        status: '已过期',
-        tip: '任务已过期，请尽快处理',
-      },
-      { event: 'task_overdue', taskId: task._id }
-    )
-    if (sent) await markTaskField(task._id, 'overdueNotifiedAt')
+
+  const targetDiffMs = reminder.minutes * MINUTE_MS
+  const actualDiffMs = reminder.direction === 'after' ? current.getTime() - dueAt.getTime() : dueAt.getTime() - current.getTime()
+  if (actualDiffMs < 0) return false
+
+  return actualDiffMs >= targetDiffMs - TOLERANCE_MS && actualDiffMs <= targetDiffMs + TOLERANCE_MS
+}
+
+function buildTaskReminderMessage(task, user, reminder, current) {
+  if (reminder.direction === 'exact') {
+    return {
+      taskName: task.title || 'Task Reminder',
+      assignee: user && user.nickname ? user.nickname : '',
+      dueTime: formatDateTime(task.dueAt),
+      remainTime: 'Due now',
+      remindTime: formatDateTime(current),
+      status: 'Due Now',
+      tip: 'Task due reminder around the deadline.',
+    }
   }
+  const isAfter = reminder.direction === 'after'
+  const offsetText = formatRemain(reminder.minutes * MINUTE_MS)
   return {
-    dueSoon: dueSoon.length,
-    overdue: overdue.length,
+    taskName: task.title || 'Task Reminder',
+    assignee: user && user.nickname ? user.nickname : '',
+    dueTime: formatDateTime(task.dueAt),
+    remainTime: isAfter ? `Overdue by ${formatRemain(current.getTime() - new Date(task.dueAt).getTime())}` : formatRemain(new Date(task.dueAt).getTime() - current.getTime()),
+    remindTime: formatDateTime(current),
+    status: isAfter ? 'Overdue' : 'Due Soon',
+    tip: isAfter ? `Task overdue reminder at about ${offsetText}.` : `Task due reminder at about ${offsetText} before deadline.`,
   }
 }
 
-async function runDaily(referenceNow) {
-  const current = referenceNow || now()
+async function runDeadlineReminders(current) {
+  const result = await db.collection(TASKS).where({ status: 'in_progress', assigneeId: _.neq('') }).get()
+  const tasks = result.data || []
+  const users = await listUsersByIds(tasks.map((task) => task.assigneeId).filter(Boolean))
+  const userMap = buildUserMap(users)
+
+  let deadlineReminders = 0
+
+  for (let index = 0; index < tasks.length; index += 1) {
+    const task = tasks[index]
+    const user = userMap[task.assigneeId]
+    if (!user) continue
+
+    const reminderSettings = normalizeReminderSettings(user.subscribeReminderSettings)
+    const sentKeys = Array.isArray(task.todoReminderSentKeys) ? task.todoReminderSentKeys.map((item) => String(item)) : []
+
+    for (let reminderIndex = 0; reminderIndex < reminderSettings.taskDeadline.length; reminderIndex += 1) {
+      const reminder = reminderSettings.taskDeadline[reminderIndex]
+      const categoryKey = reminder.direction === 'exact' ? 'taskDeadlineExact' : reminder.direction === 'after' ? 'taskDeadlineAfter' : 'taskDeadlineBefore'
+      if (reminderSettings.categoryEnabled[categoryKey] === false) continue
+
+      const reminderKey = buildReminderKey(reminder)
+      if (sentKeys.includes(reminderKey)) continue
+      if (!shouldSendDeadlineReminder(task, reminder, current)) continue
+
+      const sent = await trySendTodo(
+        user,
+        task,
+        buildTaskReminderMessage(task, user, reminder, current),
+        {
+          event: reminder.direction === 'exact' ? 'task_due_exact' : reminder.direction === 'after' ? 'task_overdue_custom' : 'task_due_soon_custom',
+          taskId: task._id,
+          reminderKey,
+        }
+      )
+      if (!sent) continue
+
+      await markTaskReminderKey(task, 'todoReminderSentKeys', reminderKey)
+      deadlineReminders += 1
+      break
+    }
+  }
+
+  return { deadlineReminders }
+}
+
+async function runChallengeExpiredReminders(current) {
   const result = await db.collection(TASKS).where({ assigneeId: _.neq('') }).get()
   const tasks = result.data || []
   const expiredChallenges = tasks.filter((task) => {
@@ -174,30 +288,45 @@ async function runDaily(referenceNow) {
   })
   const users = await listUsersByIds(expiredChallenges.map((task) => task.assigneeId).filter(Boolean))
   const userMap = buildUserMap(users)
+  let deletedCount = 0
+  let pendingAuthCount = 0
+
   for (let index = 0; index < expiredChallenges.length; index += 1) {
     const task = expiredChallenges[index]
     const user = userMap[task.assigneeId]
-    const sent = await trySendTodo(
-      user,
-      task,
-      {
-        taskName: task.title || '任务提醒',
-        assignee: user && user.nickname ? user.nickname : '',
-        dueTime: formatDateTime(task.dueAt),
-        remainTime: '已过期',
-        remindTime: formatDateTime(current),
-        status: '已过期',
-        tip: '每日挑战已过期并被系统清理',
-      },
-      { event: 'challenge_expired', taskId: task._id }
-    )
-    if (sent) {
-      await markTaskField(task._id, 'challengeExpiredNotifiedAt')
+    const reminderSettings = normalizeReminderSettings(user && user.subscribeReminderSettings)
+    let shouldDelete = reminderSettings.categoryEnabled.challengeExpired === false
+    if (reminderSettings.categoryEnabled.challengeExpired !== false) {
+      const sent = await trySendTodo(
+        user,
+        task,
+        {
+          taskName: task.title || 'Task Reminder',
+          assignee: user && user.nickname ? user.nickname : '',
+          dueTime: formatDateTime(task.dueAt),
+          remainTime: 'Expired',
+          remindTime: formatDateTime(current),
+          status: 'Expired',
+          tip: 'Daily challenge expired and was cleaned up.',
+        },
+        { event: 'challenge_expired', taskId: task._id }
+      )
+      if (sent) {
+        await markTaskField(task._id, 'challengeExpiredNotifiedAt')
+        shouldDelete = true
+      } else {
+        pendingAuthCount += 1
+      }
     }
+    if (!shouldDelete) continue
     await removeTask(task._id)
+    deletedCount += 1
   }
+
   return {
     challengeExpired: expiredChallenges.length,
+    challengeDeleted: deletedCount,
+    challengePendingAuth: pendingAuthCount,
   }
 }
 
@@ -206,10 +335,14 @@ exports.main = async (event) => {
   const current = now()
   const result = {}
   if (mode === 'all' || mode === 'hourly') {
-    result.hourly = await runHourly(current)
+    result.hourly = await runDeadlineReminders(current)
   }
   if (mode === 'all' || mode === 'daily') {
-    result.daily = await runDaily(current)
+    result.daily = await runChallengeExpiredReminders(current)
+  }
+  result.meta = {
+    scanIntervalMinutes: SCAN_INTERVAL_MS / MINUTE_MS,
+    toleranceMinutes: TOLERANCE_MS / MINUTE_MS,
   }
   return {
     ok: true,

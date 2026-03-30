@@ -1,12 +1,31 @@
 ﻿const { bootstrap, createTask, generateTaskByAI, operateTask, acceptChallengeTask, updateProfile, completeOnboarding } = require('../../utils/api')
 const { formatDateTime, formatDateInput, formatTimeInput, statusLabel, rewardLabel } = require('../../utils/format')
 const { requestTaskSubscribeAuth } = require('../../utils/subscribe')
+const { saveSubscribeSettings } = require('../../utils/api')
 const strings = require('../../config/strings')
 
 const ACTIVE_ASSIGNEE_STATUS = ['in_progress', 'pending_confirmation']
 
 function buildDueAt(dateValue, timeValue) {
-  return new Date(`${dateValue}T${timeValue}:00+08:00`).toISOString()
+  const [year, month, day] = String(dateValue || '').split('-').map((item) => Number(item))
+  const [hour, minute] = String(timeValue || '').split(':').map((item) => Number(item))
+  const localDate = new Date(year, Math.max(0, (month || 1) - 1), day || 1, hour || 0, minute || 0, 0)
+  return localDate.toISOString()
+}
+
+function getClientTimeContext() {
+  const now = new Date()
+  let timezoneLabel = ''
+  try {
+    timezoneLabel = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+  } catch (error) {
+    void error
+  }
+  return {
+    clientNow: now.toISOString(),
+    timezoneOffsetMinutes: now.getTimezoneOffset(),
+    timezoneLabel,
+  }
 }
 
 function buildCreateState() {
@@ -51,6 +70,182 @@ function buildScrollHints() {
     detail: false,
     create: false,
     profile: false,
+    subscribe: false,
+  }
+}
+
+let subscribeReminderSeed = 0
+
+const MAX_REMINDER_MINUTES = 365 * 24 * 60
+
+function buildSubscribeOffsetOptions() {
+  const options = [
+    { minutes: 30, label: `30${strings.subscribeSettings.minuteUnit}` },
+    { minutes: 60, label: `60${strings.subscribeSettings.minuteUnit}` },
+  ]
+  for (let hours = 2; hours <= 23; hours += 1) {
+    options.push({ minutes: hours * 60, label: `${hours}${strings.subscribeSettings.hourUnit}` })
+  }
+  for (let days = 1; days <= 6; days += 1) {
+    options.push({ minutes: days * 24 * 60, label: `${days}${strings.subscribeSettings.dayUnit}` })
+  }
+  options.push({ minutes: 7 * 24 * 60, label: `1${strings.subscribeSettings.weekUnit}` })
+  options.push({ minutes: 14 * 24 * 60, label: `2${strings.subscribeSettings.weekUnit}` })
+  options.push({ minutes: 21 * 24 * 60, label: `3${strings.subscribeSettings.weekUnit}` })
+  for (let months = 1; months <= 12; months += 1) {
+    options.push({
+      minutes: months * 30 * 24 * 60,
+      label: months === 12 ? `1${strings.subscribeSettings.yearUnit}` : `${months}${strings.subscribeSettings.monthUnit}`,
+    })
+  }
+  return options
+}
+
+const SUBSCRIBE_OFFSET_OPTIONS = buildSubscribeOffsetOptions()
+
+function normalizeSubscribeMinutes(minutes) {
+  const safeMinutes = Math.max(30, Math.min(MAX_REMINDER_MINUTES, Math.floor(Number(minutes || 0) || 0)))
+  if (safeMinutes <= 45) return 30
+  const matched = SUBSCRIBE_OFFSET_OPTIONS.find((item) => item.minutes === safeMinutes)
+  if (matched) return matched.minutes
+  let bestOption = SUBSCRIBE_OFFSET_OPTIONS[0]
+  let bestDistance = Math.abs(bestOption.minutes - safeMinutes)
+  for (let index = 1; index < SUBSCRIBE_OFFSET_OPTIONS.length; index += 1) {
+    const option = SUBSCRIBE_OFFSET_OPTIONS[index]
+    const distance = Math.abs(option.minutes - safeMinutes)
+    if (distance < bestDistance) {
+      bestOption = option
+      bestDistance = distance
+    }
+  }
+  return bestOption.minutes
+}
+
+function getSubscribeOffsetIndex(minutes) {
+  const normalizedMinutes = normalizeSubscribeMinutes(minutes)
+  const index = SUBSCRIBE_OFFSET_OPTIONS.findIndex((item) => item.minutes === normalizedMinutes)
+  return index >= 0 ? index : 0
+}
+
+function buildSubscribeReminderDraft(direction, minutes) {
+  const normalizedDirection = direction === 'after' ? 'after' : direction === 'exact' ? 'exact' : 'before'
+  const normalizedMinutes = normalizedDirection === 'exact' ? 0 : normalizeSubscribeMinutes(minutes)
+  const optionIndex = normalizedDirection === 'exact' ? -1 : getSubscribeOffsetIndex(normalizedMinutes)
+  subscribeReminderSeed += 1
+  return {
+    id: `reminder_${Date.now()}_${subscribeReminderSeed}`,
+    direction: normalizedDirection,
+    minutes: normalizedMinutes,
+    optionIndex,
+    optionLabel: normalizedDirection === 'exact' ? strings.subscribeSettings.onTimeLabel : (SUBSCRIBE_OFFSET_OPTIONS[optionIndex] ? SUBSCRIBE_OFFSET_OPTIONS[optionIndex].label : SUBSCRIBE_OFFSET_OPTIONS[0].label),
+  }
+}
+
+function dedupeSubscribeReminders(reminders) {
+  const source = Array.isArray(reminders) ? reminders : []
+  const seen = new Set()
+  const unique = []
+  for (let index = 0; index < source.length; index += 1) {
+    const item = source[index]
+    const direction = item && item.direction === 'after' ? 'after' : item && item.direction === 'exact' ? 'exact' : 'before'
+    const minutes = direction === 'exact' ? 0 : normalizeSubscribeMinutes(item && item.minutes ? item.minutes : 0)
+    const key = `${direction}:${minutes}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(Object.assign({}, item, { direction, minutes }))
+  }
+  return unique
+}
+
+function reindexSubscribeReminderDrafts(reminders) {
+  const source = dedupeSubscribeReminders(reminders)
+  let beforeCount = 0
+  let afterCount = 0
+  return source.map((item) => {
+    const direction = item && item.direction === 'after' ? 'after' : item && item.direction === 'exact' ? 'exact' : 'before'
+    let title = strings.subscribeSettings.reminderCardTitle
+    if (direction === 'after') {
+      afterCount += 1
+      title = `${strings.subscribeSettings.afterReminderCardTitle}${afterCount}`
+    } else if (direction === 'before') {
+      beforeCount += 1
+      title = `${strings.subscribeSettings.beforeReminderCardTitle}${beforeCount}`
+    }
+    return Object.assign({}, item, { cardTitle: title })
+  })
+}
+
+function normalizeSubscribeReminderSettings(settings) {
+  const source = settings && typeof settings === 'object' ? settings : {}
+  const categoryEnabledSource = source.categoryEnabled && typeof source.categoryEnabled === 'object' ? source.categoryEnabled : {}
+  const rawTaskDeadline = Array.isArray(source.taskDeadline)
+    ? source.taskDeadline
+        .map((item) => {
+          const rawDirection = String(item && item.direction ? item.direction : '').trim()
+          const direction = rawDirection === 'after' ? 'after' : rawDirection === 'exact' ? 'exact' : 'before'
+          const minutes = direction === 'exact' ? 0 : normalizeSubscribeMinutes(item && item.minutes ? item.minutes : 0)
+          if (direction !== 'exact' && !minutes) return null
+          return { direction, minutes }
+        })
+        .filter(Boolean)
+    : []
+  const dedupedTaskDeadline = dedupeSubscribeReminders(rawTaskDeadline)
+
+  const exactList = dedupedTaskDeadline.filter((item) => item.direction === 'exact')
+  const beforeList = dedupedTaskDeadline.filter((item) => item.direction === 'before')
+  const afterList = dedupedTaskDeadline.filter((item) => item.direction === 'after')
+
+  return {
+    categoryEnabled: {
+      taskDeadlineExact: categoryEnabledSource.taskDeadlineExact !== false,
+      taskDeadlineBefore: categoryEnabledSource.taskDeadlineBefore !== false,
+      taskDeadlineAfter: categoryEnabledSource.taskDeadlineAfter !== false,
+      work: categoryEnabledSource.work !== false,
+      taskUpdate: categoryEnabledSource.taskUpdate !== false,
+      review: categoryEnabledSource.review !== false,
+      challengeExpired: categoryEnabledSource.challengeExpired !== false,
+    },
+    taskDeadline: []
+      .concat(exactList.length ? exactList : [{ direction: 'exact', minutes: 0 }])
+      .concat(beforeList.length ? beforeList : [{ direction: 'before', minutes: 30 }])
+      .concat(afterList.length ? afterList : [{ direction: 'after', minutes: 60 }])
+      .slice(0, 8),
+  }
+}
+
+function getSubscribeStatusLabel(enabled, sceneStatus) {
+  if (!enabled) return strings.subscribeSettings.statusDisabled
+  if (sceneStatus === 'accepted') return strings.subscribeSettings.statusEnabled
+  return strings.subscribeSettings.statusNeedAuth
+}
+
+function getSubscribeSceneStatusForCategory(category, preferences) {
+  const source = preferences && typeof preferences === 'object' ? preferences : {}
+  const sceneKey = category === 'work' || category === 'taskUpdate' || category === 'review' ? category : 'todo'
+  return source[sceneKey] && source[sceneKey].status ? source[sceneKey].status : ''
+}
+
+function buildSubscribeSettingsState(settings, preferences) {
+  const normalized = normalizeSubscribeReminderSettings(settings)
+  const subscribePreferences = preferences && typeof preferences === 'object' ? preferences : {}
+  const todoStatus = subscribePreferences.todo && subscribePreferences.todo.status ? subscribePreferences.todo.status : ''
+  const workStatus = subscribePreferences.work && subscribePreferences.work.status ? subscribePreferences.work.status : ''
+  const taskUpdateStatus = subscribePreferences.taskUpdate && subscribePreferences.taskUpdate.status ? subscribePreferences.taskUpdate.status : ''
+  const reviewStatus = subscribePreferences.review && subscribePreferences.review.status ? subscribePreferences.review.status : ''
+  return {
+    visible: false,
+    closing: false,
+    categoryEnabled: Object.assign({}, normalized.categoryEnabled),
+    statuses: {
+      taskDeadlineExact: getSubscribeStatusLabel(normalized.categoryEnabled.taskDeadlineExact, todoStatus),
+      taskDeadlineBefore: getSubscribeStatusLabel(normalized.categoryEnabled.taskDeadlineBefore, todoStatus),
+      taskDeadlineAfter: getSubscribeStatusLabel(normalized.categoryEnabled.taskDeadlineAfter, todoStatus),
+      work: getSubscribeStatusLabel(normalized.categoryEnabled.work, workStatus),
+      taskUpdate: getSubscribeStatusLabel(normalized.categoryEnabled.taskUpdate, taskUpdateStatus),
+      review: getSubscribeStatusLabel(normalized.categoryEnabled.review, reviewStatus),
+      challengeExpired: getSubscribeStatusLabel(normalized.categoryEnabled.challengeExpired, todoStatus),
+    },
+    reminders: reindexSubscribeReminderDrafts(normalized.taskDeadline.map((item) => buildSubscribeReminderDraft(item.direction, item.minutes))),
   }
 }
 
@@ -462,18 +657,19 @@ function getOnboardingMeta(step) {
       }
     case 12:
       return {
-        title: '最后看设置',
-        segments: [
-          { text: '这里可以 ' },
-          { text: '修改昵称', strong: true },
-          { text: '、' },
-          { text: '订阅消息', strong: true },
-          { text: '、' },
-          { text: '重新打开新手引导', strong: true },
-          { text: '。看完就可以完成引导了。' },
-        ],
+        title: strings.onboardingExtra.settingsStepTitle,
+        segments: strings.onboardingExtra.settingsStepSegments,
         hint: '',
-        target: 'profile',
+        target: 'profile-subscribe-entry',
+        panelPosition: 'top',
+        actionDriven: false,
+      }
+    case 13:
+      return {
+        title: strings.onboardingExtra.subscribeStepTitle,
+        segments: strings.onboardingExtra.subscribeStepSegments,
+        hint: '',
+        target: 'subscribe-settings',
         panelPosition: 'top',
         actionDriven: false,
       }
@@ -853,6 +1049,8 @@ Page({
     selectedTaskDraftSubtasks: [],
     selectedTaskHasDraftChanges: false,
     profileEditVisible: false,
+    subscribeOffsetOptions: SUBSCRIBE_OFFSET_OPTIONS.map((item) => item.label),
+    subscribeSettings: buildSubscribeSettingsState(),
     nicknameDraft: '',
     create: buildCreateState(),
     scrollHints: buildScrollHints(),
@@ -894,6 +1092,10 @@ Page({
 
   onProfileScroll(event) {
     this.updateScrollHintByEvent('profile', event)
+  },
+
+  onSubscribeScroll(event) {
+    this.updateScrollHintByEvent('subscribe', event)
   },
 
   updateScrollHintByEvent(type, event) {
@@ -1097,8 +1299,14 @@ Page({
     try {
       const payload = await bootstrap()
       getApp().globalData.profile = payload.profile
+      const subscribeSettings = buildSubscribeSettingsState(
+        payload.profile && payload.profile.subscribeReminderSettings,
+        payload.profile && payload.profile.subscribePreferences
+      )
+      subscribeSettings.visible = Boolean(this.data.subscribeSettings && this.data.subscribeSettings.visible)
       this.setData({
         profile: payload.profile,
+        subscribeSettings,
         onboarding: Object.assign({}, this.data.onboarding, {
           visible: this.data.onboarding.visible || this.shouldAutoOpenOnboarding(payload.profile),
         }),
@@ -1123,6 +1331,7 @@ Page({
         if (this.data.detailMounted) this.measureScrollHint('detail')
         if (this.data.create && this.data.create.visible) this.measureScrollHint('create')
         if (this.data.profileEditVisible) this.measureScrollHint('profile')
+        if (this.data.subscribeSettings && this.data.subscribeSettings.visible) this.measureScrollHint('subscribe')
       })
     }
   },
@@ -1160,7 +1369,7 @@ Page({
   },
 
   applyOnboardingScene(step) {
-    const nextStep = Math.max(0, Math.min(12, Number(step || 0)))
+    const nextStep = Math.max(0, Math.min(13, Number(step || 0)))
     const profile = this.data.profile || {}
     const meta = getOnboardingMeta(nextStep)
     const homeView = buildGuideHomeView(profile)
@@ -1186,6 +1395,19 @@ Page({
       },
     }
     const nextCreate = buildGuideCreateState(nextStep)
+    const nextSubscribeSettings =
+      nextStep === 13
+        ? Object.assign(
+            buildSubscribeSettingsState(
+              profile && profile.subscribeReminderSettings,
+              profile && profile.subscribePreferences
+            ),
+            { visible: true, closing: false }
+          )
+        : buildSubscribeSettingsState(
+            profile && profile.subscribeReminderSettings,
+            profile && profile.subscribePreferences
+          )
     let selectedTask = null
     let selectedTaskDraftSubtasks = []
     let detailMounted = false
@@ -1245,6 +1467,7 @@ Page({
       selectedTaskDraftSubtasks,
       selectedTaskHasDraftChanges: false,
       profileEditVisible: false,
+      subscribeSettings: nextSubscribeSettings,
       nicknameDraft: '',
       tabAnimation: null,
     })
@@ -1252,6 +1475,7 @@ Page({
       this.measureScrollHint('page')
       if (detailMounted) this.measureScrollHint('detail')
       if (nextCreate.visible) this.measureScrollHint('create')
+      if (nextSubscribeSettings.visible) this.measureScrollHint('subscribe')
     })
   },
 
@@ -1307,7 +1531,44 @@ Page({
   },
 
   openOnboarding() {
+    if (this.isOnboardingActive()) return
     this.applyOnboardingScene(0)
+  },
+
+  openSubscribeSettings() {
+    if (this.isOnboardingActive()) return
+    if (this._subscribeCloseTimer) {
+      clearTimeout(this._subscribeCloseTimer)
+      this._subscribeCloseTimer = null
+    }
+    const subscribeSettings = buildSubscribeSettingsState(
+      this.data.profile && this.data.profile.subscribeReminderSettings,
+      this.data.profile && this.data.profile.subscribePreferences
+    )
+    subscribeSettings.visible = true
+    subscribeSettings.closing = false
+    this.setData({ subscribeSettings })
+    wx.nextTick(() => this.measureScrollHint('subscribe'))
+  },
+
+  closeSubscribeSettings() {
+    if (!(this.data.subscribeSettings && this.data.subscribeSettings.visible)) return
+    if (this._subscribeCloseTimer) {
+      clearTimeout(this._subscribeCloseTimer)
+    }
+    this.setData({
+      'subscribeSettings.closing': true,
+      'scrollHints.subscribe': false,
+    })
+    this._subscribeCloseTimer = setTimeout(() => {
+      this.setData({
+        subscribeSettings: buildSubscribeSettingsState(
+          this.data.profile && this.data.profile.subscribeReminderSettings,
+          this.data.profile && this.data.profile.subscribePreferences
+        ),
+      })
+      this._subscribeCloseTimer = null
+    }, 240)
   },
 
   openTermsPage() {
@@ -1319,13 +1580,22 @@ Page({
   },
 
   nextOnboardingStep() {
+    if (!(this.data.onboarding && this.data.onboarding.visible)) return
     const step = Number(this.data.onboarding && this.data.onboarding.step ? this.data.onboarding.step : 0)
     this.applyOnboardingScene(step + 1)
   },
 
   prevOnboardingStep() {
+    if (!(this.data.onboarding && this.data.onboarding.visible)) return
     const step = Number(this.data.onboarding && this.data.onboarding.step ? this.data.onboarding.step : 0)
     this.applyOnboardingScene(step - 1)
+  },
+
+  onGuideBackdropTap() {
+    const onboarding = this.data.onboarding || {}
+    if (!onboarding.visible) return
+    if (Number(onboarding.step || 0) >= 13) return
+    this.nextOnboardingStep()
   },
 
   async finishOnboarding() {
@@ -1360,10 +1630,126 @@ Page({
     return this.finishOnboarding()
   },
 
+  onToggleSubscribeCategory(event) {
+    const category = String(event.currentTarget.dataset.category || '')
+    if (!category) return
+    const currentValue =
+      this.data.subscribeSettings &&
+      this.data.subscribeSettings.categoryEnabled &&
+      this.data.subscribeSettings.categoryEnabled[category] !== false
+    this.setData({
+      [`subscribeSettings.categoryEnabled.${category}`]: !currentValue,
+      [`subscribeSettings.statuses.${category}`]: getSubscribeStatusLabel(
+        !currentValue,
+        getSubscribeSceneStatusForCategory(category, this.data.profile && this.data.profile.subscribePreferences)
+      ),
+    })
+  },
+
+  onSubscribeOffsetChange(event) {
+    const reminderId = String(event.currentTarget.dataset.id || '')
+    const nextValue = Math.max(0, Math.min(SUBSCRIBE_OFFSET_OPTIONS.length - 1, Number(event.detail && event.detail.value)))
+    const nextMinutes = SUBSCRIBE_OFFSET_OPTIONS[nextValue] ? SUBSCRIBE_OFFSET_OPTIONS[nextValue].minutes : SUBSCRIBE_OFFSET_OPTIONS[0].minutes
+    const reminders = safeArray(this.data.subscribeSettings && this.data.subscribeSettings.reminders).map((item) =>
+      item.id === reminderId
+        ? Object.assign({}, item, {
+            minutes: nextMinutes,
+            optionIndex: nextValue,
+            optionLabel: SUBSCRIBE_OFFSET_OPTIONS[nextValue] ? SUBSCRIBE_OFFSET_OPTIONS[nextValue].label : SUBSCRIBE_OFFSET_OPTIONS[0].label,
+          })
+        : item
+    )
+    this.setData({ 'subscribeSettings.reminders': reindexSubscribeReminderDrafts(reminders) })
+  },
+
+  addSubscribeReminder(event) {
+    const direction = String(event && event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.direction || '') === 'after' ? 'after' : 'before'
+    const reminders = safeArray(this.data.subscribeSettings && this.data.subscribeSettings.reminders)
+    if (reminders.length >= 8) return
+    this.setData({
+      'subscribeSettings.reminders': reindexSubscribeReminderDrafts(reminders.concat(buildSubscribeReminderDraft(direction, 30))),
+    })
+    wx.nextTick(() => this.measureScrollHint('subscribe'))
+  },
+
+  removeSubscribeReminder(event) {
+    const reminderId = String(event.currentTarget.dataset.id || '')
+    const currentReminders = safeArray(this.data.subscribeSettings && this.data.subscribeSettings.reminders)
+    const target = currentReminders.find((item) => item.id === reminderId)
+    const reminders = currentReminders.filter((item) => item.id !== reminderId)
+    const sameDirectionCount = reminders.filter((item) => item.direction === (target && target.direction)).length
+    if (target && sameDirectionCount === 0) {
+      reminders.push(buildSubscribeReminderDraft(target.direction, target.direction === 'after' ? 60 : 30))
+    }
+    this.setData({
+      'subscribeSettings.reminders': reindexSubscribeReminderDrafts(reminders),
+    })
+  },
+
+  async saveSubscribeReminderSettings() {
+    if (this.data.loading) return
+    const reminders = dedupeSubscribeReminders(safeArray(this.data.subscribeSettings && this.data.subscribeSettings.reminders))
+      .map((item) => ({
+        direction: item.direction === 'after' ? 'after' : item.direction === 'exact' ? 'exact' : 'before',
+        minutes: item.direction === 'exact' ? 0 : normalizeSubscribeMinutes(item.minutes),
+      }))
+      .filter((item) => item.direction === 'exact' || item.minutes > 0)
+    const categoryEnabled =
+      this.data.subscribeSettings && this.data.subscribeSettings.categoryEnabled
+        ? Object.assign({}, this.data.subscribeSettings.categoryEnabled)
+        : {}
+
+    if (!reminders.length) {
+      this.setError(strings.subscribeSettings.errors.emptyReminder)
+      return
+    }
+
+    this.setData({ loading: true, actionLoading: 'saveSubscribeSettings' })
+    this.clearError()
+    try {
+      const result = await saveSubscribeSettings({
+        reminderSettings: {
+          categoryEnabled,
+          taskDeadline: reminders,
+        },
+      })
+      const nextProfile = Object.assign({}, this.data.profile || {}, {
+        subscribePreferences: result && result.preferences ? result.preferences : (this.data.profile && this.data.profile.subscribePreferences) || {},
+        subscribeReminderSettings: result && result.reminderSettings ? result.reminderSettings : { categoryEnabled, taskDeadline: reminders },
+      })
+      getApp().globalData.profile = nextProfile
+      const nextSubscribeSettings = buildSubscribeSettingsState(
+        nextProfile.subscribeReminderSettings,
+        nextProfile.subscribePreferences
+      )
+      nextSubscribeSettings.visible = true
+      nextSubscribeSettings.closing = false
+      this.setData({
+        profile: nextProfile,
+        subscribeSettings: nextSubscribeSettings,
+      })
+      wx.showToast({ title: strings.subscribeSettings.saveSuccess, icon: 'none' })
+    } catch (error) {
+      this.setError((error && error.message) || strings.subscribeSettings.errors.saveFailed)
+    } finally {
+      this.setData({ loading: false, actionLoading: '' })
+    }
+  },
+
   async onRequestSubscribe() {
     if (this.data.loading) return
     await requestTaskSubscribeAuth({ force: true })
     await this.refresh()
+    if (this.data.subscribeSettings && this.data.subscribeSettings.visible) {
+      const subscribeSettings = buildSubscribeSettingsState(
+        this.data.profile && this.data.profile.subscribeReminderSettings,
+        this.data.profile && this.data.profile.subscribePreferences
+      )
+      subscribeSettings.visible = true
+      subscribeSettings.closing = false
+      this.setData({ subscribeSettings })
+      wx.nextTick(() => this.measureScrollHint('subscribe'))
+    }
   },
 
   closeProfileEdit() {
@@ -1579,7 +1965,14 @@ Page({
     this.setData({ loading: true, actionLoading: 'generateCreateDraft' })
     this.clearError()
     try {
-      const suggestion = await generateTaskByAI(prompt)
+      const suggestion = await generateTaskByAI(
+        Object.assign(
+          {
+            prompt,
+          },
+          getClientTimeContext()
+        )
+      )
       const extractedOfflineRewardPromise = extractOfflineRewardPromiseFromPrompt(prompt)
       this.setData({
         'create.title': suggestion.title || '',
@@ -1660,14 +2053,7 @@ Page({
               Object.assign({}, requestPayload, {
                 taskId: payload.reworkTaskId,
                 clientUpdatedAt: this.data.selectedTask && this.data.selectedTask.updatedAt ? this.data.selectedTask.updatedAt : '',
-                confirmDeletePrevious:
-                  payload.confirmDeletePrevious ||
-                  Boolean(
-                    this.data.selectedTask &&
-                    this.data.selectedTask.creatorId &&
-                    this.data.selectedTask.assigneeId &&
-                    this.data.selectedTask.creatorId === this.data.selectedTask.assigneeId
-                  ),
+                confirmDeletePrevious: payload.confirmDeletePrevious,
               })
             )
           : await createTask(requestPayload)
@@ -1708,6 +2094,7 @@ Page({
         })
         if (result.confirm) {
           this.setData({ 'create.confirmDeletePrevious': true })
+          this.setData({ loading: false, actionLoading: '' })
           await this.submitCreateTask()
           return
         }
@@ -1762,6 +2149,7 @@ Page({
     const dashboard = this.data.dashboard || {}
     const view = buildDashboardView(dashboard, this.data.profile)
     const candidates = []
+      .concat(safeArray(view.historyTasks))
       .concat(safeArray(view.reviewPendingTasks))
       .concat(safeArray(view.pendingConfirmationTasks))
       .concat(safeArray(view.waitingAcceptTasks))
@@ -1770,6 +2158,7 @@ Page({
       .concat(safeArray(view.collabTasks))
       .concat(safeArray(view.challengeTasks))
       .concat(safeArray(view.todayTasks))
+      .concat(safeArray(view.archiveTasks))
     const currentTask = candidates.find((item) => String(item.previousTaskId || '') === String(selectedTask._id))
     if (!currentTask) {
       this.setError('未找到当前任务')

@@ -28,6 +28,10 @@
 - `docs/`：项目文档
 - `scripts/`：当前仍有价值的本地辅助脚本
 
+其中数据库扫描、回填、修复类后台脚本统一放在：
+
+- `cloudfunctions/adminMaintenance/`
+
 ## 私有运行配置恢复
 
 公开仓库不会直接包含真实私有运行配置。
@@ -56,6 +60,7 @@
 3. `docs/overview/tech-stack_cn.md`
 4. `docs/overview/technical-challenges_cn.md`
 5. `docs/maintenance/maintainer-guide_cn.md`
+6. `docs/maintenance/backend-maintenance_cn.md`
 
 ## 说明
 

@@ -30,6 +30,7 @@ const STATUS = {
 const REWARD_TYPES = ['wisdom', 'strength', 'agility']
 const ACTIVE_ASSIGNEE_STATUS = [STATUS.IN_PROGRESS, STATUS.PENDING_CONFIRMATION]
 const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000
+const MAX_REMINDER_MINUTES = 365 * 24 * 60
 const SENSITIVE_HINT = '内容包含敏感词，请调整后再试'
 const SENSITIVE_WORDS = [
   '赌博',
@@ -383,15 +384,110 @@ function formatDateTime(value) {
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-async function saveUserSubscribePreferences(user, preferences) {
+function defaultReminderSettings() {
+  return {
+    categoryEnabled: {
+      taskDeadlineExact: true,
+      taskDeadlineBefore: true,
+      taskDeadlineAfter: true,
+      work: true,
+      taskUpdate: true,
+      review: true,
+      challengeExpired: true,
+    },
+    taskDeadline: [
+      { direction: 'exact', minutes: 0 },
+      { direction: 'before', minutes: 30 },
+      { direction: 'after', minutes: 60 },
+    ],
+  }
+}
+
+function dedupeReminderItems(items) {
+  const source = Array.isArray(items) ? items : []
+  const seen = new Set()
+  const unique = []
+  for (let index = 0; index < source.length; index += 1) {
+    const item = source[index]
+    const direction = item && item.direction === 'after' ? 'after' : item && item.direction === 'exact' ? 'exact' : 'before'
+    const minutes = direction === 'exact' ? 0 : Math.max(1, Math.min(MAX_REMINDER_MINUTES, Math.floor(Number(item && item.minutes ? item.minutes : 0))))
+    const key = `${direction}:${minutes}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push({ direction, minutes })
+  }
+  return unique
+}
+
+function normalizeReminderSettings(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {}
+  const defaults = defaultReminderSettings()
+  const categoryEnabledSource = source.categoryEnabled && typeof source.categoryEnabled === 'object' ? source.categoryEnabled : {}
+  const categoryEnabled = {
+    taskDeadlineExact: categoryEnabledSource.taskDeadlineExact !== false,
+    taskDeadlineBefore: categoryEnabledSource.taskDeadlineBefore !== false,
+    taskDeadlineAfter: categoryEnabledSource.taskDeadlineAfter !== false,
+    work: categoryEnabledSource.work !== false,
+    taskUpdate: categoryEnabledSource.taskUpdate !== false,
+    review: categoryEnabledSource.review !== false,
+    challengeExpired: categoryEnabledSource.challengeExpired !== false,
+  }
+
+  const rawTaskDeadline = Array.isArray(source.taskDeadline)
+    ? source.taskDeadline
+        .map((item) => {
+          const rawDirection = String(item && item.direction ? item.direction : '').trim()
+          const direction = rawDirection === 'after' ? 'after' : rawDirection === 'exact' ? 'exact' : 'before'
+          const rawMinutes = Math.floor(Number(item && Object.prototype.hasOwnProperty.call(item, 'minutes') ? item.minutes : 0))
+          const minutes = direction === 'exact' ? 0 : Math.max(1, Math.min(MAX_REMINDER_MINUTES, rawMinutes))
+          if (direction !== 'exact' && !minutes) return null
+          return { direction, minutes }
+        })
+        .filter(Boolean)
+    : []
+  const dedupedTaskDeadline = dedupeReminderItems(rawTaskDeadline)
+
+  const exactList = dedupedTaskDeadline.filter((item) => item.direction === 'exact')
+  const beforeList = dedupedTaskDeadline.filter((item) => item.direction === 'before')
+  const afterList = dedupedTaskDeadline.filter((item) => item.direction === 'after')
+
+  return {
+    categoryEnabled,
+    taskDeadline: []
+      .concat(exactList.length ? exactList : defaults.taskDeadline.filter((item) => item.direction === 'exact'))
+      .concat(beforeList.length ? beforeList : defaults.taskDeadline.filter((item) => item.direction === 'before'))
+      .concat(afterList.length ? afterList : defaults.taskDeadline.filter((item) => item.direction === 'after'))
+      .slice(0, 8),
+  }
+}
+
+function getReminderCategoryKey(sceneKey, context) {
+  if (sceneKey === SCENES.work) return 'work'
+  if (sceneKey === SCENES.taskUpdate) return 'taskUpdate'
+  if (sceneKey === SCENES.review) return 'review'
+  if (sceneKey === SCENES.todo) {
+    const event = String(context && context.event ? context.event : '')
+    if (event === 'challenge_expired') return 'challengeExpired'
+    if (event === 'task_due_exact') return 'taskDeadlineExact'
+    if (event === 'task_overdue_custom') return 'taskDeadlineAfter'
+    return 'taskDeadlineBefore'
+  }
+  return ''
+}
+
+async function saveUserSubscribeConfig(user, preferences, reminderSettings) {
   if (!user || !user._id) return null
   await db.collection(USERS).doc(user._id).update({
     data: {
       subscribePreferences: preferences,
+      subscribeReminderSettings: normalizeReminderSettings(reminderSettings),
       updatedAt: now(),
     },
   })
-  return preferences
+  return {
+    preferences,
+    reminderSettings: normalizeReminderSettings(reminderSettings),
+  }
 }
 
 async function sendSceneNotification(toUserId, sceneKey, dataByLabel, context) {
@@ -402,6 +498,11 @@ async function sendSceneNotification(toUserId, sceneKey, dataByLabel, context) {
   if (!templateId) return { ok: false, reason: 'missing template' }
   const user = await ensureUser(userId)
   const preferences = normalizePreferences(user.subscribePreferences, templates)
+  const reminderSettings = normalizeReminderSettings(user.subscribeReminderSettings)
+  const categoryKey = getReminderCategoryKey(sceneKey, context)
+  if (categoryKey && reminderSettings.categoryEnabled[categoryKey] === false) {
+    return { ok: false, reason: 'category disabled' }
+  }
   const scene = preferences[sceneKey]
   if (!scene || scene.templateId !== templateId || scene.status !== 'accepted') {
     return { ok: false, reason: 'not accepted' }
@@ -415,7 +516,7 @@ async function sendSceneNotification(toUserId, sceneKey, dataByLabel, context) {
   })
   if (!result.ok) return result
   const nextPreferences = markSceneConsumed(preferences, sceneKey, now())
-  await saveUserSubscribePreferences(user, nextPreferences)
+  await saveUserSubscribeConfig(user, nextPreferences, user.subscribeReminderSettings)
   return result
 }
 
@@ -445,6 +546,7 @@ async function ensureUser(userId) {
         seenAt: null,
       },
       subscribePreferences: {},
+      subscribeReminderSettings: defaultReminderSettings(),
       stars: 0,
       wisdom: 0,
       strength: 0,
@@ -469,8 +571,14 @@ async function getUserNameMap(userIds) {
 }
 
 async function getTaskById(taskId) {
-  const result = await db.collection(TASKS).doc(taskId).get()
-  return result.data || null
+  try {
+    const result = await db.collection(TASKS).doc(taskId).get()
+    return result.data || null
+  } catch (error) {
+    const message = String(error && error.message ? error.message : '')
+    if (message.includes('does not exist')) return null
+    throw error
+  }
 }
 
 async function deletePreviousTask(taskDoc) {
@@ -724,6 +832,7 @@ async function bootstrap() {
         seenAt: toIso(user.onboarding && user.onboarding.seenAt),
       },
       subscribePreferences: normalizePreferences(user.subscribePreferences, templates),
+      subscribeReminderSettings: normalizeReminderSettings(user.subscribeReminderSettings),
       subscribeTemplates: templates,
       createdAt: toIso(user.createdAt),
       updatedAt: toIso(user.updatedAt),
@@ -755,10 +864,14 @@ async function saveSubscribeSettings(payload) {
   const user = await ensureUser(userId)
   const templates = getTemplateConfig()
   const resultMap = payload && payload.result && typeof payload.result === 'object' ? payload.result : {}
+  const reminderSettings = normalizeReminderSettings(
+    payload && payload.reminderSettings ? payload.reminderSettings : user.subscribeReminderSettings
+  )
   const nextPreferences = applySubscribeResult(user.subscribePreferences, resultMap, templates, now())
-  await saveUserSubscribePreferences(user, nextPreferences)
+  await saveUserSubscribeConfig(user, nextPreferences, reminderSettings)
   return success({
     preferences: nextPreferences,
+    reminderSettings,
     templates,
   })
 }
@@ -820,6 +933,8 @@ async function createTask(payload) {
     dueSoonNotifiedAt: null,
     overdueNotifiedAt: null,
     challengeExpiredNotifiedAt: null,
+    todoReminderSentKeys: [],
+    challengeReminderSentKeys: [],
     seedKey: '',
     subtasks,
     attributeReward,
@@ -955,6 +1070,8 @@ async function acceptChallengeTask(payload) {
       dueSoonNotifiedAt: null,
       overdueNotifiedAt: null,
       challengeExpiredNotifiedAt: null,
+      todoReminderSentKeys: [],
+      challengeReminderSentKeys: [],
       seedKey,
       subtasks: hit.template.subtasks.map((item) => ({
         title: item.title,
@@ -986,6 +1103,7 @@ async function acceptTask(payload) {
       status: STATUS.IN_PROGRESS,
       dueSoonNotifiedAt: null,
       overdueNotifiedAt: null,
+      todoReminderSentKeys: [],
       updatedAt: now(),
     },
   })
@@ -996,7 +1114,7 @@ async function acceptTask(payload) {
     buildSubscribeData({
       taskName: updated.title || '任务提醒',
       assignee: updated.assigneeName || '',
-      startTime: formatDateTime(updated.createdAt || updated.startAt || now()),
+      startTime: formatDateTime(updated.startAt || updated.createdAt || now()),
       dueTime: formatDateTime(updated.dueAt || updated.createdAt || now()),
       status: '已接取',
       tip: updated.assigneeName ? `${updated.assigneeName}接取了任务` : '已接取',
@@ -1079,11 +1197,12 @@ async function continueReview(payload) {
   if (stale) return stale
   assert(task.creatorId === userId, 'Forbidden', 'FORBIDDEN')
   assert(task.status === STATUS.REVIEW_PENDING, 'Task state changed', 'STATE_CHANGED')
+  const current = now()
   await db.collection(TASKS).doc(task._id).update({
     data: {
       status: STATUS.IN_PROGRESS,
       submittedAt: null,
-      updatedAt: now(),
+      updatedAt: current,
     },
   })
   if (task.assigneeId) {
@@ -1095,14 +1214,14 @@ async function continueReview(payload) {
       task.assigneeId,
       SCENES.work,
       buildSubscribeData({
-        taskName: updated.title || '任务提醒',
+        taskName: updated.title || 'Task Reminder',
         assignee: task.assigneeName || '',
-        startTime: formatDateTime(task.originalStartAt || updated.createdAt || closedAt),
-        dueTime: formatDateTime(task.originalDueAt || updated.dueAt || closedAt),
-        status: '已关闭',
-        tip: '任务已被发布者关闭',
+        startTime: formatDateTime(updated.startAt || task.startAt || updated.createdAt || current),
+        dueTime: formatDateTime(updated.dueAt || task.dueAt || current),
+        status: 'Back To Work',
+        tip: 'Review asked for more work, please continue.',
       }),
-      { event: 'task_closed', actorId: userId, taskId: updated._id }
+      { event: 'task_continue_review', actorId: userId, taskId: updated._id }
     ).catch(() => null)
   }
   return success(normalizeTask(updated, await getUserNameMap([updated.creatorId, updated.assigneeId])))
@@ -1131,6 +1250,7 @@ async function completeTask(payload) {
       status: STATUS.COMPLETED,
       completedAt,
       deleteAt,
+      previousTaskId: '',
       updatedAt: completedAt,
     },
   })
@@ -1138,6 +1258,9 @@ async function completeTask(payload) {
   if (updated.assigneeId) {
     await upsertArchive(updated.assigneeId, updated, STATUS.COMPLETED)
     await awardUser(updated.assigneeId, updated.attributeReward)
+  }
+  if (task.previousTaskId) {
+    await deleteRefactoredChain(task.previousTaskId, task.creatorId).catch(() => null)
   }
   return success(normalizeTask(updated, await getUserNameMap([updated.creatorId, updated.assigneeId])))
 }
@@ -1158,6 +1281,7 @@ async function abandonTask(payload) {
       submittedAt: null,
       dueSoonNotifiedAt: null,
       overdueNotifiedAt: null,
+      todoReminderSentKeys: [],
       updatedAt: now(),
     },
   })
@@ -1241,6 +1365,7 @@ async function restartTask(payload) {
       deleteAt: null,
       dueSoonNotifiedAt: null,
       overdueNotifiedAt: null,
+      todoReminderSentKeys: [],
       originalStatus: null,
       originalStartAt: null,
       originalDueAt: null,
@@ -1384,6 +1509,7 @@ async function refreshTaskSchedule(payload) {
       dueAt: nextDueAt,
       dueSoonNotifiedAt: null,
       overdueNotifiedAt: null,
+      todoReminderSentKeys: [],
       updatedAt: current,
     },
   })
@@ -1456,8 +1582,7 @@ async function reworkTask(payload) {
     })
   }
 
-  const isSelfAssigned = Boolean(task.creatorId && task.assigneeId && task.creatorId === task.assigneeId)
-  if (task.previousTaskId && !payload.confirmDeletePrevious && !isSelfAssigned) {
+  if (task.previousTaskId && !payload.confirmDeletePrevious) {
     return fail('confirm required', 'REWORK_CONFIRM_REQUIRED', {
       previousTaskId: task.previousTaskId,
     })
@@ -1502,13 +1627,15 @@ async function reworkTask(payload) {
       dueSoonNotifiedAt: null,
       overdueNotifiedAt: null,
       challengeExpiredNotifiedAt: null,
+      todoReminderSentKeys: [],
+      challengeReminderSentKeys: [],
       category: task.category || 'normal',
       createdAt: current,
       updatedAt: current,
     },
   })
 
-  if (task.previousTaskId && (payload.confirmDeletePrevious || isSelfAssigned) && !task.assigneeId) {
+  if (task.previousTaskId && payload.confirmDeletePrevious && !task.assigneeId) {
     await deletePreviousTask(task)
   }
 
@@ -1555,18 +1682,39 @@ async function acceptReworkTask(payload) {
           originalStatus: previous.originalStatus || previous.status,
           originalStartAt: previous.originalStartAt || previous.startAt || previous.createdAt,
           originalDueAt: previous.originalDueAt || previous.dueAt,
+          previousTaskId: previous.previousTaskId || '',
           assigneeId: '',
           assigneeName: '',
           updatedAt: current,
         },
         })
-        await deletePreviousTask(previous)
+        if (previous.previousTaskId) {
+          await deletePreviousTask(previous)
+          await db.collection(TASKS).doc(task.previousTaskId).update({
+            data: {
+              previousTaskId: '',
+              updatedAt: current,
+            },
+          })
+        }
       }
     } catch (error) {
       void error
     }
   }
   const updated = await refreshTask(task._id)
+  await sendSceneNotification(
+    updated.creatorId,
+    SCENES.taskUpdate,
+    buildSubscribeData({
+      taskName: updated.title || 'Task Reminder',
+      changeDetail: 'Rework Accepted',
+      changeTime: formatDateTime(current),
+      status: 'Rework Accepted',
+      tip: updated.assigneeName ? `${updated.assigneeName} accepted the rework and resumed execution.` : 'The assignee accepted the rework and resumed execution.',
+    }),
+    { event: 'task_rework_accepted', actorId: userId, taskId: updated._id }
+  ).catch(() => null)
   return success(normalizeTask(updated, await getUserNameMap([updated.creatorId, updated.assigneeId])))
 }
 
@@ -1589,12 +1737,21 @@ async function rejectReworkTask(payload) {
             originalStatus: previous.originalStatus || previous.status,
             originalStartAt: previous.originalStartAt || previous.startAt || previous.createdAt,
             originalDueAt: previous.originalDueAt || previous.dueAt,
+            previousTaskId: previous.previousTaskId || '',
             assigneeId: '',
             assigneeName: '',
             updatedAt: current,
           },
         })
-        await deletePreviousTask(previous)
+        if (previous.previousTaskId) {
+          await deletePreviousTask(previous)
+          await db.collection(TASKS).doc(task.previousTaskId).update({
+            data: {
+              previousTaskId: '',
+              updatedAt: current,
+            },
+          })
+        }
       }
     } catch (error) {
       void error
@@ -1602,16 +1759,14 @@ async function rejectReworkTask(payload) {
   }
   await db.collection(TASKS).doc(task._id).update({
     data: {
-      originalStatus: STATUS.PENDING,
-      originalStartAt: task.originalStartAt || task.startAt || task.createdAt,
-      originalDueAt: task.originalDueAt || task.dueAt,
-      status: STATUS.CLOSED,
+      status: STATUS.PENDING,
       assigneeId: '',
       assigneeName: '',
-      closedAt: current,
-      startAt: current,
-      dueAt: new Date(current.getTime() + 7 * 24 * 60 * 60 * 1000),
-      deleteAt: new Date(current.getTime() + 7 * 24 * 60 * 60 * 1000),
+      closedAt: null,
+      deleteAt: null,
+      originalStatus: null,
+      originalStartAt: null,
+      originalDueAt: null,
       updatedAt: current,
     },
   })
@@ -1652,9 +1807,12 @@ async function cancelReworkTask(payload) {
             startAt: previous.originalStartAt || previous.startAt || previous.createdAt,
             dueAt: previous.originalDueAt || previous.dueAt,
             closedAt: null,
+            deleteAt: null,
             originalStatus: null,
             originalStartAt: null,
             originalDueAt: null,
+            assigneeId: task.assigneeId || '',
+            assigneeName: task.assigneeName || '',
             updatedAt: now(),
           },
         })

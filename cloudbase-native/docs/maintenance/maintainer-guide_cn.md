@@ -24,6 +24,7 @@
 - `cloudfunctions/generateTaskByAI/index.js`
 - `cloudfunctions/moderateContent/index.js`
 - `cloudfunctions/subscribeScheduler/index.js`
+- `cloudfunctions/adminMaintenance/index.js`
 
 ## 相关文档
 
@@ -31,6 +32,7 @@
 - `../product/glossary-and-rules_cn.md`
 - `change-playbook_cn.md`
 - `development-workflows_cn.md`
+- `backend-maintenance_cn.md`
 
 ## 安全变更清单
 
