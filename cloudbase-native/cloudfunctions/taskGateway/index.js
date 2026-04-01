@@ -144,13 +144,23 @@ function normalizeDailyTaskPreset(raw, fallbackId) {
   const title = String(source.title || defaultPreset.title).trim() || defaultPreset.title
   const detail = String(source.detail || defaultPreset.detail).trim()
   const dueTimeText = String(source.dueTime || defaultPreset.dueTime).trim()
+  const defaultDueTimeMatch = String(defaultPreset.dueTime || '23:59').match(/^(\d{1,2}):(\d{2})$/)
   const dueTimeMatch = dueTimeText.match(/^(\d{1,2}):(\d{2})$/)
-  const dueHour = dueTimeMatch ? clamp(Number(dueTimeMatch[1]), 0, 23) : 21
-  const dueMinute = dueTimeMatch ? clamp(Number(dueTimeMatch[2]), 0, 59) : 0
+  const dueHour = dueTimeMatch
+    ? clamp(Number(dueTimeMatch[1]), 0, 23)
+    : clamp(Number(defaultDueTimeMatch && defaultDueTimeMatch[1] ? defaultDueTimeMatch[1] : 23), 0, 23)
+  const dueMinute = dueTimeMatch
+    ? clamp(Number(dueTimeMatch[2]), 0, 59)
+    : clamp(Number(defaultDueTimeMatch && defaultDueTimeMatch[2] ? defaultDueTimeMatch[2] : 59), 0, 59)
   const autoAcceptTimeText = String(source.autoAcceptTime || defaultPreset.autoAcceptTime || '06:00').trim()
+  const defaultAutoAcceptTimeMatch = String(defaultPreset.autoAcceptTime || '06:00').match(/^(\d{1,2}):(\d{2})$/)
   const autoAcceptTimeMatch = autoAcceptTimeText.match(/^(\d{1,2}):(\d{2})$/)
-  const autoAcceptHour = autoAcceptTimeMatch ? clamp(Number(autoAcceptTimeMatch[1]), 0, 23) : 6
-  const autoAcceptMinute = autoAcceptTimeMatch ? clamp(Number(autoAcceptTimeMatch[2]), 0, 59) : 0
+  const autoAcceptHour = autoAcceptTimeMatch
+    ? clamp(Number(autoAcceptTimeMatch[1]), 0, 23)
+    : clamp(Number(defaultAutoAcceptTimeMatch && defaultAutoAcceptTimeMatch[1] ? defaultAutoAcceptTimeMatch[1] : 6), 0, 23)
+  const autoAcceptMinute = autoAcceptTimeMatch
+    ? clamp(Number(autoAcceptTimeMatch[2]), 0, 59)
+    : clamp(Number(defaultAutoAcceptTimeMatch && defaultAutoAcceptTimeMatch[2] ? defaultAutoAcceptTimeMatch[2] : 0), 0, 59)
   const subtasks = normalizeSubtasks(source.subtasks && Array.isArray(source.subtasks) ? source.subtasks : defaultPreset.subtasks)
   return {
     id: String(source.id || fallbackId || '').trim() || buildDailyTaskPresetId(0),
@@ -191,6 +201,26 @@ function normalizeDailyTaskPresets(rawPresets, legacySettings) {
   return DEFAULT_DAILY_TASK_PRESETS.map((item, index) => normalizeDailyTaskPreset(item, buildDailyTaskPresetId(index)))
 }
 
+function normalizeStoredDailyTaskPresets(rawPresets, legacySettings) {
+  if (Array.isArray(rawPresets)) return normalizeDailyTaskPresets(rawPresets)
+  if (legacySettings) return normalizeDailyTaskPresets(null, legacySettings)
+  return []
+}
+
+function buildDefaultDailyTaskPresets(userId, date) {
+  const pool = DEFAULT_DAILY_TASK_PRESETS.map((item, index) => normalizeDailyTaskPreset(item, item && item.id ? item.id : buildDailyTaskPresetId(index)))
+  if (pool.length <= 3) return pool
+  const seed = hashSeed(`${String(userId || '')}_${formatUtc8Ymd(date || now())}`)
+  const nextRandom = xorshift32(seed)
+  const candidates = pool.slice()
+  const picked = []
+  while (candidates.length && picked.length < 3) {
+    const index = nextRandom() % candidates.length
+    picked.push(candidates.splice(index, 1)[0])
+  }
+  return picked
+}
+
 function buildDailyTaskDueAt(date, preset) {
   const reference = date instanceof Date ? date : new Date(date)
   const normalized = normalizeDailyTaskPreset(preset)
@@ -210,7 +240,7 @@ function buildDailyTaskAutoAcceptAt(date, preset) {
 function buildChallengeSeeds(userId, date, dailyTaskPresets, legacyDailyTaskSettings) {
   const reference = date || now()
   const normalizedPresets = normalizeDailyTaskPresets(dailyTaskPresets, legacyDailyTaskSettings)
-  const effectivePresets = normalizedPresets.length ? normalizedPresets : DEFAULT_DAILY_TASK_PRESETS
+  const effectivePresets = normalizedPresets.length ? normalizedPresets : buildDefaultDailyTaskPresets(userId, reference)
   const dayKey = formatUtc8Ymd(reference)
   const start = startOfUtc8Day(reference)
   const end = endOfUtc8Day(reference)
@@ -314,6 +344,24 @@ async function cleanupExpiredChallengeTasks(userId, referenceNow) {
   if (!expired.length) return []
   await Promise.all(expired.map((task) => db.collection(TASKS).doc(task._id).remove().catch(() => null)))
   return expired
+}
+
+async function cleanupStalePendingChallengeTasks(userId, dailyTaskPresets, legacyDailyTaskSettings, referenceNow) {
+  const current = referenceNow || now()
+  const currentDayKey = formatUtc8Ymd(current)
+  const { creatorId, seeds } = buildChallengeSeeds(userId, current, dailyTaskPresets, legacyDailyTaskSettings)
+  const activeSeedKeys = new Set(seeds.map((item) => String(item.seedKey)))
+  const result = await db.collection(TASKS).where({ creatorId, category: 'challenge' }).get()
+  const stalePendingTasks = (result.data || []).filter((task) => {
+    if (task.assigneeId || task.status !== STATUS.PENDING) return false
+    const seedKey = String(task && task.seedKey ? task.seedKey : '')
+    const matched = seedKey.match(/^challenge_(\d{8})_/)
+    if (!matched || matched[1] !== currentDayKey) return false
+    return !activeSeedKeys.has(seedKey)
+  })
+  if (!stalePendingTasks.length) return []
+  await Promise.all(stalePendingTasks.map((task) => db.collection(TASKS).doc(task._id).remove().catch(() => null)))
+  return stalePendingTasks
 }
 
 function normalizeSubtasks(subtasks) {
@@ -530,8 +578,8 @@ function normalizeReminderSettings(raw) {
     categoryEnabled,
     taskDeadline: []
       .concat(exactList.length ? exactList : defaults.taskDeadline.filter((item) => item.direction === 'exact'))
-      .concat(beforeList.length ? beforeList : defaults.taskDeadline.filter((item) => item.direction === 'before'))
-      .concat(afterList.length ? afterList : defaults.taskDeadline.filter((item) => item.direction === 'after'))
+      .concat(beforeList)
+      .concat(afterList)
       .slice(0, 8),
   }
 }
@@ -666,7 +714,7 @@ async function ensureUser(userId) {
       },
       subscribePreferences: {},
       subscribeReminderSettings: defaultReminderSettings(),
-      dailyTaskPresets: normalizeDailyTaskPresets(DEFAULT_DAILY_TASK_PRESETS),
+      dailyTaskPresets: [],
       stars: 0,
       wisdom: 0,
       strength: 0,
@@ -916,9 +964,16 @@ async function buildDashboard(userId) {
   const assigneeTasks = assigneeRes.data
   const archives = archiveRes.data
   const challengeExisting = challengeRes.data
-
-  const challengeMap = challengeExisting.reduce((map, item) => {
-    map[item.seedKey] = item
+  const challengeGroups = challengeExisting.reduce((map, item) => {
+    const seedKey = String(item && item.seedKey ? item.seedKey : '')
+    if (!seedKey) return map
+    if (!map[seedKey]) map[seedKey] = []
+    map[seedKey].push(item)
+    return map
+  }, {})
+  const challengeMap = Object.keys(challengeGroups).reduce((map, seedKey) => {
+    const survivor = pickChallengeTaskSurvivor(challengeGroups[seedKey] || [])
+    if (survivor) map[seedKey] = survivor
     return map
   }, {})
 
@@ -1013,7 +1068,7 @@ async function bootstrap() {
       },
       subscribePreferences: normalizePreferences(user.subscribePreferences, templates),
       subscribeReminderSettings: normalizeReminderSettings(user.subscribeReminderSettings),
-      dailyTaskPresets: normalizeDailyTaskPresets(user.dailyTaskPresets, user.dailyTaskSettings),
+      dailyTaskPresets: normalizeStoredDailyTaskPresets(user.dailyTaskPresets, user.dailyTaskSettings),
       subscribeTemplates: templates,
       createdAt: toIso(user.createdAt),
       updatedAt: toIso(user.updatedAt),
@@ -1054,6 +1109,9 @@ async function updateProfile(payload) {
   await db.collection(USERS).doc(user._id).update({
     data: nextData,
   })
+  if (Object.prototype.hasOwnProperty.call(nextData, 'dailyTaskPresets')) {
+    await cleanupStalePendingChallengeTasks(userId, nextData.dailyTaskPresets, user.dailyTaskSettings, now())
+  }
   return bootstrap()
 }
 
@@ -1430,6 +1488,9 @@ async function completeTask(payload) {
   if (updated.assigneeId) {
     await upsertArchive(updated.assigneeId, updated, STATUS.COMPLETED)
     await awardUser(updated.assigneeId, updated.attributeReward)
+  }
+  if (updated.creatorId && updated.creatorId !== updated.assigneeId) {
+    await upsertArchive(updated.creatorId, updated, STATUS.COMPLETED)
   }
   if (task.previousTaskId) {
     await deleteRefactoredChain(task.previousTaskId, task.creatorId).catch(() => null)

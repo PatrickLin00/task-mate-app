@@ -1153,6 +1153,11 @@
   border: 0;
 }
 
+.button-loading {
+  opacity: 0.82;
+  transition: opacity 0.18s ease;
+}
+
 .reward-types {
   display: flex;
   gap: 12rpx;

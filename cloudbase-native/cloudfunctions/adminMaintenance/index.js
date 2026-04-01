@@ -94,6 +94,17 @@ function buildArchiveMap(archives) {
   }, new Map())
 }
 
+function buildArchiveOwnerMap(archives) {
+  return (archives || []).reduce((map, archive) => {
+    const sourceTaskId = String(archive && archive.sourceTaskId ? archive.sourceTaskId : '').trim()
+    const ownerId = String(archive && archive.ownerId ? archive.ownerId : '').trim()
+    if (!sourceTaskId || !ownerId) return map
+    if (!map.has(sourceTaskId)) map.set(sourceTaskId, new Set())
+    map.get(sourceTaskId).add(ownerId)
+    return map
+  }, new Map())
+}
+
 function collectRefactoredChain(taskMap, startId, creatorId) {
   const chain = []
   const visited = new Set()
@@ -113,10 +124,12 @@ function scanIntegrity(tasks, archives) {
   const taskMap = buildTaskMap(tasks)
   const inboundPrevious = buildInboundPreviousMap(tasks)
   const archiveMap = buildArchiveMap(archives)
+  const archiveOwnerMap = buildArchiveOwnerMap(archives)
   const completedWithHistory = []
   const danglingPreviousReferences = []
   const orphanRefactoredRoots = []
   const archiveStatusMismatches = []
+  const missingCompletedArchives = []
 
   ;(tasks || []).forEach((task) => {
     const taskId = String(task._id)
@@ -157,6 +170,24 @@ function scanIntegrity(tasks, archives) {
         })
       })
     }
+    if (task.status === STATUS.COMPLETED) {
+      const existingOwners = archiveOwnerMap.get(taskId) || new Set()
+      const expectedOwners = []
+      const creatorId = String(task.creatorId || '').trim()
+      const assigneeId = String(task.assigneeId || '').trim()
+      if (creatorId) expectedOwners.push(creatorId)
+      if (assigneeId && assigneeId !== creatorId) expectedOwners.push(assigneeId)
+      expectedOwners.forEach((ownerId) => {
+        if (existingOwners.has(ownerId)) return
+        missingCompletedArchives.push({
+          taskId,
+          ownerId,
+          creatorId,
+          assigneeId,
+          title: String(task.title || ''),
+        })
+      })
+    }
   })
 
   return {
@@ -166,6 +197,7 @@ function scanIntegrity(tasks, archives) {
     danglingPreviousReferences,
     orphanRefactoredRoots,
     archiveStatusMismatches,
+    missingCompletedArchives,
   }
 }
 
@@ -177,10 +209,12 @@ function summarizeScan(scan) {
     danglingPreviousReferenceCount: scan.danglingPreviousReferences.length,
     orphanRefactoredRootCount: scan.orphanRefactoredRoots.length,
     archiveStatusMismatchCount: scan.archiveStatusMismatches.length,
+    missingCompletedArchiveCount: scan.missingCompletedArchives.length,
     completedTaskIds: scan.completedWithHistory.map((item) => item.taskId),
     danglingTaskIds: scan.danglingPreviousReferences.map((item) => item.taskId),
     orphanRootTaskIds: scan.orphanRefactoredRoots.map((item) => item.taskId),
     archiveMismatchTaskIds: scan.archiveStatusMismatches.map((item) => item.taskId),
+    missingCompletedArchiveTaskIds: scan.missingCompletedArchives.map((item) => item.taskId),
   }
 }
 
@@ -203,9 +237,46 @@ async function scanRefactoredIntegrity() {
           chainTaskIds: item.chain.map((task) => String(task._id)),
         })),
         archiveStatusMismatches: scan.archiveStatusMismatches,
+        missingCompletedArchives: scan.missingCompletedArchives,
       },
     })
   )
+}
+
+async function repairMissingCompletedArchives() {
+  const tasks = await listAllTasks()
+  const archives = await listAllArchives()
+  const scan = scanIntegrity(tasks, archives)
+  const createdArchiveIds = []
+
+  for (let index = 0; index < scan.missingCompletedArchives.length; index += 1) {
+    const item = scan.missingCompletedArchives[index]
+    const task = tasks.find((row) => String(row && row._id ? row._id : '') === String(item.taskId))
+    if (!task) continue
+    const payload = {
+      ownerId: item.ownerId,
+      sourceTaskId: task._id,
+      status: task.status,
+      snapshot: Object.assign({}, task),
+      completedAt: task.completedAt || null,
+      submittedAt: task.submittedAt || null,
+      deleteAt: task.deleteAt || null,
+      createdAt: now(),
+      updatedAt: now(),
+    }
+    const added = await db.collection(ARCHIVES).add({ data: payload }).catch(() => null)
+    if (added && added._id) createdArchiveIds.push(String(added._id))
+  }
+
+  const afterScan = scanIntegrity(await listAllTasks(), await listAllArchives())
+  return success({
+    before: summarizeScan(scan),
+    repaired: {
+      createdArchiveIds,
+      createdArchiveCount: createdArchiveIds.length,
+    },
+    after: summarizeScan(afterScan),
+  })
 }
 
 async function repairRefactoredIntegrity() {
@@ -294,6 +365,8 @@ exports.main = async (event = {}) => {
         return await scanRefactoredIntegrity()
       case 'repairRefactoredIntegrity':
         return await repairRefactoredIntegrity()
+      case 'repairMissingCompletedArchives':
+        return await repairMissingCompletedArchives()
       default:
         return fail('Unknown action', 'UNKNOWN_ACTION', { action })
     }

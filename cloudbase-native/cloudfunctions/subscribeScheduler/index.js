@@ -101,7 +101,6 @@ function dedupeReminderItems(items) {
 
 function normalizeReminderSettings(raw) {
   const source = raw && typeof raw === 'object' ? raw : {}
-  const defaults = defaultReminderSettings()
   const categoryEnabledSource = source.categoryEnabled && typeof source.categoryEnabled === 'object' ? source.categoryEnabled : {}
   const categoryEnabled = {
     taskDeadlineExact: categoryEnabledSource.taskDeadlineExact !== false,
@@ -132,9 +131,9 @@ function normalizeReminderSettings(raw) {
   return {
     categoryEnabled,
     taskDeadline: []
-      .concat(exactList.length ? exactList : defaults.taskDeadline.filter((item) => item.direction === 'exact'))
-      .concat(beforeList.length ? beforeList : defaults.taskDeadline.filter((item) => item.direction === 'before'))
-      .concat(afterList.length ? afterList : defaults.taskDeadline.filter((item) => item.direction === 'after'))
+      .concat(exactList)
+      .concat(beforeList)
+      .concat(afterList)
       .slice(0, 8),
   }
 }
@@ -310,8 +309,8 @@ async function runChallengeExpiredReminders(current) {
     const task = expiredChallenges[index]
     const user = userMap[task.assigneeId]
     const reminderSettings = normalizeReminderSettings(user && user.subscribeReminderSettings)
-    let shouldDelete = reminderSettings.categoryEnabled.challengeExpired === false
-    if (reminderSettings.categoryEnabled.challengeExpired !== false) {
+    const shouldNotify = task && task.status !== 'completed' && reminderSettings.categoryEnabled.challengeExpired !== false
+    if (shouldNotify) {
       const sent = await trySendTodo(
         user,
         task,
@@ -328,12 +327,10 @@ async function runChallengeExpiredReminders(current) {
       )
       if (sent) {
         await markTaskField(task._id, 'challengeExpiredNotifiedAt')
-        shouldDelete = true
       } else {
         pendingAuthCount += 1
       }
     }
-    if (!shouldDelete) continue
     await removeTask(task._id)
     deletedCount += 1
   }

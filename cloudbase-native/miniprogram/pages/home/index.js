@@ -301,9 +301,9 @@ function normalizeSubscribeReminderSettings(settings) {
       challengeExpired: categoryEnabledSource.challengeExpired !== false,
     },
     taskDeadline: []
-      .concat(exactList.length ? exactList : [{ direction: 'exact', minutes: 0 }])
-      .concat(beforeList.length ? beforeList : [{ direction: 'before', minutes: 30 }])
-      .concat(afterList.length ? afterList : [{ direction: 'after', minutes: 60 }])
+      .concat(exactList)
+      .concat(beforeList)
+      .concat(afterList)
       .slice(0, 8),
   }
 }
@@ -756,6 +756,7 @@ function enrichTask(task, profile, source) {
     submittedText: formatDateTime(task.submittedAt),
     completedText: formatDateTime(task.completedAt),
     closedText: formatDateTime(task.closedAt),
+    deleteText: formatDateTime(task.deleteAt),
     overdueDaysText: getOverdueDaysText(task.dueAt, task.status),
     progressText: `${progress.current}/${progress.total || 1}`,
     progressCurrent: progress.current,
@@ -905,8 +906,17 @@ function buildDashboardView(dashboard, profile) {
     return true
   })
 
+  const closedCollabSource = creatorRaw.filter((task) => {
+    if (shouldHideTask(task, supersededIds)) return false
+    if (task.status !== 'closed') return false
+    if (task.assigneeId && task.creatorId === task.assigneeId) return false
+    return true
+  })
+
   const inProgressCollabSource = creatorRaw.filter((task) => {
     if (shouldHideTask(task, supersededIds)) return false
+    if (task.status === 'completed') return false
+    if (task.status === 'closed') return false
     if (task.status === 'refactored') return false
     if (task.status === 'review_pending') return false
     if (task.status === 'pending_confirmation') return false
@@ -917,6 +927,25 @@ function buildDashboardView(dashboard, profile) {
   })
 
   const historySource = dedupeById(creatorRaw.filter((task) => task.status === 'refactored').concat(historyRaw))
+  const profileUserId = String(profile && profile.userId ? profile.userId : '')
+  const assistedArchiveSource = completedRaw.filter((archive) => {
+    const snapshot = archive && archive.snapshot ? archive.snapshot : {}
+    const creatorId = String(snapshot.creatorId || '')
+    const assigneeId = String(snapshot.assigneeId || '')
+    return creatorId === profileUserId && assigneeId && assigneeId !== profileUserId
+  })
+  const helpingArchiveSource = completedRaw.filter((archive) => {
+    const snapshot = archive && archive.snapshot ? archive.snapshot : {}
+    const creatorId = String(snapshot.creatorId || '')
+    const assigneeId = String(snapshot.assigneeId || '')
+    return assigneeId === profileUserId && creatorId && creatorId !== profileUserId
+  })
+  const selfDisciplineArchiveSource = completedRaw.filter((archive) => {
+    const snapshot = archive && archive.snapshot ? archive.snapshot : {}
+    const creatorId = String(snapshot.creatorId || '')
+    const assigneeId = String(snapshot.assigneeId || '')
+    return creatorId === profileUserId && (!assigneeId || assigneeId === profileUserId)
+  })
 
   return {
     todayTasks: todayRaw.map((task) => enrichTask(task, profile, 'today')),
@@ -925,9 +954,13 @@ function buildDashboardView(dashboard, profile) {
     reviewPendingTasks: reviewPendingSource.map((task) => enrichTask(task, profile, 'collab')),
     pendingConfirmationTasks: pendingConfirmationSource.map((task) => enrichTask(task, profile, 'collab')),
     waitingAcceptTasks: waitingAcceptSource.map((task) => enrichTask(task, profile, 'collab')),
+    closedCollabTasks: closedCollabSource.map((task) => enrichTask(task, profile, 'collab')),
     inProgressCollabTasks: inProgressCollabSource.map((task) => enrichTask(task, profile, 'collab')),
     collabTasks: inProgressCollabSource.map((task) => enrichTask(task, profile, 'collab')),
     historyTasks: historySource.map((task) => enrichTask(task, profile, 'history')),
+    assistedArchiveTasks: assistedArchiveSource.map((archive) => enrichArchive(archive)),
+    helpingArchiveTasks: helpingArchiveSource.map((archive) => enrichArchive(archive)),
+    selfDisciplineArchiveTasks: selfDisciplineArchiveSource.map((archive) => enrichArchive(archive)),
     archiveTasks: completedRaw.map((archive) => enrichArchive(archive)),
   }
 }
@@ -962,8 +995,12 @@ Page({
       reviewPendingTasks: [],
       pendingConfirmationTasks: [],
       waitingAcceptTasks: [],
+      closedCollabTasks: [],
       inProgressCollabTasks: [],
       historyTasks: [],
+      assistedArchiveTasks: [],
+      helpingArchiveTasks: [],
+      selfDisciplineArchiveTasks: [],
       archiveTasks: [],
     },
     error: '',
@@ -1401,7 +1438,7 @@ Page({
           : source === 'mission'
             ? ['missionTasks']
             : source === 'collab'
-              ? ['reviewPendingTasks', 'pendingConfirmationTasks', 'waitingAcceptTasks', 'inProgressCollabTasks', 'collabTasks']
+              ? ['reviewPendingTasks', 'pendingConfirmationTasks', 'waitingAcceptTasks', 'inProgressCollabTasks', 'closedCollabTasks', 'collabTasks']
               : source === 'history'
                 ? ['historyTasks']
                 : source === 'challenge'
@@ -1774,7 +1811,7 @@ Page({
 
   onDailyTaskPresetDueTimeChange(event) {
     const index = Number(event.currentTarget.dataset.index)
-    this.setData({ [`dailyTaskEditor.presets[${index}].dueTime`]: event.detail.value || '21:00' })
+    this.setData({ [`dailyTaskEditor.presets[${index}].dueTime`]: event.detail.value || '23:59' })
   },
 
   onDailyTaskPresetRewardTypeChange(event) {
@@ -2045,12 +2082,7 @@ Page({
   removeSubscribeReminder(event) {
     const reminderId = String(event.currentTarget.dataset.id || '')
     const currentReminders = safeArray(this.data.subscribeSettings && this.data.subscribeSettings.reminders)
-    const target = currentReminders.find((item) => item.id === reminderId)
     const reminders = currentReminders.filter((item) => item.id !== reminderId)
-    const sameDirectionCount = reminders.filter((item) => item.direction === (target && target.direction)).length
-    if (target && sameDirectionCount === 0) {
-      reminders.push(buildSubscribeReminderDraft(target.direction, target.direction === 'after' ? 60 : 30))
-    }
     this.setData({
       'subscribeSettings.reminders': reindexSubscribeReminderDrafts(reminders),
     })
@@ -2068,11 +2100,6 @@ Page({
       this.data.subscribeSettings && this.data.subscribeSettings.categoryEnabled
         ? Object.assign({}, this.data.subscribeSettings.categoryEnabled)
         : {}
-
-    if (!reminders.length) {
-      this.setError(strings.subscribeSettings.errors.emptyReminder)
-      return
-    }
 
     this.setData({ loading: true, actionLoading: 'saveSubscribeSettings' })
     this.clearError()

@@ -123,7 +123,7 @@
                     <view class="daily-task-editor-group">
                       <view class="section-subtitle">{{strings.dailyTaskSettings.aiPromptLabel}}</view>
                       <textarea class="input area" placeholder="{{strings.dailyTaskSettings.aiPromptPlaceholder}}" value="{{preset.aiPrompt}}" data-index="{{presetIndex}}" bindinput="onDailyTaskPresetAiPromptInput" />
-                      <button hover-class="button-press" hover-stay-time="90" class="ghost-button create-footer-button" loading="{{actionLoading === ('generateDailyTaskDraft_' + presetIndex)}}" data-index="{{presetIndex}}" bindtap="onGenerateDailyTaskPresetDraft">{{strings.dailyTaskSettings.aiGenerate}}</button>
+                      <button hover-class="button-press" hover-stay-time="90" class="ghost-button create-footer-button {{actionLoading === ('generateDailyTaskDraft_' + presetIndex) ? 'button-loading' : ''}}" data-index="{{presetIndex}}" bindtap="onGenerateDailyTaskPresetDraft">{{strings.dailyTaskSettings.aiGenerate}}</button>
                     </view>
                     <view class="daily-task-editor-group">
                       <view class="section-subtitle">{{strings.dailyTaskSettings.titleLabel}}</view>
@@ -173,7 +173,7 @@
                     </view>
                     <view class="create-footer-actions daily-task-inline-actions">
                       <button hover-class="button-press" hover-stay-time="90" class="ghost-button create-footer-button" bindtap="cancelDailyTaskPresetEdit">{{strings.common.cancel}}</button>
-                      <button hover-class="button-press" hover-stay-time="90" class="primary-button create-footer-button" loading="{{actionLoading === ('saveDailyTaskSettings_' + presetIndex)}}" data-index="{{presetIndex}}" bindtap="saveDailyTaskSettings">{{strings.profile.save}}</button>
+                      <button hover-class="button-press" hover-stay-time="90" class="primary-button create-footer-button {{actionLoading === ('saveDailyTaskSettings_' + presetIndex) ? 'button-loading' : ''}}" data-index="{{presetIndex}}" bindtap="saveDailyTaskSettings">{{strings.profile.save}}</button>
                     </view>
                   </view>
                 </view>
@@ -229,7 +229,7 @@
         <view class="section-title">{{strings.collab.title}}</view>
         <view class="section-subtitle">{{strings.collab.subtitle}}</view>
         <view wx:if="{{view.reviewPendingTasks.length}}" class="history-block">
-          <view class="section-subtitle">{{strings.collab.reviewPendingTitle || '待检视'}}</view>
+          <view class="section-subtitle">{{strings.collab.reviewPendingTitle}}</view>
           <view class="task-list">
             <view wx:for="{{view.reviewPendingTasks}}" wx:key="_id" class="task-item" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
               <view class="task-head">
@@ -242,7 +242,7 @@
           </view>
         </view>
         <view wx:if="{{view.pendingConfirmationTasks.length}}" class="history-block">
-          <view class="section-subtitle">{{strings.collab.pendingConfirmationTitle || '待确认'}}</view>
+          <view class="section-subtitle">{{strings.collab.pendingConfirmationTitle}}</view>
           <view class="task-list">
             <view wx:for="{{view.pendingConfirmationTasks}}" wx:key="_id" class="task-item" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
               <view class="task-head">
@@ -255,7 +255,7 @@
           </view>
         </view>
         <view wx:if="{{view.waitingAcceptTasks.length}}" class="history-block">
-          <view class="section-subtitle">{{strings.collab.waitingAcceptTitle || '待接取'}}</view>
+          <view class="section-subtitle">{{strings.collab.waitingAcceptTitle}}</view>
           <view class="task-list">
             <view wx:for="{{view.waitingAcceptTasks}}" wx:key="_id" class="task-item {{onboarding.visible && onboarding.target === 'collab-list' && item._id === 'guide-collab-task' ? 'guide-target' : ''}}" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
               <view class="task-head">
@@ -268,7 +268,7 @@
           </view>
         </view>
         <view wx:if="{{view.inProgressCollabTasks.length}}" class="history-block">
-          <view class="section-subtitle">{{strings.collab.inProgressTitle || '进行中'}}</view>
+          <view class="section-subtitle">{{strings.collab.inProgressTitle}}</view>
           <view class="task-list">
             <view wx:for="{{view.inProgressCollabTasks}}" wx:key="_id" class="task-item" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
               <view class="task-head">
@@ -290,7 +290,22 @@
             <view class="task-meta">{{strings.detail.dueAt}} {{item.dueText}}<text wx:if="{{item.overdueDaysText}}" class="task-overdue-text"> {{item.overdueDaysText}}</text></view>
           </view>
         </view>
-        <view class="empty" wx:if="{{!view.reviewPendingTasks.length && !view.pendingConfirmationTasks.length && !view.waitingAcceptTasks.length && !view.inProgressCollabTasks.length && !view.historyTasks.length}}">{{strings.collab.empty}}</view>
+        <view wx:if="{{view.closedCollabTasks.length}}" class="history-block">
+          <view class="section-subtitle">{{strings.collab.closedTitle}}</view>
+          <view class="task-list">
+            <view wx:for="{{view.closedCollabTasks}}" wx:key="_id" class="task-item" data-task-id="{{item._id}}" data-source="{{item.source}}" bindtap="openTask">
+              <view class="task-head">
+                <view class="task-title">{{item.title}}</view>
+                <view class="task-status">{{item.statusText}}</view>
+              </view>
+              <view class="task-meta">{{item.assigneeName ? (strings.collab.assigneePrefix + item.assigneeName) : strings.collab.waitingAccept}}</view>
+              <view class="task-meta" wx:if="{{item.deleteText}}">{{strings.collab.autoDeletePrefix}} {{item.deleteText}} {{strings.collab.autoDeleteSuffix}}</view>
+              <view class="task-meta" wx:else>{{strings.detail.closedAt}} {{item.closedText}}</view>
+            </view>
+          </view>
+        </view>
+
+        <view class="empty" wx:if="{{!view.reviewPendingTasks.length && !view.pendingConfirmationTasks.length && !view.waitingAcceptTasks.length && !view.inProgressCollabTasks.length && !view.closedCollabTasks.length && !view.historyTasks.length}}">{{strings.collab.empty}}</view>
 
         <view wx:if="{{view.historyTasks.length}}" class="history-block">
           <view class="section-subtitle">{{strings.collab.historyTitle}}</view>
@@ -311,17 +326,46 @@
       <view class="card section-card tab-pane {{onboarding.visible && onboarding.target === 'archive-list' ? 'guide-target' : ''}}">
         <view class="section-title">{{strings.archive.title}}</view>
         <view class="section-subtitle">{{strings.archive.subtitle}}</view>
-        <view class="task-list" wx:if="{{view.archiveTasks.length}}">
-          <view wx:for="{{view.archiveTasks}}" wx:key="_id" class="task-item archive-item {{onboarding.visible && onboarding.target === 'archive-list' && item._id === 'guide-archive-task' ? 'guide-target' : ''}}" data-task-id="{{item._id}}" data-source="archive" bindtap="openTask">
-            <view class="task-head">
-              <view class="task-title">{{item.title}}</view>
-              <view class="task-status">{{item.statusText}}</view>
+        <view wx:if="{{view.assistedArchiveTasks.length}}" class="history-block">
+          <view class="section-subtitle">{{strings.archive.assistedTitle}}</view>
+          <view class="task-list">
+            <view wx:for="{{view.assistedArchiveTasks}}" wx:key="_id" class="task-item archive-item {{onboarding.visible && onboarding.target === 'archive-list' && item._id === 'guide-archive-task' ? 'guide-target' : ''}}" data-task-id="{{item._id}}" data-source="archive" bindtap="openTask">
+              <view class="task-head">
+                <view class="task-title">{{item.title}}</view>
+                <view class="task-status">{{item.statusText}}</view>
+              </view>
+              <view class="task-meta">{{strings.archive.recordedAt}} {{item.finishedText}}</view>
+              <view class="task-meta">{{strings.archive.progress}} {{item.progressText}}</view>
             </view>
-            <view class="task-meta">{{strings.archive.recordedAt}} {{item.finishedText}}</view>
-            <view class="task-meta">{{strings.archive.progress}} {{item.progressText}}</view>
           </view>
         </view>
-        <view class="empty" wx:else>{{strings.archive.empty}}</view>
+        <view wx:if="{{view.helpingArchiveTasks.length}}" class="history-block">
+          <view class="section-subtitle">{{strings.archive.helpingTitle}}</view>
+          <view class="task-list">
+            <view wx:for="{{view.helpingArchiveTasks}}" wx:key="_id" class="task-item archive-item" data-task-id="{{item._id}}" data-source="archive" bindtap="openTask">
+              <view class="task-head">
+                <view class="task-title">{{item.title}}</view>
+                <view class="task-status">{{item.statusText}}</view>
+              </view>
+              <view class="task-meta">{{strings.archive.recordedAt}} {{item.finishedText}}</view>
+              <view class="task-meta">{{strings.archive.progress}} {{item.progressText}}</view>
+            </view>
+          </view>
+        </view>
+        <view wx:if="{{view.selfDisciplineArchiveTasks.length}}" class="history-block">
+          <view class="section-subtitle">{{strings.archive.selfDisciplineTitle}}</view>
+          <view class="task-list">
+            <view wx:for="{{view.selfDisciplineArchiveTasks}}" wx:key="_id" class="task-item archive-item" data-task-id="{{item._id}}" data-source="archive" bindtap="openTask">
+              <view class="task-head">
+                <view class="task-title">{{item.title}}</view>
+                <view class="task-status">{{item.statusText}}</view>
+              </view>
+              <view class="task-meta">{{strings.archive.recordedAt}} {{item.finishedText}}</view>
+              <view class="task-meta">{{strings.archive.progress}} {{item.progressText}}</view>
+            </view>
+          </view>
+        </view>
+        <view class="empty" wx:if="{{!view.assistedArchiveTasks.length && !view.helpingArchiveTasks.length && !view.selfDisciplineArchiveTasks.length}}">{{strings.archive.empty}}</view>
       </view>
     </block>
 
@@ -394,7 +438,8 @@
       <view class="detail-summary">
         <view wx:if="{{selectedTask.detail}}" class="task-meta detail-line">{{selectedTask.detail}}</view>
         <view class="detail-group">
-          <view class="task-meta detail-line">{{strings.detail.dueAt}} {{selectedTask.dueText}}<text wx:if="{{selectedTask.overdueDaysText}}" class="task-overdue-text"> {{selectedTask.overdueDaysText}}</text></view>
+          <view wx:if="{{selectedTask.status === 'closed' && selectedTask.deleteText}}" class="task-meta detail-line">{{strings.detail.autoDeleteAt}} {{selectedTask.deleteText}}</view>
+          <view wx:else class="task-meta detail-line">{{strings.detail.dueAt}} {{selectedTask.dueText}}<text wx:if="{{selectedTask.overdueDaysText}}" class="task-overdue-text"> {{selectedTask.overdueDaysText}}</text></view>
           <view class="task-meta detail-line">{{strings.detail.reward}} {{selectedTask.rewardText}}</view>
           <view wx:if="{{selectedTask.offlineRewardPromise}}" class="task-meta detail-line detail-offline-reward">发起者承诺线下奖励：{{selectedTask.offlineRewardPromise}}</view>
         </view>
@@ -447,16 +492,16 @@
         <block wx:if="{{!selectedTask.canAdjustProgress}}">
           <view wx:for="{{selectedTask.nonProgressActionRows}}" wx:key="index" class="secondary-action-row {{item.length >= 3 ? 'secondary-action-row-triple' : ''}}">
             <block wx:for="{{item}}" wx:key="key" wx:for-item="action">
-              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'refreshSchedule'}}" class="primary-button" loading="{{actionLoading === 'refreshTaskSchedule'}}" bindtap="onRefreshTaskSchedule">{{strings.actions.refreshSchedule}}</button>
-              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'acceptTask'}}" class="primary-button {{onboarding.visible && onboarding.target === 'collab-accept' ? 'guide-target' : ''}}" loading="{{actionLoading === 'acceptTask'}}" bindtap="onAcceptTask">{{strings.actions.acceptTask}}</button>
-              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'acceptRework'}}" class="primary-button" loading="{{actionLoading === 'acceptReworkTask'}}" bindtap="onAcceptReworkTask">{{strings.actions.acceptRework}}</button>
-              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'rejectRework'}}" class="ghost-button" loading="{{actionLoading === 'rejectReworkTask'}}" bindtap="onRejectReworkTask">{{strings.actions.rejectRework}}</button>
-              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'cancelRework'}}" class="ghost-button" loading="{{actionLoading === 'cancelReworkTask'}}" bindtap="onCancelReworkTask">{{strings.actions.cancelRework}}</button>
-              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'submitReview'}}" class="primary-button" loading="{{actionLoading === 'submitReview'}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
-              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'continueReview'}}" class="ghost-button" loading="{{actionLoading === 'continueReview'}}" bindtap="onContinueReview">{{strings.actions.continueReview}}</button>
-              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'completeTask'}}" class="primary-button {{onboarding.visible && onboarding.target === 'mission-complete' ? 'guide-target' : ''}}" loading="{{actionLoading === 'completeTask'}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
-              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'abandonTask'}}" class="ghost-button" loading="{{actionLoading === 'abandonTask'}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
-              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'restartTask'}}" class="primary-button" loading="{{actionLoading === 'restartTask'}}" bindtap="onRestartTask">{{strings.actions.restartTask}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'refreshSchedule'}}" class="primary-button {{actionLoading === 'refreshTaskSchedule' ? 'button-loading' : ''}}" bindtap="onRefreshTaskSchedule">{{strings.actions.refreshSchedule}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'acceptTask'}}" class="primary-button {{onboarding.visible && onboarding.target === 'collab-accept' ? 'guide-target' : ''}} {{actionLoading === 'acceptTask' ? 'button-loading' : ''}}" bindtap="onAcceptTask">{{strings.actions.acceptTask}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'acceptRework'}}" class="primary-button {{actionLoading === 'acceptReworkTask' ? 'button-loading' : ''}}" bindtap="onAcceptReworkTask">{{strings.actions.acceptRework}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'rejectRework'}}" class="ghost-button {{actionLoading === 'rejectReworkTask' ? 'button-loading' : ''}}" bindtap="onRejectReworkTask">{{strings.actions.rejectRework}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'cancelRework'}}" class="ghost-button {{actionLoading === 'cancelReworkTask' ? 'button-loading' : ''}}" bindtap="onCancelReworkTask">{{strings.actions.cancelRework}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'submitReview'}}" class="primary-button {{actionLoading === 'submitReview' ? 'button-loading' : ''}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'continueReview'}}" class="ghost-button {{actionLoading === 'continueReview' ? 'button-loading' : ''}}" bindtap="onContinueReview">{{strings.actions.continueReview}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'completeTask'}}" class="primary-button {{onboarding.visible && onboarding.target === 'mission-complete' ? 'guide-target' : ''}} {{actionLoading === 'completeTask' ? 'button-loading' : ''}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'abandonTask'}}" class="ghost-button {{actionLoading === 'abandonTask' ? 'button-loading' : ''}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
+              <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'restartTask'}}" class="primary-button {{actionLoading === 'restartTask' ? 'button-loading' : ''}}" bindtap="onRestartTask">{{strings.actions.restartTask}}</button>
               <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'shareTask'}}" class="ghost-button" open-type="share" data-taskid="{{selectedTask._id}}" data-tasktitle="{{selectedTask.title}}">{{strings.actions.shareTask}}</button>
               <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'viewPreviousVersion'}}" class="ghost-button" data-task-id="{{selectedTask.previousTaskId}}" bindtap="openPreviousVersion">{{strings.actions.viewPreviousVersion}}</button>
               <button hover-class="button-press" hover-stay-time="90" wx:if="{{action.key === 'reworkTask'}}" class="ghost-button" bindtap="startReworkFromSelectedTask">{{strings.actions.reworkTask}}</button>
@@ -464,8 +509,7 @@
                 hover-class="button-press"
                 hover-stay-time="90"
                 wx:if="{{action.key === 'closeTask' || action.key === 'deleteTask'}}"
-                class="ghost-button"
-                loading="{{actionLoading === action.loadingKey}}"
+                class="ghost-button {{actionLoading === action.loadingKey ? 'button-loading' : ''}}"
                 data-operation="{{action.key === 'deleteTask' ? 'deleteTask' : 'closeTask'}}"
                 data-title="{{action.key === 'deleteTask' ? strings.dialogs.deleteTaskTitle : strings.dialogs.closeTaskTitle}}"
                 data-content="{{action.key === 'deleteTask' ? strings.dialogs.deleteTaskContent : strings.dialogs.closeTaskContent}}"
@@ -476,10 +520,10 @@
         </block>
 
         <view wx:if="{{selectedTask.canAdjustProgress && (selectedTask.canSubmitReview || selectedTask.canComplete || selectedTask.canAbandon)}}" class="progress-action-row">
-          <button hover-class="button-press" hover-stay-time="90" class="ghost-button progress-action-button" loading="{{actionLoading === 'applyProgress'}}" disabled="{{loading || !selectedTaskHasDraftChanges}}" bindtap="onApplyProgress">{{strings.actions.updateProgress}}</button>
-          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canSubmitReview}}" class="primary-button progress-action-button" loading="{{actionLoading === 'submitReview'}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
-          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canComplete}}" class="primary-button progress-action-button {{onboarding.visible && onboarding.target === 'mission-complete' ? 'guide-target' : ''}}" loading="{{actionLoading === 'completeTask'}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
-          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAbandon}}" class="ghost-button progress-action-button" loading="{{actionLoading === 'abandonTask'}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
+          <button hover-class="button-press" hover-stay-time="90" class="ghost-button progress-action-button {{actionLoading === 'applyProgress' ? 'button-loading' : ''}}" disabled="{{loading || !selectedTaskHasDraftChanges}}" bindtap="onApplyProgress">{{strings.actions.updateProgress}}</button>
+          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canSubmitReview}}" class="primary-button progress-action-button {{actionLoading === 'submitReview' ? 'button-loading' : ''}}" bindtap="onSubmitReview">{{strings.actions.submitReview}}</button>
+          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canComplete}}" class="primary-button progress-action-button {{onboarding.visible && onboarding.target === 'mission-complete' ? 'guide-target' : ''}} {{actionLoading === 'completeTask' ? 'button-loading' : ''}}" bindtap="onCompleteTask">{{strings.actions.completeTask}}</button>
+          <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canAbandon}}" class="ghost-button progress-action-button {{actionLoading === 'abandonTask' ? 'button-loading' : ''}}" bindtap="onAbandonTask">{{strings.actions.abandonTask}}</button>
         </view>
 
         <view wx:if="{{selectedTask.canAdjustProgress}}" wx:for="{{selectedTask.progressExtraActionRows}}" wx:key="index" class="secondary-action-row {{item.length >= 3 ? 'secondary-action-row-triple' : ''}}">
@@ -490,8 +534,7 @@
               hover-class="button-press"
               hover-stay-time="90"
               wx:if="{{action.key === 'closeTask' || action.key === 'deleteTask'}}"
-              class="ghost-button"
-              loading="{{actionLoading === action.loadingKey}}"
+              class="ghost-button {{actionLoading === action.loadingKey ? 'button-loading' : ''}}"
               data-operation="{{action.key === 'deleteTask' ? 'deleteTask' : 'closeTask'}}"
               data-title="{{action.key === 'deleteTask' ? strings.dialogs.deleteTaskTitle : strings.dialogs.closeTaskTitle}}"
               data-content="{{action.key === 'deleteTask' ? strings.dialogs.deleteTaskContent : strings.dialogs.closeTaskContent}}"
@@ -503,7 +546,7 @@
       </view>
 
       <view class="actions" wx:if="{{selectedTask.isArchive}}">
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canDelete}}" class="ghost-button {{onboarding.visible && onboarding.target === 'archive-delete' ? 'guide-target' : ''}}" loading="{{actionLoading === 'deleteTask'}}" data-operation="deleteTask" data-title="{{strings.detail.deleteArchiveTitle}}" data-content="{{strings.detail.deleteArchiveContent}}" bindtap="confirmAndRun">{{strings.detail.deleteArchiveTitle}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{selectedTask.canDelete}}" class="ghost-button {{onboarding.visible && onboarding.target === 'archive-delete' ? 'guide-target' : ''}} {{actionLoading === 'deleteTask' ? 'button-loading' : ''}}" data-operation="deleteTask" data-title="{{strings.detail.deleteArchiveTitle}}" data-content="{{strings.detail.deleteArchiveContent}}" bindtap="confirmAndRun">{{strings.detail.deleteArchiveTitle}}</button>
       </view>
       </view>
     </scroll-view>
@@ -523,7 +566,7 @@
       </view>
 
       <textarea class="input area" placeholder="{{strings.create.aiPromptPlaceholder}}" value="{{create.aiPrompt}}" bindinput="onAiPromptInput" />
-      <button hover-class="button-press" hover-stay-time="90" class="ghost-button {{onboarding.visible && onboarding.target === 'create-ai' ? 'guide-target' : ''}}" loading="{{actionLoading === 'generateCreateDraft'}}" bindtap="onGenerateCreateDraft">{{strings.create.aiGenerate}}</button>
+      <button hover-class="button-press" hover-stay-time="90" class="ghost-button {{onboarding.visible && onboarding.target === 'create-ai' ? 'guide-target' : ''}} {{actionLoading === 'generateCreateDraft' ? 'button-loading' : ''}}" bindtap="onGenerateCreateDraft">{{strings.create.aiGenerate}}</button>
 
       <input class="input" placeholder="{{strings.create.titlePlaceholder}}" value="{{create.title}}" bindinput="onCreateTitleInput" />
       <textarea class="input area" placeholder="{{strings.create.detailPlaceholder}}" value="{{create.detail}}" bindinput="onCreateDetailInput" />
@@ -560,7 +603,7 @@
 
       <view class="create-footer-actions">
         <button hover-class="button-press" hover-stay-time="90" class="ghost-button create-footer-button" bindtap="addSubtask">{{strings.actions.addStep}}</button>
-        <button hover-class="button-press" hover-stay-time="90" class="primary-button create-footer-button {{onboarding.visible && onboarding.target === 'create-submit' ? 'guide-target' : ''}}" loading="{{actionLoading === 'submitCreateTask'}}" bindtap="submitCreateTask">{{create.mode === 'rework' ? strings.create.submitRework : strings.create.submitCreate}}</button>
+        <button hover-class="button-press" hover-stay-time="90" class="primary-button create-footer-button {{onboarding.visible && onboarding.target === 'create-submit' ? 'guide-target' : ''}} {{actionLoading === 'submitCreateTask' ? 'button-loading' : ''}}" bindtap="submitCreateTask">{{create.mode === 'rework' ? strings.create.submitRework : strings.create.submitCreate}}</button>
       </view>
       </view>
     </scroll-view>
@@ -579,7 +622,7 @@
         <view class="section-title">{{strings.profile.nicknameModalTitle}}</view>
       </view>
       <input class="input" placeholder="{{strings.profile.nicknamePlaceholder}}" value="{{nicknameDraft}}" bindinput="onNicknameDraftInput" />
-      <button hover-class="button-press" hover-stay-time="90" class="primary-button" loading="{{actionLoading === 'saveProfile'}}" bindtap="saveProfile">{{strings.profile.save}}</button>
+      <button hover-class="button-press" hover-stay-time="90" class="primary-button {{actionLoading === 'saveProfile' ? 'button-loading' : ''}}" bindtap="saveProfile">{{strings.profile.save}}</button>
       </view>
     </scroll-view>
     <view wx:if="{{scrollHints.profile}}" class="scroll-hint scroll-hint-modal">
@@ -786,7 +829,7 @@
       </view>
 
       <view class="create-footer-actions">
-        <button hover-class="button-press" hover-stay-time="90" class="ghost-button create-footer-button" loading="{{actionLoading === 'saveSubscribeSettings'}}" bindtap="saveSubscribeReminderSettings">{{strings.subscribeSettings.saveRules}}</button>
+        <button hover-class="button-press" hover-stay-time="90" class="ghost-button create-footer-button {{actionLoading === 'saveSubscribeSettings' ? 'button-loading' : ''}}" bindtap="saveSubscribeReminderSettings">{{strings.subscribeSettings.saveRules}}</button>
         <button hover-class="button-press" hover-stay-time="90" class="primary-button create-footer-button {{onboarding.visible && onboarding.target === 'subscribe-settings' ? 'guide-target' : ''}}" bindtap="onRequestSubscribe">{{strings.subscribeSettings.authorize}}</button>
       </view>
       </view>
@@ -813,7 +856,7 @@
         <button hover-class="button-press" hover-stay-time="90" wx:if="{{onboarding.step > 0}}" class="ghost-button guide-action-button" bindtap="prevOnboardingStep">{{strings.onboarding.prev}}</button>
         <button hover-class="button-press" hover-stay-time="90" wx:if="{{onboarding.actionDriven && onboarding.step < 13}}" class="ghost-button guide-action-button" bindtap="nextOnboardingStep">{{strings.onboarding.next}}</button>
         <button hover-class="button-press" hover-stay-time="90" wx:if="{{!onboarding.actionDriven && onboarding.step < 13}}" class="primary-button guide-action-button" bindtap="nextOnboardingStep">{{strings.onboarding.next}}</button>
-        <button hover-class="button-press" hover-stay-time="90" wx:if="{{onboarding.step === 13}}" class="primary-button guide-action-button" loading="{{actionLoading === 'completeOnboarding'}}" bindtap="finishOnboarding">{{strings.onboarding.finish}}</button>
+        <button hover-class="button-press" hover-stay-time="90" wx:if="{{onboarding.step === 13}}" class="primary-button guide-action-button {{actionLoading === 'completeOnboarding' ? 'button-loading' : ''}}" bindtap="finishOnboarding">{{strings.onboarding.finish}}</button>
       </view>
     </view>
   </view>
