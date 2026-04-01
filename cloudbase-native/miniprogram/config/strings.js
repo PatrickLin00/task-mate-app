@@ -456,3 +456,53 @@ module.exports = {
 
 module.exports.icons.progressThumb = '▸'
 module.exports.actions.sharedTaskUnavailable = '任务已被接取'
+module.exports.homeRuntime = {
+  guide: {
+    nicknameFallback: '旅者-P-ZA',
+    taskTitle: '整理测试房间',
+    taskDetail: '把散乱的区域收一收，确认流程清楚、页面可用。',
+    subtaskDesk: '整理桌面区域',
+    subtaskBox: '收好杂物箱',
+    todayTitle: '检查首页信息',
+    todayDetail: '确认今天要先推进的内容有没有漏掉。',
+    todaySubtask: '确认今日重点',
+    challengeTitle: '完成一组整理练习',
+    challengeDetail: '这是系统每天给你的练手挑战。',
+    systemName: '系统',
+    challengeSubtask: '完成一组整理',
+    aiPrompt: '帮我生成一个整理测试房间的协作任务',
+    createDetail: '把散乱的区域整理好，顺手熟悉一次任务发布流程。',
+    steps: [
+      { title: '先看顶部卡片', segments: [{ text: '这里会显示 ' }, { text: '昵称', strong: true }, { text: '、' }, { text: '属性值', strong: true }, { text: ' 和 ' }, { text: '新建任务', strong: true }, { text: '。这是你进入小程序后最先看到的状态面板。' }], hint: '', target: 'hero', panelPosition: 'bottom', actionDriven: false },
+      { title: '再看首页', segments: [{ text: '这里会显示 ' }, { text: '首页', strong: true }, { text: ' 里的 ' }, { text: '今日焦点', strong: true }, { text: ' 和 ' }, { text: '每日挑战', strong: true }, { text: '。进入小程序或下拉时会自动刷新数据。' }], hint: '', target: 'home', panelPosition: 'top', actionDriven: false },
+      { title: '开始新建任务', segments: [{ text: '点一下 ' }, { text: '新建任务', strong: true }, { text: '。接下来会用一份假数据带你走完整个流程。' }], hint: '请点击高亮按钮继续', target: 'create-entry', panelPosition: 'bottom', actionDriven: true },
+      { title: '先填充任务', segments: [{ text: '这里已经帮你填好一句示例描述。点 ' }, { text: '一键填充任务', strong: true }, { text: '，先看看任务草案会怎么整理出来。' }], hint: '请点击高亮按钮继续', target: 'create-ai', panelPosition: 'bottom', actionDriven: true },
+      { title: '发布到协作区', segments: [{ text: '草案已经准备好了。请在页面最下方点击 ' }, { text: '创建任务', strong: true }, { text: '，这张演示任务会出现在协作页里。' }], hint: '请点击高亮按钮继续', target: 'create-submit', panelPosition: 'top', actionDriven: true },
+      { title: '看看协作区', segments: [{ text: '这里会显示你发布出去、还在跟进状态的任务。' }, { text: '点这张演示任务', strong: true }, { text: '，进入详情。' }], hint: '请点击高亮任务继续', target: 'collab-list', panelPosition: 'top', actionDriven: true },
+      { title: '接取这张任务', segments: [{ text: '在详情里点 ' }, { text: '接取任务', strong: true }, { text: '。接取后，它会进入使命页。' }], hint: '请点击高亮按钮继续', target: 'collab-accept', panelPosition: 'bottom', actionDriven: true },
+      { title: '看看使命区', segments: [{ text: '这里是你已经接取并正在推进的任务。' }, { text: '点这张演示任务', strong: true }, { text: '，继续下一步。' }], hint: '请点击高亮任务继续', target: 'mission-list', panelPosition: 'top', actionDriven: true },
+      { title: '完成这张任务', segments: [{ text: '这一步直接演示完成流程。点 ' }, { text: '完成任务', strong: true }, { text: '，完成后会进入归档。' }], hint: '请点击高亮按钮继续', target: 'mission-complete', panelPosition: 'bottom', actionDriven: true },
+      { title: '看看归档', segments: [{ text: '这里会保留完成记录，普通任务会保留 ' }, { text: '7天', strong: true }, { text: '。' }, { text: '点这条演示归档', strong: true }, { text: '，进入记录详情。' }], hint: '请点击高亮记录继续', target: 'archive-list', panelPosition: 'top', actionDriven: true },
+      { title: '删除一条完成记录', segments: [{ text: '归档默认保留 ' }, { text: '7天', strong: true }, { text: '，也可以提前删除完成记录。点 ' }, { text: '删除归档', strong: true }, { text: '，可以把这条演示记录移除。' }], hint: '请点击高亮按钮继续', target: 'archive-delete', panelPosition: 'bottom', actionDriven: true },
+      { title: '看看成长页', segments: [{ text: '这里会展示你的属性累计和归档记录数量。' }], hint: '', target: 'achievements', panelPosition: 'top', actionDriven: false },
+    ],
+  },
+  offlineReward: {
+    patternSources: ['(?:线下奖励|额外奖励|奖励|奖品|报酬|酬劳)[：:是为给\\s]*([^，。；;\\n]{2,32})', '(?:换取|兑换|换成)[^\\S\\r\\n]*([^，。；;\\n]{2,24})', '((?:请|送|给)[^，。；;\\n]{0,8}(?:喝|吃|拿|送)[^，。；;\\n]{1,24})', '((?:请|带|陪)(?:你|你们|对方|Ta|ta)?去[^，。；;\\n]{1,24})', '((?:一起去|去)[^，。；;\\n]{2,18})', '((?:奶茶|咖啡|红包|请客|饮料|零食|甜品)[^，。；;\\n]{0,18})'],
+    cleanupSource: '^(作为)?(?:线下奖励|额外奖励|奖励|奖品|报酬|酬劳|换取|兑换|换成)[：:\\s]*',
+    trimSource: '[,.，。；;!！?？]+$',
+    reminderTitle: '线下奖励提醒',
+    reminderContent: '任务有承诺的线下奖励，发起者需自行按照承诺给实施者对应奖励。',
+    agree: '同意',
+    reject: '拒绝',
+  },
+  overdue: {
+    prefix: '已过期',
+    suffix: '天',
+  },
+}
+module.exports.share.sharedTaskTitle = '分享任务'
+module.exports.share.sharedTaskAcceptedDetail = '任务已被接取'
+module.exports.errors.taskNotFound = '未找到当前任务'
+module.exports.dialogs.submitReviewTitle = '提交检视'
+module.exports.dialogs.submitReviewContent = '是否已经完成全部任务，并准备提交检视？'

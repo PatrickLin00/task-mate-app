@@ -8,6 +8,7 @@ const {
   buildSubscribeData,
   sendSubscribeMessage,
 } = require('./subscribe')
+const strings = require('./strings')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
@@ -31,31 +32,9 @@ const REWARD_TYPES = ['wisdom', 'strength', 'agility']
 const ACTIVE_ASSIGNEE_STATUS = [STATUS.IN_PROGRESS, STATUS.PENDING_CONFIRMATION]
 const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000
 const MAX_REMINDER_MINUTES = 365 * 24 * 60
-const SENSITIVE_HINT = '内容包含敏感词，请调整后再试'
-const SENSITIVE_WORDS = [
-  '赌博',
-  '毒品',
-  '色情',
-  '约炮',
-  '法轮功',
-  '爆炸',
-  'cao',
-  'fuck',
-  'sb',
-]
-
-const DEFAULT_DAILY_TASK_PRESETS = [
-  {
-    id: 'daily_preset_default',
-    title: '完成一组整理练习',
-    detail: '这是每天给自己的一项固定推进。',
-    dueTime: '23:59',
-    rewardType: 'agility',
-    autoAccept: false,
-    autoAcceptTime: '06:00',
-    subtasks: [{ title: '完成一组整理', total: 1 }],
-  },
-]
+const SENSITIVE_HINT = strings.sensitiveHint
+const SENSITIVE_WORDS = strings.sensitiveWords.concat(['cao', 'fuck', 'sb'])
+const DEFAULT_DAILY_TASK_PRESETS = strings.defaultDailyTaskPresets
 
 function success(data) {
   return { ok: true, data }
@@ -100,6 +79,11 @@ function clamp(value, min, max) {
 
 function safeArray(list) {
   return Array.isArray(list) ? list : []
+}
+
+function fallbackTravelerName(userId, withDash) {
+  const prefix = withDash ? strings.names.travelerWithDash : strings.names.traveler
+  return `${prefix}${String(userId || '').slice(-4)}`
 }
 
 function formatYmd(date) {
@@ -185,7 +169,14 @@ function normalizeDailyTaskPreset(raw, fallbackId) {
 }
 
 function normalizeDailyTaskPresets(rawPresets, legacySettings) {
-  const source = Array.isArray(rawPresets) && rawPresets.length ? rawPresets : Array.isArray(legacySettings) ? legacySettings : null
+  if (Array.isArray(rawPresets)) {
+    const normalizedRawPresets = rawPresets
+      .slice(0, 8)
+      .map((item, index) => normalizeDailyTaskPreset(item, buildDailyTaskPresetId(index)))
+      .filter((item) => item.title && item.subtasks && item.subtasks.length)
+    return normalizedRawPresets
+  }
+  const source = Array.isArray(legacySettings) ? legacySettings : null
   const baseList =
     source && source.length
       ? source
@@ -219,11 +210,12 @@ function buildDailyTaskAutoAcceptAt(date, preset) {
 function buildChallengeSeeds(userId, date, dailyTaskPresets, legacyDailyTaskSettings) {
   const reference = date || now()
   const normalizedPresets = normalizeDailyTaskPresets(dailyTaskPresets, legacyDailyTaskSettings)
+  const effectivePresets = normalizedPresets.length ? normalizedPresets : DEFAULT_DAILY_TASK_PRESETS
   const dayKey = formatUtc8Ymd(reference)
   const start = startOfUtc8Day(reference)
   const end = endOfUtc8Day(reference)
   const creatorId = buildChallengeSystemId(userId)
-  const seeds = normalizedPresets.map((preset) => ({
+  const seeds = effectivePresets.map((preset) => ({
     template: {
       id: preset.id,
       title: preset.title,
@@ -269,11 +261,49 @@ function isChallengeTask(task) {
 
 function isExpiredChallengeTask(task, referenceNow) {
   if (!isChallengeTask(task)) return false
-  if (task.status === STATUS.COMPLETED) return false
   const seedKey = String(task && task.seedKey ? task.seedKey : '')
   const matched = seedKey.match(/^challenge_(\d{8})_/)
   if (!matched) return false
   return matched[1] < formatUtc8Ymd(referenceNow)
+}
+
+async function listChallengeTasksBySeed(creatorId, seedKey) {
+  if (!creatorId || !seedKey) return []
+  const result = await db.collection(TASKS).where({ creatorId, seedKey }).get()
+  return result.data || []
+}
+
+function pickChallengeTaskSurvivor(tasks, preferredTaskId) {
+  const source = safeArray(tasks)
+  if (!source.length) return null
+  const preferredId = String(preferredTaskId || '')
+  const sorted = source.slice().sort((left, right) => {
+    const leftAssigned = left && left.assigneeId ? 1 : 0
+    const rightAssigned = right && right.assigneeId ? 1 : 0
+    if (leftAssigned !== rightAssigned) return rightAssigned - leftAssigned
+    if (preferredId) {
+      const leftPreferred = String(left && left._id ? left._id : '') === preferredId ? 1 : 0
+      const rightPreferred = String(right && right._id ? right._id : '') === preferredId ? 1 : 0
+      if (leftPreferred !== rightPreferred) return rightPreferred - leftPreferred
+    }
+    const leftCreated = new Date(left && left.createdAt ? left.createdAt : 0).getTime()
+    const rightCreated = new Date(right && right.createdAt ? right.createdAt : 0).getTime()
+    return leftCreated - rightCreated
+  })
+  return sorted[0] || null
+}
+
+async function dedupeChallengeTasksBySeed(creatorId, seedKey, preferredTaskId) {
+  const tasks = await listChallengeTasksBySeed(creatorId, seedKey)
+  if (!tasks.length) return null
+  const survivor = pickChallengeTaskSurvivor(tasks, preferredTaskId)
+  if (!survivor) return null
+  const survivorId = String(survivor._id || '')
+  const duplicates = tasks.filter((item) => String(item && item._id ? item._id : '') !== survivorId)
+  if (duplicates.length) {
+    await Promise.all(duplicates.map((item) => db.collection(TASKS).doc(item._id).remove().catch(() => null)))
+  }
+  return getTaskById(survivorId)
 }
 
 async function cleanupExpiredChallengeTasks(userId, referenceNow) {
@@ -369,9 +399,11 @@ function normalizeTask(task, nameMap) {
   if (!task) return null
   const creatorName =
     task.creatorId && String(task.creatorId).startsWith(SYSTEM_PREFIX)
-      ? '星旅系统'
-      : (nameMap && nameMap[task.creatorId]) || task.creatorName || '未命名旅者'
-  const assigneeName = task.assigneeId ? (nameMap && nameMap[task.assigneeId]) || task.assigneeName || '未命名旅者' : ''
+      ? strings.names.system
+      : (nameMap && nameMap[task.creatorId]) || task.creatorName || strings.names.unnamedTraveler
+  const assigneeName = task.assigneeId
+    ? (nameMap && nameMap[task.assigneeId]) || task.assigneeName || strings.names.unnamedTraveler
+    : ''
   return {
     _id: task._id,
     title: task.title || '',
@@ -592,9 +624,9 @@ function buildChallengeTaskRecord(seed, userId, nickname, startAt, creatorId, op
     status: assigned ? STATUS.IN_PROGRESS : STATUS.PENDING,
     category: 'challenge',
     creatorId,
-    creatorName: '星旅系统',
+    creatorName: strings.names.system,
     assigneeId: assigned ? userId : '',
-    assigneeName: assigned ? (nickname || `旅者${String(userId).slice(-4)}`) : '',
+    assigneeName: assigned ? (nickname || fallbackTravelerName(userId, false)) : '',
     ownerScope: 'personal',
     dueAt,
     startAt: startAt || current,
@@ -625,7 +657,7 @@ async function ensureUser(userId) {
   const createdAt = now()
   await db.collection(USERS).add({
     data: {
-      nickname: `旅者-${String(userId).slice(-4)}`,
+      nickname: fallbackTravelerName(userId, true),
       userId,
       avatar: '',
       onboarding: {
@@ -653,7 +685,7 @@ async function getUserNameMap(userIds) {
   if (!ids.length) return {}
   const result = await db.collection(USERS).where({ userId: _.in(ids) }).get()
   return result.data.reduce((map, item) => {
-    map[item.userId || item._openid] = item.nickname || `旅者-${String(item.userId || item._openid).slice(-4)}`
+    map[item.userId || item._openid] = item.nickname || fallbackTravelerName(item.userId || item._openid, true)
     return map
   }, {})
 }
@@ -818,7 +850,7 @@ async function ensureDailyTaskSeedTasks(user, referenceNow) {
   const seedKeys = seeds.map((item) => item.seedKey)
   if (!seedKeys.length) return { seeds, start, creatorId, presets }
 
-  const existingDailyRes = await db.collection(TASKS).where({ creatorId, seedKey: _.in(seedKeys) }).limit(seedKeys.length).get()
+  const existingDailyRes = await db.collection(TASKS).where({ creatorId, seedKey: _.in(seedKeys) }).get()
   const existingDailyMap = (existingDailyRes.data || []).reduce((map, item) => {
     map[item.seedKey] = item
     return map
@@ -843,21 +875,23 @@ async function ensureDailyTaskSeedTasks(user, referenceNow) {
         currentTime: createdAt,
       }),
     })
-    const createdTask = await getTaskById(added._id)
+    const createdTask = await dedupeChallengeTasksBySeed(creatorId, seed.seedKey, added._id)
     existingDailyMap[seed.seedKey] = createdTask
-    await sendSceneNotification(
+    if (createdTask && String(createdTask._id || '') === String(added._id || '')) {
+      await sendSceneNotification(
       currentUser.userId,
       SCENES.work,
       buildSubscribeData({
         taskName: (createdTask && createdTask.title) || seed.template.title,
-        assignee: currentUser.nickname || `旅者-${String(currentUser.userId).slice(-4)}`,
+        assignee: currentUser.nickname || fallbackTravelerName(currentUser.userId, true),
         startTime: formatDateTime((createdTask && createdTask.startAt) || createdAt),
         dueTime: formatDateTime((createdTask && createdTask.dueAt) || seed.template.dueAt || createdAt),
-        status: '已自动接取',
-        tip: '今日每日任务已按预设自动接取。',
+        status: strings.notifications.autoAcceptedStatus,
+        tip: strings.notifications.autoAcceptedTip,
       }),
-      { event: 'daily_task_auto_accepted', taskId: added._id }
-    ).catch(() => null)
+      { event: 'daily_task_auto_accepted', taskId: createdTask._id }
+      ).catch(() => null)
+    }
   }
 
   return { seeds, start, creatorId, presets }
@@ -967,7 +1001,7 @@ async function bootstrap() {
     profile: {
       _id: user._id || user.userId,
       userId: user.userId,
-      nickname: user.nickname || `旅者-${String(user.userId).slice(-4)}`,
+      nickname: user.nickname || fallbackTravelerName(user.userId, true),
       avatar: user.avatar || '',
       stars: Number(user.stars || 0),
       wisdom: Number(user.wisdom || 0),
@@ -1084,9 +1118,9 @@ async function createTask(payload) {
     status: payload && payload.selfAssign ? STATUS.IN_PROGRESS : STATUS.PENDING,
     category: 'normal',
     creatorId: userId,
-    creatorName: user.nickname || `旅者-${String(userId).slice(-4)}`,
+    creatorName: user.nickname || fallbackTravelerName(userId, true),
     assigneeId: payload && payload.selfAssign ? userId : '',
-    assigneeName: payload && payload.selfAssign ? user.nickname || `旅者-${String(userId).slice(-4)}` : '',
+    assigneeName: payload && payload.selfAssign ? user.nickname || fallbackTravelerName(userId, true) : '',
     ownerScope: 'personal',
     dueAt,
     startAt: createdAt,
@@ -1167,9 +1201,9 @@ async function getTask(payload) {
     return success(
       Object.assign({}, normalized, {
         sharedPreviewLocked: true,
-        title: normalized.title || '分享任务',
-        detail: '任务已被接取',
-        sharedPreviewMessage: '任务已被接取',
+        title: normalized.title || strings.sharedTask.title,
+        detail: strings.sharedTask.acceptedDetail,
+        sharedPreviewMessage: strings.sharedTask.acceptedDetail,
         assigneeName: '',
       })
     )
@@ -1195,22 +1229,23 @@ async function acceptChallengeTask(payload) {
   const hit = seeds.find((item) => item.seedKey === seedKey)
   assert(hit, 'Challenge not found', 'NOT_FOUND')
 
-  const existingRes = await db.collection(TASKS).where({ creatorId, seedKey }).limit(1).get()
-  const existing = existingRes.data[0]
+  const existingList = await listChallengeTasksBySeed(creatorId, seedKey)
+  const existing = pickChallengeTaskSurvivor(existingList)
   if (existing) {
     if (existing.status === STATUS.PENDING && !existing.assigneeId) {
       await db.collection(TASKS).doc(existing._id).update({
         data: {
           assigneeId: userId,
-          assigneeName: user.nickname || `旅者-${String(userId).slice(-4)}`,
+          assigneeName: user.nickname || fallbackTravelerName(userId, true),
           status: STATUS.IN_PROGRESS,
           updatedAt: now(),
         },
       })
-      const updated = await refreshTask(existing._id)
+      const updated = await dedupeChallengeTasksBySeed(creatorId, seedKey, existing._id)
       return success(normalizeTask(updated, { [userId]: user.nickname }))
     }
-    return success(normalizeTask(existing, { [userId]: user.nickname }))
+    const dedupedExisting = await dedupeChallengeTasksBySeed(creatorId, seedKey, existing._id)
+    return success(normalizeTask(dedupedExisting || existing, { [userId]: user.nickname }))
   }
 
   const createdAt = now()
@@ -1220,7 +1255,7 @@ async function acceptChallengeTask(payload) {
       currentTime: createdAt,
     }),
   })
-  const task = await getTaskById(added._id)
+  const task = await dedupeChallengeTasksBySeed(creatorId, seedKey, added._id)
   return success(normalizeTask(task, { [userId]: user.nickname }))
 }
 
@@ -1236,7 +1271,7 @@ async function acceptTask(payload) {
   await db.collection(TASKS).doc(task._id).update({
     data: {
       assigneeId: userId,
-      assigneeName: user.nickname || `旅者-${String(userId).slice(-4)}`,
+      assigneeName: user.nickname || fallbackTravelerName(userId, true),
       status: STATUS.IN_PROGRESS,
       dueSoonNotifiedAt: null,
       overdueNotifiedAt: null,
@@ -1249,12 +1284,12 @@ async function acceptTask(payload) {
     updated.creatorId,
     SCENES.work,
     buildSubscribeData({
-      taskName: updated.title || '任务提醒',
+      taskName: updated.title || strings.notifications.taskReminder,
       assignee: updated.assigneeName || '',
       startTime: formatDateTime(updated.startAt || updated.createdAt || now()),
       dueTime: formatDateTime(updated.dueAt || updated.createdAt || now()),
-      status: '已接取',
-      tip: updated.assigneeName ? `${updated.assigneeName}接取了任务` : '已接取',
+      status: strings.notifications.acceptedStatus,
+      tip: updated.assigneeName ? `${updated.assigneeName}${strings.notifications.acceptedStatus}` : strings.notifications.acceptedTip,
     }),
     { event: 'task_assigned', actorId: userId, taskId: updated._id }
   ).catch(() => null)
@@ -1314,12 +1349,12 @@ async function submitReview(payload) {
     updated.creatorId,
     SCENES.review,
     buildSubscribeData({
-      reviewType: '提交检视',
-      reviewResult: '待确认',
+      reviewType: strings.notifications.submitReviewType,
+      reviewResult: strings.notifications.pendingConfirm,
       notifyTime: formatDateTime(submittedAt),
       reviewer: updated.assigneeName || '',
-      status: '待检视',
-      tip: updated.assigneeName ? `${updated.assigneeName}提交了检视` : '待检视',
+      status: strings.notifications.reviewPendingStatus,
+      tip: updated.assigneeName ? `${updated.assigneeName}${strings.notifications.submitReviewType}` : strings.notifications.reviewPendingTip,
     }),
     { event: 'task_review_submitted', actorId: userId, taskId: updated._id }
   ).catch(() => null)
@@ -1428,12 +1463,14 @@ async function abandonTask(payload) {
     updated.creatorId,
     SCENES.work,
     buildSubscribeData({
-      taskName: updated.title || '任务提醒',
+      taskName: updated.title || strings.notifications.taskReminder,
       assignee: task.assigneeName || '',
       startTime: formatDateTime(updated.startAt || updated.createdAt),
       dueTime: formatDateTime(updated.dueAt || updated.createdAt),
-      status: '已放弃',
-      tip: task.assigneeName ? `${task.assigneeName}已放弃任务` : '已放弃',
+      status: strings.notifications.abandonedStatus,
+      tip: task.assigneeName
+        ? `${task.assigneeName}${strings.notifications.abandonedStatus}\u4efb\u52a1`
+        : strings.notifications.abandonedTip,
     }),
     { event: 'task_abandoned', actorId: userId, taskId: updated._id }
   ).catch(() => null)
@@ -1472,12 +1509,12 @@ async function closeTask(payload) {
       task.assigneeId,
       SCENES.work,
       buildSubscribeData({
-        taskName: updated.title || '任务提醒',
+        taskName: updated.title || strings.notifications.taskReminder,
         assignee: task.assigneeName || '',
         startTime: formatDateTime(task.originalStartAt || task.startAt || task.createdAt),
         dueTime: formatDateTime(task.originalDueAt || task.dueAt || closedAt),
-        status: '已关闭',
-        tip: '任务已被关闭',
+        status: strings.notifications.closedStatus,
+        tip: strings.notifications.closedTip,
       }),
       { event: 'task_closed', actorId: userId, taskId: updated._id }
     ).catch(() => null)
@@ -1755,7 +1792,7 @@ async function reworkTask(payload) {
       originalStatus: null,
       status: task.assigneeId ? STATUS.PENDING_CONFIRMATION : STATUS.PENDING,
       creatorId: userId,
-      creatorName: user.nickname || `旅者-${String(userId).slice(-4)}`,
+      creatorName: user.nickname || fallbackTravelerName(userId, true),
       assigneeId: task.assigneeId || '',
       assigneeName: task.assigneeName || '',
       previousTaskId: task._id,
@@ -1783,11 +1820,11 @@ async function reworkTask(payload) {
       created.assigneeId,
       SCENES.taskUpdate,
       buildSubscribeData({
-        taskName: created.title || '任务提醒',
-        changeDetail: '待确认变更',
+        taskName: created.title || strings.notifications.taskReminder,
+        changeDetail: strings.notifications.reworkPendingDetail,
         changeTime: formatDateTime(current),
-        status: '待确认变更',
-        tip: '任务已重构，请确认变更',
+        status: strings.notifications.reworkPendingStatus,
+        tip: strings.notifications.reworkPendingTip,
       }),
       { event: 'task_rework_pending', actorId: userId, taskId: created._id }
     ).catch(() => null)
@@ -1912,13 +1949,13 @@ async function rejectReworkTask(payload) {
     task.creatorId,
     SCENES.review,
     buildSubscribeData({
-      reviewType: '任务变更',
-      reviewResult: '已拒绝',
+      reviewType: strings.notifications.reworkType,
+      reviewResult: strings.notifications.rejected,
       notifyTime: formatDateTime(current),
-      rejectReason: task.assigneeName ? `${task.assigneeName}拒绝了变更` : '对方拒绝变更',
+      rejectReason: task.assigneeName ? `${task.assigneeName}${strings.notifications.rejected}${strings.notifications.reworkType}` : strings.notifications.otherRejectedRework,
       reviewer: task.assigneeName || '',
-      status: '已拒绝',
-      tip: `${task.title || '任务提醒'} · 变更被拒绝`,
+      status: strings.notifications.rejected,
+      tip: `${task.title || strings.notifications.taskReminder}${strings.notifications.reworkRejectedSuffix}`,
     }),
     { event: 'task_rework_rejected', actorId: userId, taskId: task._id }
   ).catch(() => null)
@@ -1964,11 +2001,11 @@ async function cancelReworkTask(payload) {
       task.assigneeId,
       SCENES.taskUpdate,
       buildSubscribeData({
-        taskName: task.title || '任务提醒',
-        changeDetail: '变更已撤销',
+        taskName: task.title || strings.notifications.taskReminder,
+        changeDetail: strings.notifications.reworkCanceledDetail,
         changeTime: formatDateTime(now()),
-        status: '变更已撤销',
-        tip: '发布者撤销了重构',
+        status: strings.notifications.reworkCanceledStatus,
+        tip: strings.notifications.reworkCanceledTip,
       }),
       { event: 'task_rework_canceled', actorId: userId, taskId: task._id }
     ).catch(() => null)

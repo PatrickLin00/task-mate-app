@@ -7,6 +7,7 @@ const {
   buildSubscribeData,
   sendSubscribeMessage,
 } = require('./subscribe')
+const strings = require('./strings')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
@@ -19,6 +20,7 @@ const MINUTE_MS = 60 * 1000
 const SCAN_INTERVAL_MS = 30 * MINUTE_MS
 const TOLERANCE_MS = 15 * MINUTE_MS
 const MAX_REMINDER_MINUTES = 365 * 24 * 60
+const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000
 
 function now() {
   return new Date()
@@ -40,9 +42,25 @@ function formatRemain(ms) {
   const days = Math.floor(totalMinutes / (24 * 60))
   const hours = Math.floor((totalMinutes % (24 * 60)) / 60)
   const minutes = totalMinutes % 60
-  if (days > 0) return `${days}天${hours}小时`
-  if (hours > 0) return `${hours}小时${minutes}分钟`
-  return `${minutes}分钟`
+  if (days > 0) return `${days}${strings.remain.day}${hours}${strings.remain.hour}`
+  if (hours > 0) return `${hours}${strings.remain.hour}${minutes}${strings.remain.minute}`
+  return `${minutes}${strings.remain.minute}`
+}
+
+function formatUtc8Ymd(date) {
+  const reference = date instanceof Date ? date : new Date(date)
+  const shifted = new Date(reference.getTime() + UTC8_OFFSET_MS)
+  const yyyy = String(shifted.getUTCFullYear())
+  const mm = String(shifted.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(shifted.getUTCDate()).padStart(2, '0')
+  return `${yyyy}${mm}${dd}`
+}
+
+function isExpiredChallengeTask(task, referenceNow) {
+  const seedKey = String(task && task.seedKey ? task.seedKey : '')
+  const matched = seedKey.match(/^challenge_(\d{8})_/)
+  if (!matched) return false
+  return matched[1] < formatUtc8Ymd(referenceNow)
 }
 
 function defaultReminderSettings() {
@@ -282,13 +300,7 @@ async function runDeadlineReminders(current) {
 async function runChallengeExpiredReminders(current) {
   const result = await db.collection(TASKS).where({ assigneeId: _.neq('') }).get()
   const tasks = result.data || []
-  const expiredChallenges = tasks.filter((task) => {
-    const dueAt = task && task.dueAt ? new Date(task.dueAt) : null
-    const seedKey = String(task && task.seedKey ? task.seedKey : '')
-    if (!seedKey.startsWith('challenge_')) return false
-    if (!dueAt || Number.isNaN(dueAt.getTime())) return false
-    return !task.challengeExpiredNotifiedAt && dueAt < current
-  })
+  const expiredChallenges = tasks.filter((task) => !task.challengeExpiredNotifiedAt && isExpiredChallengeTask(task, current))
   const users = await listUsersByIds(expiredChallenges.map((task) => task.assigneeId).filter(Boolean))
   const userMap = buildUserMap(users)
   let deletedCount = 0

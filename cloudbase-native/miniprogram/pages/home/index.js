@@ -3,6 +3,9 @@ const { formatDateTime, formatDateInput, formatTimeInput, statusLabel, rewardLab
 const { requestTaskSubscribeAuth } = require('../../utils/subscribe')
 const { saveSubscribeSettings } = require('../../utils/api')
 const strings = require('../../config/strings')
+const homeRuntime = strings.homeRuntime || {}
+const guideStrings = homeRuntime.guide || {}
+const offlineRewardStrings = homeRuntime.offlineReward || {}
 
 const ACTIVE_ASSIGNEE_STATUS = ['in_progress', 'pending_confirmation']
 
@@ -102,9 +105,35 @@ function buildDailyTaskEditorState(presets) {
     expandedIndex: -1,
     openingIndex: -1,
     closingIndex: -1,
-    presets: (source.length ? source : [null]).map((item, index) => buildDailyTaskPresetDraft(item, index)),
-    savedPresets: (source.length ? source : [null]).map((item, index) => buildDailyTaskPresetDraft(item, index)),
+    deletingIndex: -1,
+    presets: source.map((item, index) => buildDailyTaskPresetDraft(item, index)),
+    savedPresets: source.map((item, index) => buildDailyTaskPresetDraft(item, index)),
   }
+}
+
+function serializeDailyTaskPresetForSave(preset, index) {
+  return {
+    id: String(preset && preset.id ? preset.id : `daily_preset_${index + 1}`),
+    title: String(preset && preset.title ? preset.title : '').trim(),
+    detail: String(preset && preset.detail ? preset.detail : '').trim(),
+    dueTime: String(preset && preset.dueTime ? preset.dueTime : '23:59').trim() || '23:59',
+    rewardType: preset && preset.rewardType ? preset.rewardType : 'agility',
+    autoAccept: Boolean(preset && preset.autoAccept),
+    autoAcceptTime: String(preset && preset.autoAcceptTime ? preset.autoAcceptTime : '06:00').trim() || '06:00',
+    subtasks: safeArray(preset && preset.subtasks)
+      .map((item) => ({ title: String(item.title || '').trim(), total: 1 }))
+      .filter((item) => item.title),
+  }
+}
+
+function buildDailyTaskPresetsForSingleSave(editor, targetIndex) {
+  const currentPresets = safeArray(editor && editor.presets)
+  const savedPresets = safeArray(editor && editor.savedPresets)
+  const nextPresets = savedPresets.map((preset, index) => serializeDailyTaskPresetForSave(preset, index))
+  const currentPreset = currentPresets[targetIndex]
+  if (!currentPreset) return nextPresets
+  nextPresets[targetIndex] = serializeDailyTaskPresetForSave(currentPreset, targetIndex)
+  return nextPresets
 }
 
 function buildTaskFlyState() {
@@ -222,6 +251,24 @@ function reindexSubscribeReminderDrafts(reminders) {
   })
 }
 
+function getNextSubscribeReminderMinutes(reminders, direction) {
+  const targetDirection = direction === 'after' ? 'after' : direction === 'exact' ? 'exact' : 'before'
+  if (targetDirection === 'exact') return 0
+  const used = new Set(
+    safeArray(reminders)
+      .filter((item) => {
+        const itemDirection = item && item.direction === 'after' ? 'after' : item && item.direction === 'exact' ? 'exact' : 'before'
+        return itemDirection === targetDirection
+      })
+      .map((item) => normalizeSubscribeMinutes(item && item.minutes ? item.minutes : 0))
+  )
+  for (let index = 0; index < SUBSCRIBE_OFFSET_OPTIONS.length; index += 1) {
+    const option = SUBSCRIBE_OFFSET_OPTIONS[index]
+    if (option && !used.has(option.minutes)) return option.minutes
+  }
+  return targetDirection === 'after' ? 60 : 30
+}
+
 function normalizeSubscribeReminderSettings(settings) {
   const source = settings && typeof settings === 'object' ? settings : {}
   const categoryEnabledSource = source.categoryEnabled && typeof source.categoryEnabled === 'object' ? source.categoryEnabled : {}
@@ -282,6 +329,7 @@ function buildSubscribeSettingsState(settings, preferences) {
   const reviewStatus = subscribePreferences.review && subscribePreferences.review.status ? subscribePreferences.review.status : ''
   return {
     visible: false,
+    panelVisible: false,
     closing: false,
     categoryEnabled: Object.assign({}, normalized.categoryEnabled),
     statuses: {
@@ -406,12 +454,12 @@ const GUIDE_IDS = {
 
 function buildGuideTask(profile, mode) {
   const userId = profile && profile.userId ? profile.userId : 'guide-user'
-  const nickname = profile && profile.nickname ? profile.nickname : '旅者-P-ZA'
+  const nickname = profile && profile.nickname ? profile.nickname : guideStrings.nicknameFallback
   const dueAt = new Date('2026-03-18T21:00:00+08:00').toISOString()
   const base = {
     _id: mode === 'archive' ? GUIDE_IDS.archive : mode === 'mission' ? GUIDE_IDS.mission : GUIDE_IDS.collab,
-    title: '整理测试房间',
-    detail: '把散乱的区域收一收，确认流程清楚、页面可用。',
+    title: guideStrings.taskTitle,
+    detail: guideStrings.taskDetail,
     status: mode === 'collab' ? 'pending' : mode === 'mission' ? 'in_progress' : 'completed',
     category: 'normal',
     creatorId: userId,
@@ -425,8 +473,8 @@ function buildGuideTask(profile, mode) {
     previousTaskId: '',
     attributeReward: { type: 'agility', value: 1 },
     subtasks: [
-      { title: '整理桌面区域', total: 1, current: mode === 'collab' ? 0 : 1 },
-      { title: '收好杂物箱', total: 1, current: mode === 'collab' ? 0 : 1 },
+      { title: guideStrings.subtaskDesk, total: 1, current: mode === 'collab' ? 0 : 1 },
+      { title: guideStrings.subtaskBox, total: 1, current: mode === 'collab' ? 0 : 1 },
     ],
     computedProgress: mode === 'collab' ? { current: 0, total: 2 } : { current: 2, total: 2 },
     createdAt: new Date('2026-03-16T20:00:00+08:00').toISOString(),
@@ -464,18 +512,18 @@ function buildGuideHomeView(profile) {
   const todayTask = enrichTask(
     {
       _id: 'guide-today-task',
-      title: '检查首页信息',
-      detail: '确认今天要先推进的内容有没有漏掉。',
+      title: guideStrings.todayTitle,
+      detail: guideStrings.todayDetail,
       status: 'in_progress',
       category: 'normal',
       creatorId: profile.userId || 'guide-user',
-      creatorName: profile.nickname || '旅者-P-ZA',
+      creatorName: profile.nickname || guideStrings.nicknameFallback,
       assigneeId: profile.userId || 'guide-user',
-      assigneeName: profile.nickname || '旅者-P-ZA',
+      assigneeName: profile.nickname || guideStrings.nicknameFallback,
       dueAt: new Date('2026-03-16T21:00:00+08:00').toISOString(),
       startAt: new Date('2026-03-16T18:00:00+08:00').toISOString(),
       attributeReward: { type: 'wisdom', value: 1 },
-      subtasks: [{ title: '确认今日重点', total: 1, current: 0 }],
+      subtasks: [{ title: guideStrings.todaySubtask, total: 1, current: 0 }],
       createdAt: new Date('2026-03-16T18:00:00+08:00').toISOString(),
       updatedAt: new Date('2026-03-16T18:00:00+08:00').toISOString(),
     },
@@ -485,18 +533,18 @@ function buildGuideHomeView(profile) {
   const challengeTask = enrichTask(
     {
       _id: 'guide-challenge-task',
-      title: '完成一组整理练习',
-      detail: '这是系统每天给你的练手挑战。',
+      title: guideStrings.challengeTitle,
+      detail: guideStrings.challengeDetail,
       status: 'pending',
       category: 'challenge',
       creatorId: `sys:${profile.userId || 'guide-user'}`,
-      creatorName: '系统',
+      creatorName: guideStrings.systemName,
       assigneeId: '',
       assigneeName: '',
       dueAt: new Date('2026-03-16T23:59:00+08:00').toISOString(),
       startAt: new Date('2026-03-16T00:00:00+08:00').toISOString(),
       attributeReward: { type: 'agility', value: 1 },
-      subtasks: [{ title: '完成一组整理', total: 1, current: 0 }],
+      subtasks: [{ title: guideStrings.challengeSubtask, total: 1, current: 0 }],
       createdAt: new Date('2026-03-16T00:00:00+08:00').toISOString(),
       updatedAt: new Date('2026-03-16T00:00:00+08:00').toISOString(),
       isVirtual: true,
@@ -522,188 +570,25 @@ function buildGuideHomeView(profile) {
 function buildGuideCreateState(step) {
   const create = Object.assign(buildCreateState(), {
     visible: step === 3 || step === 4,
-    aiPrompt: '帮我生成一个整理测试房间的协作任务',
+    aiPrompt: guideStrings.aiPrompt,
   })
   if (step === 4) {
-    create.title = '整理测试房间'
-    create.detail = '把散乱的区域整理好，顺手熟悉一次任务发布流程。'
+    create.title = guideStrings.taskTitle
+    create.detail = guideStrings.createDetail
     create.rewardType = 'agility'
     create.subtasks = [
-      { title: '整理桌面区域', total: 1 },
-      { title: '收好杂物箱', total: 1 },
+      { title: guideStrings.subtaskDesk, total: 1 },
+      { title: guideStrings.subtaskBox, total: 1 },
     ]
   }
   return create
 }
 
 function getOnboardingMeta(step) {
+  if (step >= 0 && step < safeArray(guideStrings.steps).length) {
+    return guideStrings.steps[step]
+  }
   switch (step) {
-    case 0:
-      return {
-        title: '先看顶部卡片',
-        segments: [
-          { text: '这里会显示 ' },
-          { text: '昵称', strong: true },
-          { text: '、' },
-          { text: '属性值', strong: true },
-          { text: ' 和 ' },
-          { text: '新建任务', strong: true },
-          { text: '。这是你进入小程序后最先看到的状态面板。' },
-        ],
-        hint: '',
-        target: 'hero',
-        panelPosition: 'bottom',
-        actionDriven: false,
-      }
-    case 1:
-      return {
-        title: '再看首页',
-        segments: [
-          { text: '这里会显示 ' },
-          { text: '首页', strong: true },
-          { text: ' 里的 ' },
-          { text: '今日焦点', strong: true },
-          { text: ' 和 ' },
-          { text: '每日挑战', strong: true },
-          { text: '。进入小程序或下拉时会自动刷新数据。' },
-        ],
-        hint: '',
-        target: 'home',
-        panelPosition: 'top',
-        actionDriven: false,
-      }
-    case 2:
-      return {
-        title: '开始新建任务',
-        segments: [
-          { text: '点一下 ' },
-          { text: '新建任务', strong: true },
-          { text: '。接下来会用一份假数据带你走完整个流程。' },
-        ],
-        hint: '请点击高亮按钮继续',
-        target: 'create-entry',
-        panelPosition: 'bottom',
-        actionDriven: true,
-      }
-    case 3:
-      return {
-        title: '先填充任务',
-        segments: [
-          { text: '这里已经帮你填好一句示例描述。点 ' },
-          { text: '一键填充任务', strong: true },
-          { text: '，先看看任务草案会怎么整理出来。' },
-        ],
-        hint: '请点击高亮按钮继续',
-        target: 'create-ai',
-        panelPosition: 'bottom',
-        actionDriven: true,
-      }
-    case 4:
-      return {
-        title: '发布到协作区',
-        segments: [
-          { text: '草案已经准备好了。请在页面最下方点击 ' },
-          { text: '创建任务', strong: true },
-          { text: '，这张演示任务会出现在协作页里。' },
-        ],
-        hint: '请点击高亮按钮继续',
-        target: 'create-submit',
-        panelPosition: 'top',
-        actionDriven: true,
-      }
-    case 5:
-      return {
-        title: '看看协作区',
-        segments: [
-          { text: '这里会显示你发布出去、还在跟进状态的任务。' },
-          { text: '点这张演示任务', strong: true },
-          { text: '，进入详情。' },
-        ],
-        hint: '请点击高亮任务继续',
-        target: 'collab-list',
-        panelPosition: 'top',
-        actionDriven: true,
-      }
-    case 6:
-      return {
-        title: '接取这张任务',
-        segments: [
-          { text: '在详情里点 ' },
-          { text: '接取任务', strong: true },
-          { text: '。接取后，它会进入使命页。' },
-        ],
-        hint: '请点击高亮按钮继续',
-        target: 'collab-accept',
-        panelPosition: 'bottom',
-        actionDriven: true,
-      }
-    case 7:
-      return {
-        title: '看看使命区',
-        segments: [
-          { text: '这里是你已经接取并正在推进的任务。' },
-          { text: '点这张演示任务', strong: true },
-          { text: '，继续下一步。' },
-        ],
-        hint: '请点击高亮任务继续',
-        target: 'mission-list',
-        panelPosition: 'top',
-        actionDriven: true,
-      }
-    case 8:
-      return {
-        title: '完成这张任务',
-        segments: [
-          { text: '这一步直接演示完成流程。点 ' },
-          { text: '完成任务', strong: true },
-          { text: '，完成后会进入归档。' },
-        ],
-        hint: '请点击高亮按钮继续',
-        target: 'mission-complete',
-        panelPosition: 'bottom',
-        actionDriven: true,
-      }
-    case 9:
-      return {
-        title: '看看归档',
-        segments: [
-          { text: '这里会保留完成记录，普通任务会保留 ' },
-          { text: '7天', strong: true },
-          { text: '。' },
-          { text: '点这条演示归档', strong: true },
-          { text: '，进入记录详情。' },
-        ],
-        hint: '请点击高亮记录继续',
-        target: 'archive-list',
-        panelPosition: 'top',
-        actionDriven: true,
-      }
-    case 10:
-      return {
-        title: '删除一条完成记录',
-        segments: [
-          { text: '归档默认保留 ' },
-          { text: '7天', strong: true },
-          { text: '，也可以提前删除完成记录。点 ' },
-          { text: '删除归档', strong: true },
-          { text: '，可以把这条演示记录移除。' },
-        ],
-        hint: '请点击高亮按钮继续',
-        target: 'archive-delete',
-        panelPosition: 'bottom',
-        actionDriven: true,
-      }
-    case 11:
-      return {
-        title: '看看成长页',
-        segments: [
-          { text: '这里会展示你的属性累计和归档记录数量。' },
-        ],
-        hint: '',
-        target: 'achievements',
-        panelPosition: 'top',
-        actionDriven: false,
-      }
     case 12:
       return {
         title: strings.onboardingExtra.settingsStepTitle,
@@ -741,20 +626,15 @@ function safeArray(list) {
 function extractOfflineRewardPromiseFromPrompt(text) {
   const source = String(text || '').trim()
   if (!source) return ''
-  const patterns = [
-    /(?:线下奖励|额外奖励|奖励|奖品|报酬|酬劳)[：:是为给\s]*([^，。；;\n]{2,32})/,
-    /(?:换取|兑换|换成)[^\S\r\n]*([^，。；;\n]{2,24})/,
-    /((?:请|送|给)[^，。；;\n]{0,8}(?:喝|吃|拿|送)[^，。；;\n]{1,24})/,
-    /((?:请|带|陪)(?:你|你们|对方|Ta|ta)?去[^，。；;\n]{1,24})/,
-    /((?:一起去|去)[^，。；;\n]{2,18})/,
-    /((?:奶茶|咖啡|红包|请客|饮料|零食|甜品)[^，。；;\n]{0,18})/,
-  ]
+  const patterns = safeArray(offlineRewardStrings.patternSources).map((pattern) => new RegExp(pattern))
+  const cleanupPattern = new RegExp(String(offlineRewardStrings.cleanupSource || ''), 'u')
+  const trimPattern = new RegExp(String(offlineRewardStrings.trimSource || ''), 'u')
   for (let index = 0; index < patterns.length; index += 1) {
     const matched = source.match(patterns[index])
     if (!matched) continue
     const value = String(matched[1] || '')
-      .replace(/^(作为)?(?:线下奖励|额外奖励|奖励|奖品|报酬|酬劳|换取|兑换|换成)[：:\s]*/u, '')
-      .replace(/[,.，。；;!！?？]+$/u, '')
+      .replace(cleanupPattern, '')
+      .replace(trimPattern, '')
       .trim()
     if (value.length >= 2) return value
   }
@@ -815,7 +695,7 @@ function getOverdueDaysText(dueAt, status) {
   const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const diffDays = Math.floor((nowDate.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000))
   if (diffDays <= 0) return ''
-  return `已过期${diffDays}天`
+  return `${homeRuntime.overdue.prefix}${diffDays}${homeRuntime.overdue.suffix}`
 }
 
 function shouldHideTask(task, supersededIds) {
@@ -1417,8 +1297,8 @@ Page({
         const sharedTask = enrichTask(
           {
             _id: sharedTaskId,
-            title: strings.share.taskDetailFallback || '分享任务',
-            detail: '任务已被接取',
+            title: strings.share.sharedTaskTitle || strings.share.taskDetailFallback,
+            detail: strings.share.sharedTaskAcceptedDetail,
             status: 'in_progress',
             category: 'normal',
             creatorId: '',
@@ -1463,10 +1343,16 @@ Page({
         payload.profile && payload.profile.subscribeReminderSettings,
         payload.profile && payload.profile.subscribePreferences
       )
-      const dailyTaskEditor = buildDailyTaskEditorState(payload.profile && payload.profile.dailyTaskPresets)
+      const currentDailyTaskEditor = this.data.dailyTaskEditor
+      const keepDailyTaskDrafts = Boolean(currentDailyTaskEditor && currentDailyTaskEditor.editMode)
+      const dailyTaskEditor = keepDailyTaskDrafts
+        ? currentDailyTaskEditor
+        : buildDailyTaskEditorState(payload.profile && payload.profile.dailyTaskPresets)
       subscribeSettings.visible = Boolean(this.data.subscribeSettings && this.data.subscribeSettings.visible)
-      dailyTaskEditor.editMode = Boolean(this.data.dailyTaskEditor && this.data.dailyTaskEditor.editMode)
-      dailyTaskEditor.expandedIndex = Number(this.data.dailyTaskEditor && this.data.dailyTaskEditor.expandedIndex >= 0 ? this.data.dailyTaskEditor.expandedIndex : -1)
+      if (!keepDailyTaskDrafts) {
+        dailyTaskEditor.editMode = Boolean(this.data.dailyTaskEditor && this.data.dailyTaskEditor.editMode)
+        dailyTaskEditor.expandedIndex = Number(this.data.dailyTaskEditor && this.data.dailyTaskEditor.expandedIndex >= 0 ? this.data.dailyTaskEditor.expandedIndex : -1)
+      }
       this.setData({
         profile: payload.profile,
         subscribeSettings,
@@ -1567,7 +1453,7 @@ Page({
               profile && profile.subscribeReminderSettings,
               profile && profile.subscribePreferences
             ),
-            { visible: true, closing: false }
+            { visible: true, panelVisible: true, closing: false }
           )
         : buildSubscribeSettingsState(
             profile && profile.subscribeReminderSettings,
@@ -1841,9 +1727,13 @@ Page({
       this.data.profile && this.data.profile.subscribePreferences
     )
     subscribeSettings.visible = true
+    subscribeSettings.panelVisible = false
     subscribeSettings.closing = false
     this.setData({ subscribeSettings })
-    wx.nextTick(() => this.measureScrollHint('subscribe'))
+    wx.nextTick(() => {
+      this.setData({ 'subscribeSettings.panelVisible': true })
+      this.measureScrollHint('subscribe')
+    })
   },
 
   closeSubscribeSettings() {
@@ -1852,6 +1742,7 @@ Page({
       clearTimeout(this._subscribeCloseTimer)
     }
     this.setData({
+      'subscribeSettings.panelVisible': false,
       'subscribeSettings.closing': true,
       'scrollHints.subscribe': false,
     })
@@ -1936,10 +1827,34 @@ Page({
   async deleteDailyTaskPreset(event) {
     if (this.data.loading) return
     const index = Number(event.currentTarget.dataset.index)
+    const currentPresets = safeArray(this.data.dailyTaskEditor && this.data.dailyTaskEditor.presets)
+    const targetPreset = currentPresets[index]
+    if (!targetPreset) return
     const savedPresets = safeArray(this.data.dailyTaskEditor && this.data.dailyTaskEditor.savedPresets)
-    if (savedPresets.length <= 1) return
-    const nextPresets = savedPresets.filter((_, current) => current !== index).map((item, current) => buildDailyTaskPresetDraft(item, current))
-    this.setData({ loading: true, actionLoading: `deleteDailyTaskPreset_${index}` })
+    const savedIndex = savedPresets.findIndex((item) => String(item && item.id ? item.id : '') === String(targetPreset.id || ''))
+    if (savedIndex < 0) {
+      const nextCurrentPresets = currentPresets
+        .filter((_, current) => current !== index)
+        .map((item, current) => buildDailyTaskPresetDraft(item, current))
+      const expandedIndex = Number(this.data.dailyTaskEditor && this.data.dailyTaskEditor.expandedIndex)
+      const nextExpandedIndex =
+        expandedIndex === index ? -1 : expandedIndex > index ? expandedIndex - 1 : expandedIndex
+      this.setData({
+        'dailyTaskEditor.presets': nextCurrentPresets,
+        'dailyTaskEditor.expandedIndex': nextExpandedIndex,
+        'dailyTaskEditor.openingIndex': -1,
+        'dailyTaskEditor.closingIndex': -1,
+        'dailyTaskEditor.deletingIndex': -1,
+      })
+      wx.nextTick(() => this.measureScrollHint('page'))
+      return
+    }
+    const nextPresets = savedPresets.filter((_, current) => current !== savedIndex).map((item, current) => buildDailyTaskPresetDraft(item, current))
+    this.setData({
+      loading: true,
+      actionLoading: `deleteDailyTaskPreset_${index}`,
+      'dailyTaskEditor.deletingIndex': index,
+    })
     this.clearError()
     try {
       const payload = await updateProfile({ dailyTaskPresets: nextPresets })
@@ -1947,6 +1862,7 @@ Page({
       const nextDailyTaskEditor = buildDailyTaskEditorState(payload.profile && payload.profile.dailyTaskPresets)
       nextDailyTaskEditor.editMode = true
       nextDailyTaskEditor.expandedIndex = -1
+      nextDailyTaskEditor.deletingIndex = -1
       this.setData({
         profile: payload.profile,
         dailyTaskEditor: nextDailyTaskEditor,
@@ -1955,7 +1871,11 @@ Page({
     } catch (error) {
       this.setError((error && error.message) || strings.dailyTaskSettings.errors.saveFailed)
     } finally {
-      this.setData({ loading: false, actionLoading: '' })
+      this.setData({
+        loading: false,
+        actionLoading: '',
+        'dailyTaskEditor.deletingIndex': -1,
+      })
     }
   },
 
@@ -2115,8 +2035,9 @@ Page({
     const direction = String(event && event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.direction || '') === 'after' ? 'after' : 'before'
     const reminders = safeArray(this.data.subscribeSettings && this.data.subscribeSettings.reminders)
     if (reminders.length >= 8) return
+    const nextMinutes = getNextSubscribeReminderMinutes(reminders, direction)
     this.setData({
-      'subscribeSettings.reminders': reindexSubscribeReminderDrafts(reminders.concat(buildSubscribeReminderDraft(direction, 30))),
+      'subscribeSettings.reminders': reindexSubscribeReminderDrafts(reminders.concat(buildSubscribeReminderDraft(direction, nextMinutes))),
     })
     wx.nextTick(() => this.measureScrollHint('subscribe'))
   },
@@ -2172,6 +2093,7 @@ Page({
         nextProfile.subscribePreferences
       )
       nextSubscribeSettings.visible = true
+      nextSubscribeSettings.panelVisible = true
       nextSubscribeSettings.closing = false
       this.setData({
         profile: nextProfile,
@@ -2195,6 +2117,7 @@ Page({
         this.data.profile && this.data.profile.subscribePreferences
       )
       subscribeSettings.visible = true
+      subscribeSettings.panelVisible = true
       subscribeSettings.closing = false
       this.setData({ subscribeSettings })
       wx.nextTick(() => this.measureScrollHint('subscribe'))
@@ -2241,18 +2164,7 @@ Page({
   async saveDailyTaskSettings(event) {
     if (this.data.loading) return
     const targetIndex = Number(event && event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.index)
-    const presets = safeArray(this.data.dailyTaskEditor && this.data.dailyTaskEditor.presets).map((preset, index) => ({
-      id: String(preset && preset.id ? preset.id : `daily_preset_${index + 1}`),
-      title: String(preset && preset.title ? preset.title : '').trim(),
-      detail: String(preset && preset.detail ? preset.detail : '').trim(),
-      dueTime: String(preset && preset.dueTime ? preset.dueTime : '23:59').trim() || '23:59',
-      rewardType: preset && preset.rewardType ? preset.rewardType : 'agility',
-      autoAccept: Boolean(preset && preset.autoAccept),
-      autoAcceptTime: String(preset && preset.autoAcceptTime ? preset.autoAcceptTime : '06:00').trim() || '06:00',
-      subtasks: safeArray(preset && preset.subtasks)
-        .map((item) => ({ title: String(item.title || '').trim(), total: 1 }))
-        .filter((item) => item.title),
-    }))
+    const presets = buildDailyTaskPresetsForSingleSave(this.data.dailyTaskEditor, targetIndex)
     const presetToSave = Number.isInteger(targetIndex) && targetIndex >= 0 ? presets[targetIndex] : null
     if (!presetToSave) return
     if (!presetToSave.title) {
@@ -2521,10 +2433,10 @@ Page({
     const offlineRewardPromise = String(payload.offlineRewardPromise || '').trim()
     if (payload.mode !== 'rework' && offlineRewardPromise) {
       const confirmReward = await wx.showModal({
-        title: '线下奖励提醒',
-        content: '任务有承诺的线下奖励，发起者需自行按照承诺给实施者对应奖励。',
-        confirmText: '同意',
-        cancelText: '拒绝',
+        title: offlineRewardStrings.reminderTitle,
+        content: offlineRewardStrings.reminderContent,
+        confirmText: offlineRewardStrings.agree,
+        cancelText: offlineRewardStrings.reject,
       })
       if (!confirmReward.confirm) return
     }
@@ -2654,7 +2566,7 @@ Page({
       .concat(safeArray(view.archiveTasks))
     const currentTask = candidates.find((item) => String(item.previousTaskId || '') === String(selectedTask._id))
     if (!currentTask) {
-      this.setError('未找到当前任务')
+      this.setError(strings.errors.taskNotFound)
       return
     }
     this.showTaskDetail(currentTask)
@@ -2852,8 +2764,8 @@ Page({
   onSubmitReview() {
     if (this.data.loading) return
     wx.showModal({
-      title: '提交检视',
-      content: '是否已经完成全部任务，并准备提交检视？',
+      title: strings.dialogs.submitReviewTitle,
+      content: strings.dialogs.submitReviewContent,
       confirmText: strings.dialogs.confirmContinue,
       cancelText: strings.dialogs.confirmCancel,
     }).then((result) => {

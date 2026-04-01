@@ -116,7 +116,7 @@
                     </view>
                     <view class="daily-task-editor-card-actions">
                       <button hover-class="button-press" hover-stay-time="90" size="mini" class="ghost-button mini-button" data-index="{{presetIndex}}" catchtap="toggleDailyTaskPresetEditor">{{dailyTaskEditor.expandedIndex === presetIndex ? strings.common.cancel : strings.common.edit}}</button>
-                      <button hover-class="button-press" hover-stay-time="90" size="mini" class="ghost-button mini-button" loading="{{actionLoading === ('deleteDailyTaskPreset_' + presetIndex)}}" data-index="{{presetIndex}}" catchtap="deleteDailyTaskPreset">{{strings.dailyTaskSettings.deletePreset}}</button>
+                      <button hover-class="button-press" hover-stay-time="90" size="mini" class="ghost-button mini-button daily-task-editor-action-button {{dailyTaskEditor.deletingIndex === presetIndex ? 'daily-task-editor-action-button-loading' : ''}}" data-index="{{presetIndex}}" catchtap="deleteDailyTaskPreset">{{strings.dailyTaskSettings.deletePreset}}</button>
                     </view>
                   </view>
                   <view wx:if="{{dailyTaskEditor.expandedIndex === presetIndex || dailyTaskEditor.openingIndex === presetIndex || dailyTaskEditor.closingIndex === presetIndex}}" class="daily-task-editor-panel {{dailyTaskEditor.expandedIndex === presetIndex ? 'daily-task-editor-panel-open' : (dailyTaskEditor.openingIndex === presetIndex ? 'daily-task-editor-panel-opening' : 'daily-task-editor-panel-closing')}}" catchtap="noop">
@@ -589,7 +589,7 @@
     </view>
   </view>
 
-  <view wx:if="{{subscribeSettings.visible}}" class="modal-mask subscribe-mask {{subscribeSettings.visible && !subscribeSettings.closing ? 'modal-open' : ''}} {{subscribeSettings.closing ? 'modal-closing' : ''}}" bindtap="{{onboarding.visible && onboarding.target === 'subscribe-settings' ? 'noop' : 'closeSubscribeSettings'}}" catchtouchmove="noop">
+  <view wx:if="{{subscribeSettings.visible}}" class="modal-mask subscribe-mask {{subscribeSettings.panelVisible && !subscribeSettings.closing ? 'modal-open' : ''}} {{subscribeSettings.closing ? 'modal-closing' : ''}}" bindtap="{{onboarding.visible && onboarding.target === 'subscribe-settings' ? 'noop' : 'closeSubscribeSettings'}}" catchtouchmove="noop">
     <view class="modal-stack">
     <scroll-view scroll-y="true" class="modal modal-scroll profile-scroll subscribe-scroll card create-modal" catchtap="noop" bindscroll="onSubscribeScroll">
       <view class="profile-scroll-content subscribe-scroll-content">
