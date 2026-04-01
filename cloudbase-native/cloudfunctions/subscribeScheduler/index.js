@@ -52,6 +52,7 @@ function defaultReminderSettings() {
       taskDeadlineBefore: true,
       taskDeadlineAfter: true,
       work: true,
+      dailyTaskAutoAccept: true,
       taskUpdate: true,
       review: true,
       challengeExpired: true,
@@ -89,6 +90,7 @@ function normalizeReminderSettings(raw) {
     taskDeadlineBefore: categoryEnabledSource.taskDeadlineBefore !== false,
     taskDeadlineAfter: categoryEnabledSource.taskDeadlineAfter !== false,
     work: categoryEnabledSource.work !== false,
+    dailyTaskAutoAccept: categoryEnabledSource.dailyTaskAutoAccept !== false,
     taskUpdate: categoryEnabledSource.taskUpdate !== false,
     review: categoryEnabledSource.review !== false,
     challengeExpired: categoryEnabledSource.challengeExpired !== false,
@@ -245,6 +247,7 @@ async function runDeadlineReminders(current) {
 
     const reminderSettings = normalizeReminderSettings(user.subscribeReminderSettings)
     const sentKeys = Array.isArray(task.todoReminderSentKeys) ? task.todoReminderSentKeys.map((item) => String(item)) : []
+    if (task.category === 'challenge') continue
 
     for (let reminderIndex = 0; reminderIndex < reminderSettings.taskDeadline.length; reminderIndex += 1) {
       const reminder = reminderSettings.taskDeadline[reminderIndex]

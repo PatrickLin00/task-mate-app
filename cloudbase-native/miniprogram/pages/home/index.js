@@ -71,6 +71,53 @@ function buildScrollHints() {
     create: false,
     profile: false,
     subscribe: false,
+    dailyTask: false,
+  }
+}
+
+function buildDailyTaskPresetDraft(preset, index) {
+  const source = preset && typeof preset === 'object' ? preset : {}
+  return {
+    id: String(source.id || `daily_preset_${index + 1}`),
+    aiPrompt: String(source.aiPrompt || ''),
+    title: String(source.title || '').trim(),
+    detail: String(source.detail || '').trim(),
+    dueTime: String(source.dueTime || '23:59').trim() || '23:59',
+    rewardType: ['wisdom', 'strength', 'agility'].includes(String(source.rewardType || '')) ? String(source.rewardType) : 'agility',
+    autoAccept: Boolean(source.autoAccept),
+    autoAcceptTime: String(source.autoAcceptTime || '06:00').trim() || '06:00',
+    subtasks:
+      safeArray(source.subtasks).length > 0
+        ? safeArray(source.subtasks).map((item) => ({ title: String(item.title || ''), total: Math.max(1, Number(item.total || 1)) }))
+        : [{ title: '', total: 1 }],
+  }
+}
+
+function buildDailyTaskEditorState(presets) {
+  const source = safeArray(presets)
+  return {
+    editMode: false,
+    panelMounted: false,
+    panelVisible: false,
+    expandedIndex: -1,
+    openingIndex: -1,
+    closingIndex: -1,
+    presets: (source.length ? source : [null]).map((item, index) => buildDailyTaskPresetDraft(item, index)),
+    savedPresets: (source.length ? source : [null]).map((item, index) => buildDailyTaskPresetDraft(item, index)),
+  }
+}
+
+function buildTaskFlyState() {
+  return {
+    visible: false,
+    title: '',
+    x: 0,
+    y: 0,
+    tx: 0,
+    ty: 0,
+    scale: 1,
+    opacity: 1,
+    targetTab: '',
   }
 }
 
@@ -201,6 +248,7 @@ function normalizeSubscribeReminderSettings(settings) {
       taskDeadlineBefore: categoryEnabledSource.taskDeadlineBefore !== false,
       taskDeadlineAfter: categoryEnabledSource.taskDeadlineAfter !== false,
       work: categoryEnabledSource.work !== false,
+      dailyTaskAutoAccept: categoryEnabledSource.dailyTaskAutoAccept !== false,
       taskUpdate: categoryEnabledSource.taskUpdate !== false,
       review: categoryEnabledSource.review !== false,
       challengeExpired: categoryEnabledSource.challengeExpired !== false,
@@ -221,7 +269,7 @@ function getSubscribeStatusLabel(enabled, sceneStatus) {
 
 function getSubscribeSceneStatusForCategory(category, preferences) {
   const source = preferences && typeof preferences === 'object' ? preferences : {}
-  const sceneKey = category === 'work' || category === 'taskUpdate' || category === 'review' ? category : 'todo'
+  const sceneKey = category === 'work' || category === 'dailyTaskAutoAccept' ? 'work' : category === 'taskUpdate' || category === 'review' ? category : 'todo'
   return source[sceneKey] && source[sceneKey].status ? source[sceneKey].status : ''
 }
 
@@ -241,6 +289,7 @@ function buildSubscribeSettingsState(settings, preferences) {
       taskDeadlineBefore: getSubscribeStatusLabel(normalized.categoryEnabled.taskDeadlineBefore, todoStatus),
       taskDeadlineAfter: getSubscribeStatusLabel(normalized.categoryEnabled.taskDeadlineAfter, todoStatus),
       work: getSubscribeStatusLabel(normalized.categoryEnabled.work, workStatus),
+      dailyTaskAutoAccept: getSubscribeStatusLabel(normalized.categoryEnabled.dailyTaskAutoAccept, workStatus),
       taskUpdate: getSubscribeStatusLabel(normalized.categoryEnabled.taskUpdate, taskUpdateStatus),
       review: getSubscribeStatusLabel(normalized.categoryEnabled.review, reviewStatus),
       challengeExpired: getSubscribeStatusLabel(normalized.categoryEnabled.challengeExpired, todoStatus),
@@ -1051,13 +1100,20 @@ Page({
     profileEditVisible: false,
     subscribeOffsetOptions: SUBSCRIBE_OFFSET_OPTIONS.map((item) => item.label),
     subscribeSettings: buildSubscribeSettingsState(),
+    dailyTaskEditor: buildDailyTaskEditorState(),
     nicknameDraft: '',
     create: buildCreateState(),
     scrollHints: buildScrollHints(),
+    taskFly: buildTaskFlyState(),
+    tabPulseTab: '',
+    pendingChallengeAcceptSeedKeys: [],
+    pendingChallengeAcceptMap: {},
   },
 
   onLoad(options) {
     this._scrollMetrics = {}
+    this._acceptChallengeQueue = []
+    this._processingAcceptChallenge = false
     const openTaskId = options && options.openTaskId ? String(options.openTaskId) : ''
     if (openTaskId) {
       this.setData({ pendingOpenTaskId: openTaskId })
@@ -1098,6 +1154,10 @@ Page({
     this.updateScrollHintByEvent('subscribe', event)
   },
 
+  onDailyTaskScroll(event) {
+    this.updateScrollHintByEvent('dailyTask', event)
+  },
+
   updateScrollHintByEvent(type, event) {
     const detail = event && event.detail ? event.detail : {}
     const scrollTop = Number(detail.scrollTop || 0)
@@ -1117,6 +1177,8 @@ Page({
       detail: { container: '.detail-scroll', content: '.detail-scroll-content' },
       create: { container: '.create-scroll', content: '.create-scroll-content' },
       profile: { container: '.profile-scroll', content: '.profile-scroll-content' },
+      dailyTask: { container: '.daily-task-scroll', content: '.daily-task-scroll-content' },
+      subscribe: { container: '.subscribe-scroll', content: '.subscribe-scroll-content' },
     }
     const current = selectors[type]
     if (!current) return
@@ -1182,6 +1244,104 @@ Page({
       wx.nextTick(() => this.measureScrollHint('detail'))
       this._detailOpenTimer = null
     }, 16)
+  },
+
+  measureElementRect(selector) {
+    return new Promise((resolve) => {
+      const query = this.createSelectorQuery()
+      query.select(selector).boundingClientRect()
+      query.exec((result) => {
+        resolve(result && result[0] ? result[0] : null)
+      })
+    })
+  },
+
+  dismissTransientPanels() {
+    if (this._detailOpenTimer) {
+      clearTimeout(this._detailOpenTimer)
+      this._detailOpenTimer = null
+    }
+    if (this._detailCloseTimer) {
+      clearTimeout(this._detailCloseTimer)
+      this._detailCloseTimer = null
+    }
+    if (this._createOpenTimer) {
+      clearTimeout(this._createOpenTimer)
+      this._createOpenTimer = null
+    }
+    if (this._createCloseTimer) {
+      clearTimeout(this._createCloseTimer)
+      this._createCloseTimer = null
+    }
+    this.setData({
+      detailMounted: false,
+      detailVisible: false,
+      detailClosing: false,
+      selectedTask: null,
+      selectedTaskDraftSubtasks: [],
+      selectedTaskHasDraftChanges: false,
+      create: buildCreateState(),
+      createModalVisible: false,
+      createModalClosing: false,
+      'scrollHints.detail': false,
+      'scrollHints.create': false,
+    })
+  },
+
+  async playTaskFlyToTab(title, targetTab) {
+    const safeTab = targetTab === 'collab' ? 'collab' : targetTab === 'home' ? 'home' : 'mission'
+    const feedbackText =
+      safeTab === 'home'
+        ? strings.feedback.taskMovedToDailyTask
+        : safeTab === 'mission'
+          ? strings.feedback.taskMovedToMission
+          : strings.feedback.taskMovedToCollab
+    const systemInfo = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync()
+    const windowWidth = Number(systemInfo.windowWidth || 375)
+    const windowHeight = Number(systemInfo.windowHeight || 667)
+    const startX = Math.max(16, Math.round(windowWidth / 2 - 108))
+    const startY = Math.max(112, Math.round(windowHeight * 0.42))
+    const targetRect = await this.measureElementRect(`#tab-${safeTab}`)
+    const endX = targetRect ? Math.round(targetRect.left + targetRect.width / 2 - 54) : startX
+    const endY = targetRect ? Math.round(targetRect.top + targetRect.height / 2 - 24) : Math.round(windowHeight - 140)
+
+    if (this._taskFlyTimer) clearTimeout(this._taskFlyTimer)
+    if (this._taskFlyPulseTimer) clearTimeout(this._taskFlyPulseTimer)
+
+    this.setData({
+      taskFly: {
+        visible: true,
+        title: title || strings.share.taskDetailFallback,
+        x: startX,
+        y: startY,
+        tx: 0,
+        ty: 0,
+        scale: 1,
+        opacity: 1,
+        targetTab: safeTab,
+      },
+      tabPulseTab: safeTab,
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    this.setData({
+      'taskFly.tx': endX - startX,
+      'taskFly.ty': endY - startY,
+      'taskFly.scale': 0.35,
+      'taskFly.opacity': 0.1,
+    })
+
+    wx.showToast({ title: feedbackText, icon: 'none' })
+
+    this._taskFlyTimer = setTimeout(() => {
+      this.setData({ taskFly: buildTaskFlyState() })
+      this._taskFlyTimer = null
+    }, 520)
+
+    this._taskFlyPulseTimer = setTimeout(() => {
+      this.setData({ tabPulseTab: '' })
+      this._taskFlyPulseTimer = null
+    }, 760)
   },
 
   updateSelectedTaskDraft(subtasks) {
@@ -1303,10 +1463,14 @@ Page({
         payload.profile && payload.profile.subscribeReminderSettings,
         payload.profile && payload.profile.subscribePreferences
       )
+      const dailyTaskEditor = buildDailyTaskEditorState(payload.profile && payload.profile.dailyTaskPresets)
       subscribeSettings.visible = Boolean(this.data.subscribeSettings && this.data.subscribeSettings.visible)
+      dailyTaskEditor.editMode = Boolean(this.data.dailyTaskEditor && this.data.dailyTaskEditor.editMode)
+      dailyTaskEditor.expandedIndex = Number(this.data.dailyTaskEditor && this.data.dailyTaskEditor.expandedIndex >= 0 ? this.data.dailyTaskEditor.expandedIndex : -1)
       this.setData({
         profile: payload.profile,
         subscribeSettings,
+        dailyTaskEditor,
         onboarding: Object.assign({}, this.data.onboarding, {
           visible: this.data.onboarding.visible || this.shouldAutoOpenOnboarding(payload.profile),
         }),
@@ -1331,6 +1495,7 @@ Page({
         if (this.data.detailMounted) this.measureScrollHint('detail')
         if (this.data.create && this.data.create.visible) this.measureScrollHint('create')
         if (this.data.profileEditVisible) this.measureScrollHint('profile')
+        if (this.data.dailyTaskEditor && this.data.dailyTaskEditor.editMode) this.measureScrollHint('page')
         if (this.data.subscribeSettings && this.data.subscribeSettings.visible) this.measureScrollHint('subscribe')
       })
     }
@@ -1535,6 +1700,136 @@ Page({
     this.applyOnboardingScene(0)
   },
 
+  openDailyTaskSettings() {
+    if (this.isOnboardingActive()) return
+    const dailyTaskEditor = buildDailyTaskEditorState(this.data.profile && this.data.profile.dailyTaskPresets)
+    dailyTaskEditor.editMode = true
+    dailyTaskEditor.panelMounted = true
+    dailyTaskEditor.panelVisible = true
+    dailyTaskEditor.expandedIndex = -1
+    this.setData({ dailyTaskEditor })
+    wx.nextTick(() => this.measureScrollHint('page'))
+  },
+
+  closeDailyTaskSettings() {
+    if (!(this.data.dailyTaskEditor && this.data.dailyTaskEditor.editMode)) return
+    this.setData({
+      dailyTaskEditor: buildDailyTaskEditorState(this.data.profile && this.data.profile.dailyTaskPresets),
+    })
+  },
+
+  toggleDailyTaskEditMode() {
+    if (this.data.dailyTaskEditor && this.data.dailyTaskEditor.editMode) {
+      this.closeDailyTaskSettings()
+      return
+    }
+    this.openDailyTaskSettings()
+  },
+
+  revertExpandedDailyTaskPreset() {
+    const editor = this.data.dailyTaskEditor || {}
+    const expandedIndex = Number(editor.expandedIndex)
+    if (expandedIndex < 0) return
+    if (this._dailyTaskPanelCloseTimer) {
+      clearTimeout(this._dailyTaskPanelCloseTimer)
+      this._dailyTaskPanelCloseTimer = null
+    }
+    const savedPresets = safeArray(editor.savedPresets)
+    const presets = clone(editor.presets)
+    if (savedPresets[expandedIndex]) {
+      presets[expandedIndex] = buildDailyTaskPresetDraft(savedPresets[expandedIndex], expandedIndex)
+    } else {
+      presets.splice(expandedIndex, 1)
+    }
+    this.setData({
+      'dailyTaskEditor.presets': presets.map((item, index) => buildDailyTaskPresetDraft(item, index)),
+      'dailyTaskEditor.expandedIndex': -1,
+      'dailyTaskEditor.openingIndex': -1,
+      'dailyTaskEditor.closingIndex': expandedIndex,
+    })
+    this._dailyTaskPanelCloseTimer = setTimeout(() => {
+      this.setData({ 'dailyTaskEditor.closingIndex': -1 })
+      this._dailyTaskPanelCloseTimer = null
+    }, 220)
+  },
+
+  switchDailyTaskPresetEditor(index) {
+    const safeIndex = Number(index)
+    if (safeIndex < 0) return
+    const currentExpanded = Number(this.data.dailyTaskEditor && this.data.dailyTaskEditor.expandedIndex)
+    if (currentExpanded === safeIndex) {
+      this.revertExpandedDailyTaskPreset()
+      return
+    }
+    if (this._dailyTaskPanelCloseTimer) {
+      clearTimeout(this._dailyTaskPanelCloseTimer)
+      this._dailyTaskPanelCloseTimer = null
+    }
+    if (this._dailyTaskPanelOpenTimer) {
+      clearTimeout(this._dailyTaskPanelOpenTimer)
+      this._dailyTaskPanelOpenTimer = null
+    }
+    if (currentExpanded >= 0) {
+      const savedPresets = safeArray(this.data.dailyTaskEditor && this.data.dailyTaskEditor.savedPresets)
+      const presets = clone(this.data.dailyTaskEditor && this.data.dailyTaskEditor.presets)
+      let nextExpandedIndex = safeIndex
+      if (savedPresets[currentExpanded]) {
+        presets[currentExpanded] = buildDailyTaskPresetDraft(savedPresets[currentExpanded], currentExpanded)
+      } else {
+        presets.splice(currentExpanded, 1)
+        if (safeIndex > currentExpanded) nextExpandedIndex -= 1
+      }
+      this.setData({
+        'dailyTaskEditor.presets': presets.map((item, current) => buildDailyTaskPresetDraft(item, current)),
+        'dailyTaskEditor.openingIndex': nextExpandedIndex,
+        'dailyTaskEditor.closingIndex': currentExpanded,
+        'dailyTaskEditor.expandedIndex': -1,
+      })
+      this._dailyTaskPanelOpenTimer = setTimeout(() => {
+        this.setData({
+          'dailyTaskEditor.openingIndex': -1,
+          'dailyTaskEditor.expandedIndex': nextExpandedIndex,
+        })
+        this._dailyTaskPanelOpenTimer = null
+      }, 16)
+      this._dailyTaskPanelCloseTimer = setTimeout(() => {
+        this.setData({ 'dailyTaskEditor.closingIndex': -1 })
+        this._dailyTaskPanelCloseTimer = null
+      }, 220)
+      wx.nextTick(() => this.measureScrollHint('page'))
+      return
+    }
+    this.setData({
+      'dailyTaskEditor.closingIndex': -1,
+      'dailyTaskEditor.openingIndex': safeIndex,
+      'dailyTaskEditor.expandedIndex': -1,
+    })
+    this._dailyTaskPanelOpenTimer = setTimeout(() => {
+      this.setData({
+        'dailyTaskEditor.openingIndex': -1,
+        'dailyTaskEditor.expandedIndex': safeIndex,
+      })
+      wx.nextTick(() => this.measureScrollHint('page'))
+      this._dailyTaskPanelOpenTimer = null
+    }, 16)
+  },
+
+  toggleDailyTaskPresetEditor(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    this.switchDailyTaskPresetEditor(index)
+  },
+
+  onTapDailyTaskPresetCard(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    const currentExpanded = Number(this.data.dailyTaskEditor && this.data.dailyTaskEditor.expandedIndex)
+    if (index < 0 || currentExpanded === index) return
+    this.switchDailyTaskPresetEditor(index)
+  },
+
+  cancelDailyTaskPresetEdit() {
+    this.revertExpandedDailyTaskPreset()
+  },
+
   openSubscribeSettings() {
     if (this.isOnboardingActive()) return
     if (this._subscribeCloseTimer) {
@@ -1569,6 +1864,160 @@ Page({
       })
       this._subscribeCloseTimer = null
     }, 240)
+  },
+
+  onDailyTaskPresetTitleInput(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    this.setData({ [`dailyTaskEditor.presets[${index}].title`]: event.detail.value || '' })
+  },
+
+  onDailyTaskPresetAiPromptInput(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    this.setData({ [`dailyTaskEditor.presets[${index}].aiPrompt`]: event.detail.value || '' })
+  },
+
+  onDailyTaskPresetDetailInput(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    this.setData({ [`dailyTaskEditor.presets[${index}].detail`]: event.detail.value || '' })
+  },
+
+  onDailyTaskPresetDueTimeChange(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    this.setData({ [`dailyTaskEditor.presets[${index}].dueTime`]: event.detail.value || '21:00' })
+  },
+
+  onDailyTaskPresetRewardTypeChange(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    this.setData({ [`dailyTaskEditor.presets[${index}].rewardType`]: event.currentTarget.dataset.type || 'agility' })
+  },
+
+  onDailyTaskPresetAutoAcceptChange(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    this.setData({ [`dailyTaskEditor.presets[${index}].autoAccept`]: Boolean(event.detail.value) })
+  },
+
+  onDailyTaskPresetAutoAcceptTimeChange(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    this.setData({ [`dailyTaskEditor.presets[${index}].autoAcceptTime`]: event.detail.value || '06:00' })
+  },
+
+  onDailyTaskPresetSubtaskInput(event) {
+    const presetIndex = Number(event.currentTarget.dataset.presetIndex)
+    const subtaskIndex = Number(event.currentTarget.dataset.subtaskIndex)
+    const presets = clone(this.data.dailyTaskEditor && this.data.dailyTaskEditor.presets)
+    if (!presets[presetIndex] || !safeArray(presets[presetIndex].subtasks)[subtaskIndex]) return
+    presets[presetIndex].subtasks[subtaskIndex].title = event.detail.value || ''
+    this.setData({ 'dailyTaskEditor.presets': presets })
+  },
+
+  addDailyTaskPreset() {
+    const presets = safeArray(this.data.dailyTaskEditor && this.data.dailyTaskEditor.presets)
+    if (presets.length >= 8) return
+    const presetId = `daily_preset_${Date.now()}_${presets.length + 1}`
+    this.setData({
+      'dailyTaskEditor.presets': presets.concat([buildDailyTaskPresetDraft({ id: presetId }, presets.length)]),
+      'dailyTaskEditor.expandedIndex': presets.length,
+    })
+    wx.nextTick(() => this.measureScrollHint('page'))
+  },
+
+  removeDailyTaskPreset(event) {
+    const index = Number(event.currentTarget.dataset.index)
+    const savedPresets = safeArray(this.data.dailyTaskEditor && this.data.dailyTaskEditor.savedPresets)
+    if (savedPresets.length <= 1) return
+    const presets = safeArray(this.data.dailyTaskEditor && this.data.dailyTaskEditor.presets)
+    this.setData({
+      'dailyTaskEditor.presets': presets.filter((_, current) => current !== index).map((item, current) => buildDailyTaskPresetDraft(item, current)),
+      'dailyTaskEditor.expandedIndex': Math.max(-1, index - 1),
+    })
+    wx.nextTick(() => this.measureScrollHint('page'))
+  },
+
+  async deleteDailyTaskPreset(event) {
+    if (this.data.loading) return
+    const index = Number(event.currentTarget.dataset.index)
+    const savedPresets = safeArray(this.data.dailyTaskEditor && this.data.dailyTaskEditor.savedPresets)
+    if (savedPresets.length <= 1) return
+    const nextPresets = savedPresets.filter((_, current) => current !== index).map((item, current) => buildDailyTaskPresetDraft(item, current))
+    this.setData({ loading: true, actionLoading: `deleteDailyTaskPreset_${index}` })
+    this.clearError()
+    try {
+      const payload = await updateProfile({ dailyTaskPresets: nextPresets })
+      getApp().globalData.profile = payload.profile
+      const nextDailyTaskEditor = buildDailyTaskEditorState(payload.profile && payload.profile.dailyTaskPresets)
+      nextDailyTaskEditor.editMode = true
+      nextDailyTaskEditor.expandedIndex = -1
+      this.setData({
+        profile: payload.profile,
+        dailyTaskEditor: nextDailyTaskEditor,
+      })
+      this.applyDashboard(payload.dashboard)
+    } catch (error) {
+      this.setError((error && error.message) || strings.dailyTaskSettings.errors.saveFailed)
+    } finally {
+      this.setData({ loading: false, actionLoading: '' })
+    }
+  },
+
+  addDailyTaskSubtask(event) {
+    const presetIndex = Number(event.currentTarget.dataset.index)
+    const presets = clone(this.data.dailyTaskEditor && this.data.dailyTaskEditor.presets)
+    const subtasks = safeArray(presets[presetIndex] && presets[presetIndex].subtasks)
+    if (subtasks.length >= 5) return
+    presets[presetIndex].subtasks = subtasks.concat([{ title: '', total: 1 }])
+    this.setData({ 'dailyTaskEditor.presets': presets })
+    wx.nextTick(() => this.measureScrollHint('page'))
+  },
+
+  removeDailyTaskSubtask(event) {
+    const presetIndex = Number(event.currentTarget.dataset.presetIndex)
+    const subtaskIndex = Number(event.currentTarget.dataset.subtaskIndex)
+    const presets = clone(this.data.dailyTaskEditor && this.data.dailyTaskEditor.presets)
+    const subtasks = safeArray(presets[presetIndex] && presets[presetIndex].subtasks)
+    if (subtasks.length <= 1) return
+    presets[presetIndex].subtasks = subtasks.filter((_, current) => current !== subtaskIndex)
+    this.setData({ 'dailyTaskEditor.presets': presets })
+    wx.nextTick(() => this.measureScrollHint('page'))
+  },
+
+  async onGenerateDailyTaskPresetDraft(event) {
+    if (this.data.loading) return
+    const index = Number(event.currentTarget.dataset.index)
+    const preset = this.data.dailyTaskEditor && this.data.dailyTaskEditor.presets ? this.data.dailyTaskEditor.presets[index] : null
+    const prompt = String(preset && preset.aiPrompt ? preset.aiPrompt : '').trim()
+    if (!prompt) {
+      this.setError(strings.errors.aiPromptRequired)
+      return
+    }
+    this.setData({ loading: true, actionLoading: `generateDailyTaskDraft_${index}` })
+    this.clearError()
+    try {
+      const suggestion = await generateTaskByAI(
+        Object.assign(
+          {
+            prompt,
+          },
+          getClientTimeContext()
+        )
+      )
+      const nextDueTime = suggestion && suggestion.dueAt ? formatTimeInput(suggestion.dueAt) : (preset && preset.dueTime) || '23:59'
+      this.setData({
+        [`dailyTaskEditor.presets[${index}].title`]: (suggestion && suggestion.title) || '',
+        [`dailyTaskEditor.presets[${index}].detail`]: (suggestion && suggestion.description) || '',
+        [`dailyTaskEditor.presets[${index}].rewardType`]:
+          suggestion && suggestion.attributeReward && suggestion.attributeReward.type ? suggestion.attributeReward.type : 'wisdom',
+        [`dailyTaskEditor.presets[${index}].subtasks`]:
+          safeArray(suggestion && suggestion.subtasks).length > 0
+            ? suggestion.subtasks.map((item) => ({ title: item.title || '', total: Number(item.total || 1) }))
+            : [{ title: '', total: 1 }],
+        [`dailyTaskEditor.presets[${index}].dueTime`]: nextDueTime,
+      })
+      wx.nextTick(() => this.measureScrollHint('page'))
+    } catch (error) {
+      this.setError(error.message || strings.errors.aiGenerateFailed)
+    } finally {
+      this.setData({ loading: false, actionLoading: '' })
+    }
   },
 
   openTermsPage() {
@@ -1784,6 +2233,55 @@ Page({
       this.applyDashboard(payload.dashboard)
     } catch (error) {
       this.setError(error.message || strings.errors.updateNicknameFailed)
+    } finally {
+      this.setData({ loading: false, actionLoading: '' })
+    }
+  },
+
+  async saveDailyTaskSettings(event) {
+    if (this.data.loading) return
+    const targetIndex = Number(event && event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.index)
+    const presets = safeArray(this.data.dailyTaskEditor && this.data.dailyTaskEditor.presets).map((preset, index) => ({
+      id: String(preset && preset.id ? preset.id : `daily_preset_${index + 1}`),
+      title: String(preset && preset.title ? preset.title : '').trim(),
+      detail: String(preset && preset.detail ? preset.detail : '').trim(),
+      dueTime: String(preset && preset.dueTime ? preset.dueTime : '23:59').trim() || '23:59',
+      rewardType: preset && preset.rewardType ? preset.rewardType : 'agility',
+      autoAccept: Boolean(preset && preset.autoAccept),
+      autoAcceptTime: String(preset && preset.autoAcceptTime ? preset.autoAcceptTime : '06:00').trim() || '06:00',
+      subtasks: safeArray(preset && preset.subtasks)
+        .map((item) => ({ title: String(item.title || '').trim(), total: 1 }))
+        .filter((item) => item.title),
+    }))
+    const presetToSave = Number.isInteger(targetIndex) && targetIndex >= 0 ? presets[targetIndex] : null
+    if (!presetToSave) return
+    if (!presetToSave.title) {
+      this.setError(strings.errors.dailyTaskTitleRequired)
+      return
+    }
+    if (!presetToSave.subtasks.length) {
+      this.setError(strings.errors.subtaskRequired)
+      return
+    }
+
+    this.setData({ loading: true, actionLoading: `saveDailyTaskSettings_${targetIndex}` })
+    this.clearError()
+    try {
+      const payload = await updateProfile({
+        dailyTaskPresets: presets,
+      })
+      getApp().globalData.profile = payload.profile
+      const nextDailyTaskEditor = buildDailyTaskEditorState(payload.profile && payload.profile.dailyTaskPresets)
+      nextDailyTaskEditor.editMode = true
+      nextDailyTaskEditor.expandedIndex = -1
+      this.setData({
+        profile: payload.profile,
+        dailyTaskEditor: nextDailyTaskEditor,
+      })
+      this.applyDashboard(payload.dashboard)
+      wx.showToast({ title: strings.dailyTaskSettings.saveSuccess, icon: 'none' })
+    } catch (error) {
+      this.setError((error && error.message) || strings.dailyTaskSettings.errors.saveFailed)
     } finally {
       this.setData({ loading: false, actionLoading: '' })
     }
@@ -2060,30 +2558,16 @@ Page({
 
       if (result && result.message === 'no changes' && result.task) {
         await this.refresh()
-        const selectedTask = this.findTaskById(result.task._id, this.data.dashboard, 'collab')
-        this.setData({
-          create: buildCreateState(),
-          detailVisible: true,
-          selectedTask,
-          selectedTaskDraftSubtasks: cloneSubtasks((selectedTask || {}).subtasks),
-          selectedTaskHasDraftChanges: false,
-          activeTab: 'collab',
-        })
+        this.dismissTransientPanels()
+        await this.playTaskFlyToTab((result.task && result.task.title) || title, 'collab')
         return
       }
 
       const created = result && result.task ? result.task : result
       await this.refresh()
-      const nextSource = payload.mode === 'rework' ? 'collab' : payload.selfAssign ? 'mission' : 'collab'
-      const selectedTask = this.findTaskById(created._id, this.data.dashboard, nextSource)
-      this.setData({
-        create: buildCreateState(),
-        detailVisible: true,
-        selectedTask,
-        selectedTaskDraftSubtasks: cloneSubtasks((selectedTask || {}).subtasks),
-        selectedTaskHasDraftChanges: false,
-        activeTab: nextSource,
-      })
+      const targetTab = payload.mode === 'rework' ? 'collab' : payload.selfAssign ? 'mission' : 'collab'
+      this.dismissTransientPanels()
+      await this.playTaskFlyToTab((created && created.title) || title, targetTab)
     } catch (error) {
       if (error && error.code === 'REWORK_CONFIRM_REQUIRED') {
         const result = await wx.showModal({
@@ -2124,6 +2608,15 @@ Page({
     const task = this.findTaskById(taskId, this.data.dashboard, source)
     if (!task) return
     this.showTaskDetail(task)
+  },
+
+  onTapDailyTaskCard(event) {
+    if (this.isOnboardingActive()) return
+    const status = String(event.currentTarget.dataset.status || '')
+    const assigneeId = String(event.currentTarget.dataset.assigneeId || '')
+    const seedKey = String(event.currentTarget.dataset.seedKey || '')
+    if (status === 'pending' && !assigneeId && seedKey) return
+    this.openTask(event)
   },
 
   openHistory(event) {
@@ -2196,23 +2689,50 @@ Page({
 
   noop() {},
 
+  async processAcceptChallengeQueue() {
+    if (this._processingAcceptChallenge) return
+    this._processingAcceptChallenge = true
+    while (this._acceptChallengeQueue && this._acceptChallengeQueue.length) {
+      const seedKey = this._acceptChallengeQueue[0]
+      try {
+        this.setData({ loading: true, actionLoading: `acceptChallenge_${seedKey}` })
+        this.clearError()
+        const task = await acceptChallengeTask(seedKey)
+        await this.refresh()
+        this.dismissTransientPanels()
+        await this.playTaskFlyToTab((task && task.title) || strings.home.challengeTitle, 'mission')
+      } catch (error) {
+        this.setError((error && error.message) || strings.errors.acceptChallengeFailed)
+      } finally {
+        this._acceptChallengeQueue.shift()
+        this.setData({
+          loading: false,
+          actionLoading: '',
+          pendingChallengeAcceptSeedKeys: this._acceptChallengeQueue.slice(),
+          pendingChallengeAcceptMap: this._acceptChallengeQueue.reduce((map, currentKey) => {
+            map[currentKey] = true
+            return map
+          }, {}),
+        })
+      }
+    }
+    this._processingAcceptChallenge = false
+  },
+
   async onAcceptChallenge(event) {
-    if (this.data.loading) return
     const seedKey = event.currentTarget.dataset.seedKey
     if (!seedKey) return
-    this.setData({ loading: true, actionLoading: 'acceptChallenge' })
-    this.clearError()
-    try {
-      const task = await acceptChallengeTask(seedKey)
-      await this.refresh()
-      const selectedTask = this.findTaskById(task._id, this.data.dashboard, 'mission')
-      this.showTaskDetail(selectedTask)
-      this.setData({ activeTab: 'mission' })
-    } catch (error) {
-      this.setError(error.message || strings.errors.acceptChallengeFailed)
-    } finally {
-      this.setData({ loading: false, actionLoading: '' })
-    }
+    const queued = Array.isArray(this._acceptChallengeQueue) ? this._acceptChallengeQueue : []
+    if (queued.includes(seedKey)) return
+    this._acceptChallengeQueue = queued.concat([seedKey])
+    this.setData({
+      pendingChallengeAcceptSeedKeys: this._acceptChallengeQueue.slice(),
+      pendingChallengeAcceptMap: this._acceptChallengeQueue.reduce((map, currentKey) => {
+        map[currentKey] = true
+        return map
+      }, {}),
+    })
+    return this.processAcceptChallengeQueue()
   },
 
   async runTaskOperation(operation, extraPayload, loadingKey) {
@@ -2305,7 +2825,28 @@ Page({
       }
       return
     }
-    return this.runTaskOperation('acceptTask', null, 'acceptTask')
+    if (this.data.loading) return
+    const task = this.data.selectedTask
+    if (!task) return
+    this.setData({ loading: true, actionLoading: 'acceptTask' })
+    this.clearError()
+    operateTask('acceptTask', {
+      taskId: task._id,
+      clientUpdatedAt: task.updatedAt || '',
+    }).then(async (result) => {
+      await this.refresh()
+      this.dismissTransientPanels()
+      await this.playTaskFlyToTab((result && result.title) || task.title || strings.actions.acceptTask, 'mission')
+    }).catch((error) => {
+      if (error && error.code === 'CONFLICT_REFRESH' && error.detail && error.detail.dashboard) {
+        this.applyDashboard(error.detail.dashboard, task._id, task.source)
+        this.setError(strings.errors.taskUpdated)
+        return
+      }
+      this.setError((error && error.message) || strings.errors.operationFailed)
+    }).finally(() => {
+      this.setData({ loading: false, actionLoading: '' })
+    })
   },
 
   onSubmitReview() {
@@ -2336,6 +2877,30 @@ Page({
   },
 
   onAbandonTask() {
+    if (this.data.loading) return null
+    const task = this.data.selectedTask
+    if (!task) return null
+    if (task.category === 'challenge') {
+      this.setData({ loading: true, actionLoading: 'abandonTask' })
+      this.clearError()
+      return operateTask('abandonTask', {
+        taskId: task._id,
+        clientUpdatedAt: task.updatedAt || '',
+      }).then(async (result) => {
+        await this.refresh()
+        this.dismissTransientPanels()
+        await this.playTaskFlyToTab((result && result.title) || task.title || strings.actions.abandonTask, 'home')
+      }).catch((error) => {
+        if (error && error.code === 'CONFLICT_REFRESH' && error.detail && error.detail.dashboard) {
+          this.applyDashboard(error.detail.dashboard, task._id, task.source)
+          this.setError(strings.errors.taskUpdated)
+          return
+        }
+        this.setError((error && error.message) || strings.errors.operationFailed)
+      }).finally(() => {
+        this.setData({ loading: false, actionLoading: '' })
+      })
+    }
     return this.runTaskOperation('abandonTask', null, 'abandonTask')
   },
 

@@ -44,46 +44,16 @@ const SENSITIVE_WORDS = [
   'sb',
 ]
 
-const CHALLENGE_TEMPLATES = [
+const DEFAULT_DAILY_TASK_PRESETS = [
   {
-    id: 'deep_focus',
-    title: '深潜专注',
-    detail: '留出 30 分钟，推进一项最难拖延的任务。',
-    icon: 'focus',
-    reward: { type: 'wisdom', value: 8 },
-    subtasks: [{ title: '完成一次深度专注', total: 1 }],
-  },
-  {
-    id: 'quick_reset',
-    title: '快速整理',
-    detail: '清掉一个小范围的混乱点，让空间重新可用。',
-    icon: 'reset',
-    reward: { type: 'agility', value: 6 },
-    subtasks: [{ title: '整理一个区域', total: 1 }],
-  },
-  {
-    id: 'body_wake',
-    title: '身体唤醒',
-    detail: '做一组短时运动，给今天补一点体能。',
-    icon: 'body',
-    reward: { type: 'strength', value: 7 },
-    subtasks: [{ title: '完成一次活动', total: 1 }],
-  },
-  {
-    id: 'notes_recap',
-    title: '笔记回收',
-    detail: '复盘当天信息，把零散记录整理成一个结果。',
-    icon: 'notes',
-    reward: { type: 'wisdom', value: 9 },
-    subtasks: [{ title: '整理一份摘要', total: 1 }],
-  },
-  {
-    id: 'errand_burst',
-    title: '杂务冲刺',
-    detail: '快速处理一件堆着不想做的小任务。',
-    icon: 'errand',
-    reward: { type: 'agility', value: 5 },
-    subtasks: [{ title: '解决一件杂务', total: 1 }],
+    id: 'daily_preset_default',
+    title: '完成一组整理练习',
+    detail: '这是每天给自己的一项固定推进。',
+    dueTime: '23:59',
+    rewardType: 'agility',
+    autoAccept: false,
+    autoAcceptTime: '06:00',
+    subtasks: [{ title: '完成一组整理', total: 1 }],
   },
 ]
 
@@ -126,6 +96,10 @@ function toIso(value) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(value, max))
+}
+
+function safeArray(list) {
+  return Array.isArray(list) ? list : []
 }
 
 function formatYmd(date) {
@@ -176,28 +150,94 @@ function buildChallengeSystemId(userId) {
   return `${SYSTEM_PREFIX}${userId}`
 }
 
-function pickDailyChallengeTemplates(userId, dayKey, count) {
-  const random = xorshift32(hashSeed(`${userId}|${dayKey}|challenge`))
-  const pool = CHALLENGE_TEMPLATES.slice()
-  const selected = []
-  while (pool.length && selected.length < count) {
-    const index = random() % pool.length
-    selected.push(pool.splice(index, 1)[0])
-  }
-  return selected
+function buildDailyTaskPresetId(index) {
+  return `daily_preset_${index + 1}`
 }
 
-function buildChallengeSeeds(userId, date) {
+function normalizeDailyTaskPreset(raw, fallbackId) {
+  const defaultPreset = DEFAULT_DAILY_TASK_PRESETS[0]
+  const source = raw && typeof raw === 'object' ? raw : {}
+  const title = String(source.title || defaultPreset.title).trim() || defaultPreset.title
+  const detail = String(source.detail || defaultPreset.detail).trim()
+  const dueTimeText = String(source.dueTime || defaultPreset.dueTime).trim()
+  const dueTimeMatch = dueTimeText.match(/^(\d{1,2}):(\d{2})$/)
+  const dueHour = dueTimeMatch ? clamp(Number(dueTimeMatch[1]), 0, 23) : 21
+  const dueMinute = dueTimeMatch ? clamp(Number(dueTimeMatch[2]), 0, 59) : 0
+  const autoAcceptTimeText = String(source.autoAcceptTime || defaultPreset.autoAcceptTime || '06:00').trim()
+  const autoAcceptTimeMatch = autoAcceptTimeText.match(/^(\d{1,2}):(\d{2})$/)
+  const autoAcceptHour = autoAcceptTimeMatch ? clamp(Number(autoAcceptTimeMatch[1]), 0, 23) : 6
+  const autoAcceptMinute = autoAcceptTimeMatch ? clamp(Number(autoAcceptTimeMatch[2]), 0, 59) : 0
+  const subtasks = normalizeSubtasks(source.subtasks && Array.isArray(source.subtasks) ? source.subtasks : defaultPreset.subtasks)
+  return {
+    id: String(source.id || fallbackId || '').trim() || buildDailyTaskPresetId(0),
+    title,
+    detail,
+    dueTime: `${String(dueHour).padStart(2, '0')}:${String(dueMinute).padStart(2, '0')}`,
+    dueHour,
+    dueMinute,
+    rewardType: REWARD_TYPES.includes(String(source.rewardType || '')) ? String(source.rewardType) : defaultPreset.rewardType,
+    autoAccept: source.autoAccept === true,
+    autoAcceptTime: `${String(autoAcceptHour).padStart(2, '0')}:${String(autoAcceptMinute).padStart(2, '0')}`,
+    autoAcceptHour,
+    autoAcceptMinute,
+    subtasks: subtasks.length ? subtasks.map((item) => ({ title: item.title, total: item.total })) : defaultPreset.subtasks.slice(),
+  }
+}
+
+function normalizeDailyTaskPresets(rawPresets, legacySettings) {
+  const source = Array.isArray(rawPresets) && rawPresets.length ? rawPresets : Array.isArray(legacySettings) ? legacySettings : null
+  const baseList =
+    source && source.length
+      ? source
+      : legacySettings && typeof legacySettings === 'object' && !Array.isArray(legacySettings)
+        ? [legacySettings]
+        : DEFAULT_DAILY_TASK_PRESETS
+  const normalized = baseList
+    .slice(0, 8)
+    .map((item, index) => normalizeDailyTaskPreset(item, buildDailyTaskPresetId(index)))
+    .filter((item) => item.title && item.subtasks && item.subtasks.length)
+  if (normalized.length) return normalized
+  return DEFAULT_DAILY_TASK_PRESETS.map((item, index) => normalizeDailyTaskPreset(item, buildDailyTaskPresetId(index)))
+}
+
+function buildDailyTaskDueAt(date, preset) {
+  const reference = date instanceof Date ? date : new Date(date)
+  const normalized = normalizeDailyTaskPreset(preset)
+  const shifted = new Date(reference.getTime() + UTC8_OFFSET_MS)
+  shifted.setUTCHours(normalized.dueHour, normalized.dueMinute, 0, 0)
+  return new Date(shifted.getTime() - UTC8_OFFSET_MS)
+}
+
+function buildDailyTaskAutoAcceptAt(date, preset) {
+  const reference = date instanceof Date ? date : new Date(date)
+  const normalized = normalizeDailyTaskPreset(preset)
+  const shifted = new Date(reference.getTime() + UTC8_OFFSET_MS)
+  shifted.setUTCHours(normalized.autoAcceptHour, normalized.autoAcceptMinute, 0, 0)
+  return new Date(shifted.getTime() - UTC8_OFFSET_MS)
+}
+
+function buildChallengeSeeds(userId, date, dailyTaskPresets, legacyDailyTaskSettings) {
   const reference = date || now()
+  const normalizedPresets = normalizeDailyTaskPresets(dailyTaskPresets, legacyDailyTaskSettings)
   const dayKey = formatUtc8Ymd(reference)
   const start = startOfUtc8Day(reference)
   const end = endOfUtc8Day(reference)
   const creatorId = buildChallengeSystemId(userId)
-  const seeds = pickDailyChallengeTemplates(userId, dayKey, 3).map((template) => ({
-    template,
-    seedKey: buildChallengeSeedKey(userId, dayKey, template.id),
+  const seeds = normalizedPresets.map((preset) => ({
+    template: {
+      id: preset.id,
+      title: preset.title,
+      detail: preset.detail,
+      icon: 'focus',
+      reward: { type: preset.rewardType, value: 1 },
+      subtasks: preset.subtasks.map((item) => ({ title: item.title, total: item.total })),
+      dueAt: buildDailyTaskDueAt(reference, preset),
+      autoAccept: preset.autoAccept,
+      autoAcceptAt: buildDailyTaskAutoAcceptAt(reference, preset),
+    },
+    seedKey: buildChallengeSeedKey(userId, dayKey, preset.id),
   }))
-  return { dayKey, start, end, creatorId, seeds }
+  return { dayKey, start, end, creatorId, seeds, presets: normalizedPresets }
 }
 
 function formatUtc8Ymd(date) {
@@ -230,9 +270,10 @@ function isChallengeTask(task) {
 function isExpiredChallengeTask(task, referenceNow) {
   if (!isChallengeTask(task)) return false
   if (task.status === STATUS.COMPLETED) return false
-  const dueAt = task && task.dueAt ? new Date(task.dueAt) : null
-  if (!dueAt || Number.isNaN(dueAt.getTime())) return false
-  return dueAt.getTime() < referenceNow.getTime()
+  const seedKey = String(task && task.seedKey ? task.seedKey : '')
+  const matched = seedKey.match(/^challenge_(\d{8})_/)
+  if (!matched) return false
+  return matched[1] < formatUtc8Ymd(referenceNow)
 }
 
 async function cleanupExpiredChallengeTasks(userId, referenceNow) {
@@ -391,6 +432,7 @@ function defaultReminderSettings() {
       taskDeadlineBefore: true,
       taskDeadlineAfter: true,
       work: true,
+      dailyTaskAutoAccept: true,
       taskUpdate: true,
       review: true,
       challengeExpired: true,
@@ -428,6 +470,7 @@ function normalizeReminderSettings(raw) {
     taskDeadlineBefore: categoryEnabledSource.taskDeadlineBefore !== false,
     taskDeadlineAfter: categoryEnabledSource.taskDeadlineAfter !== false,
     work: categoryEnabledSource.work !== false,
+    dailyTaskAutoAccept: categoryEnabledSource.dailyTaskAutoAccept !== false,
     taskUpdate: categoryEnabledSource.taskUpdate !== false,
     review: categoryEnabledSource.review !== false,
     challengeExpired: categoryEnabledSource.challengeExpired !== false,
@@ -462,7 +505,10 @@ function normalizeReminderSettings(raw) {
 }
 
 function getReminderCategoryKey(sceneKey, context) {
-  if (sceneKey === SCENES.work) return 'work'
+  if (sceneKey === SCENES.work) {
+    if (String(context && context.event ? context.event : '') === 'daily_task_auto_accepted') return 'dailyTaskAutoAccept'
+    return 'work'
+  }
   if (sceneKey === SCENES.taskUpdate) return 'taskUpdate'
   if (sceneKey === SCENES.review) return 'review'
   if (sceneKey === SCENES.todo) {
@@ -532,6 +578,47 @@ async function getUserById(userId) {
   return result.data[0] || null
 }
 
+function buildChallengeTaskRecord(seed, userId, nickname, startAt, creatorId, options) {
+  const sourceSeed = seed && seed.template ? seed.template : {}
+  const current = options && options.currentTime ? options.currentTime : now()
+  const assigned = options && options.assigned === true
+  const dueAt = sourceSeed.dueAt ? new Date(sourceSeed.dueAt) : endOfUtc8Day(startAt || current)
+  const resetAt = endOfUtc8Day(startAt || current)
+  const defaultPreset = DEFAULT_DAILY_TASK_PRESETS[0]
+  return {
+    title: sourceSeed.title || defaultPreset.title,
+    detail: sourceSeed.detail || '',
+    icon: sourceSeed.icon || '',
+    status: assigned ? STATUS.IN_PROGRESS : STATUS.PENDING,
+    category: 'challenge',
+    creatorId,
+    creatorName: '星旅系统',
+    assigneeId: assigned ? userId : '',
+    assigneeName: assigned ? (nickname || `旅者${String(userId).slice(-4)}`) : '',
+    ownerScope: 'personal',
+    dueAt,
+    startAt: startAt || current,
+    submittedAt: null,
+    completedAt: null,
+    closedAt: null,
+    deleteAt: assigned ? resetAt : null,
+    dueSoonNotifiedAt: null,
+    overdueNotifiedAt: null,
+    challengeExpiredNotifiedAt: null,
+    todoReminderSentKeys: [],
+    challengeReminderSentKeys: [],
+    seedKey: seed && seed.seedKey ? seed.seedKey : '',
+    subtasks: safeArray(sourceSeed.subtasks).map((item) => ({
+      title: item.title,
+      total: item.total,
+      current: 0,
+    })),
+    attributeReward: sourceSeed.reward || { type: defaultPreset.rewardType, value: 1 },
+    createdAt: current,
+    updatedAt: current,
+  }
+}
+
 async function ensureUser(userId) {
   let user = await getUserById(userId)
   if (user) return user
@@ -547,6 +634,7 @@ async function ensureUser(userId) {
       },
       subscribePreferences: {},
       subscribeReminderSettings: defaultReminderSettings(),
+      dailyTaskPresets: normalizeDailyTaskPresets(DEFAULT_DAILY_TASK_PRESETS),
       stars: 0,
       wisdom: 0,
       strength: 0,
@@ -718,9 +806,67 @@ async function listArchivesByWhere(where) {
   return result.data || []
 }
 
+async function ensureDailyTaskSeedTasks(user, referenceNow) {
+  const currentUser = user || {}
+  const current = referenceNow || now()
+  const { seeds, start, creatorId, presets } = buildChallengeSeeds(
+    currentUser.userId,
+    current,
+    currentUser.dailyTaskPresets,
+    currentUser.dailyTaskSettings
+  )
+  const seedKeys = seeds.map((item) => item.seedKey)
+  if (!seedKeys.length) return { seeds, start, creatorId, presets }
+
+  const existingDailyRes = await db.collection(TASKS).where({ creatorId, seedKey: _.in(seedKeys) }).limit(seedKeys.length).get()
+  const existingDailyMap = (existingDailyRes.data || []).reduce((map, item) => {
+    map[item.seedKey] = item
+    return map
+  }, {})
+
+  for (let index = 0; index < seeds.length; index += 1) {
+    const seed = seeds[index]
+    const autoAcceptAt = seed && seed.template && seed.template.autoAcceptAt ? new Date(seed.template.autoAcceptAt) : null
+    if (
+      existingDailyMap[seed.seedKey] ||
+      !seed.template.autoAccept ||
+      !autoAcceptAt ||
+      Number.isNaN(autoAcceptAt.getTime()) ||
+      autoAcceptAt.getTime() > current.getTime()
+    ) {
+      continue
+    }
+    const createdAt = now()
+    const added = await db.collection(TASKS).add({
+      data: buildChallengeTaskRecord(seed, currentUser.userId, currentUser.nickname, start, creatorId, {
+        assigned: true,
+        currentTime: createdAt,
+      }),
+    })
+    const createdTask = await getTaskById(added._id)
+    existingDailyMap[seed.seedKey] = createdTask
+    await sendSceneNotification(
+      currentUser.userId,
+      SCENES.work,
+      buildSubscribeData({
+        taskName: (createdTask && createdTask.title) || seed.template.title,
+        assignee: currentUser.nickname || `旅者-${String(currentUser.userId).slice(-4)}`,
+        startTime: formatDateTime((createdTask && createdTask.startAt) || createdAt),
+        dueTime: formatDateTime((createdTask && createdTask.dueAt) || seed.template.dueAt || createdAt),
+        status: '已自动接取',
+        tip: '今日每日任务已按预设自动接取。',
+      }),
+      { event: 'daily_task_auto_accepted', taskId: added._id }
+    ).catch(() => null)
+  }
+
+  return { seeds, start, creatorId, presets }
+}
+
 async function buildDashboard(userId) {
+  const user = await ensureUser(userId)
   await cleanupExpiredChallengeTasks(userId, now())
-  const { seeds, start, end, creatorId } = buildChallengeSeeds(userId, now())
+  const { seeds, start, creatorId } = await ensureDailyTaskSeedTasks(user, now())
   const seedKeys = seeds.map((item) => item.seedKey)
 
   const [creatorRes, assigneeRes, archiveRes, challengeRes] = await Promise.all([
@@ -753,7 +899,7 @@ async function buildDashboard(userId) {
       status: STATUS.PENDING,
       creatorId,
       assigneeId: '',
-      dueAt: end,
+      dueAt: template.dueAt,
       startAt: start,
       seedKey,
       subtasks: template.subtasks.map((item) => ({ title: item.title, total: item.total, current: 0 })),
@@ -833,6 +979,7 @@ async function bootstrap() {
       },
       subscribePreferences: normalizePreferences(user.subscribePreferences, templates),
       subscribeReminderSettings: normalizeReminderSettings(user.subscribeReminderSettings),
+      dailyTaskPresets: normalizeDailyTaskPresets(user.dailyTaskPresets, user.dailyTaskSettings),
       subscribeTemplates: templates,
       createdAt: toIso(user.createdAt),
       updatedAt: toIso(user.updatedAt),
@@ -844,17 +991,34 @@ async function bootstrap() {
 async function updateProfile(payload) {
   const userId = await getCurrentUserId()
   const user = await ensureUser(userId)
-  const nickname = payload && payload.nickname ? String(payload.nickname).trim() : user.nickname
-  const avatar = payload && payload.avatar ? String(payload.avatar).trim() : user.avatar
-  assert(nickname, 'Nickname is required', 'INVALID_NICKNAME')
-  assert(!containsSensitiveText(nickname), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
-  assert(!(await moderateWithAI(nickname)), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
+  const nextData = {
+    updatedAt: now(),
+  }
+  if (payload && Object.prototype.hasOwnProperty.call(payload, 'nickname')) {
+    const nickname = payload && payload.nickname ? String(payload.nickname).trim() : ''
+    const avatar = payload && payload.avatar ? String(payload.avatar).trim() : user.avatar
+    assert(nickname, 'Nickname is required', 'INVALID_NICKNAME')
+    assert(!containsSensitiveText(nickname), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
+    assert(!(await moderateWithAI(nickname)), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
+    nextData.nickname = nickname
+    nextData.avatar = avatar
+  }
+  if (payload && Object.prototype.hasOwnProperty.call(payload, 'dailyTaskPresets')) {
+    const dailyTaskPresets = normalizeDailyTaskPresets(payload.dailyTaskPresets)
+    const moderationText = dailyTaskPresets
+      .map((preset) => [preset.title, preset.detail].concat(preset.subtasks.map((item) => item.title)).join(' '))
+      .filter(Boolean)
+      .join(' ')
+    assert(
+      !dailyTaskPresets.some((preset) => containsSensitiveTask({ title: preset.title, detail: preset.detail, subtasks: preset.subtasks })),
+      SENSITIVE_HINT,
+      'SENSITIVE_CONTENT'
+    )
+    assert(!(await moderateWithAI(moderationText)), SENSITIVE_HINT, 'SENSITIVE_CONTENT')
+    nextData.dailyTaskPresets = dailyTaskPresets
+  }
   await db.collection(USERS).doc(user._id).update({
-    data: {
-      nickname,
-      avatar,
-      updatedAt: now(),
-    },
+    data: nextData,
   })
   return bootstrap()
 }
@@ -953,7 +1117,8 @@ async function getTask(payload) {
   assert(taskId, 'taskId is required', 'INVALID_TASK_ID')
 
   if (taskId.startsWith('challenge_')) {
-    const { seeds, start, end, creatorId } = buildChallengeSeeds(userId, now())
+    const user = await ensureUser(userId)
+    const { seeds, start, creatorId } = buildChallengeSeeds(userId, now(), user.dailyTaskPresets, user.dailyTaskSettings)
     const hit = seeds.find((item) => item.seedKey === taskId)
     assert(hit, 'Task not found', 'NOT_FOUND')
     const nameMap = await getUserNameMap([userId])
@@ -967,7 +1132,7 @@ async function getTask(payload) {
           category: 'challenge',
           status: STATUS.PENDING,
           creatorId,
-          dueAt: end,
+          dueAt: hit.template.dueAt,
           startAt: start,
           seedKey: hit.seedKey,
           subtasks: hit.template.subtasks.map((item) => ({ title: item.title, total: item.total, current: 0 })),
@@ -1026,7 +1191,7 @@ async function acceptChallengeTask(payload) {
   const seedKey = String(payload && payload.seedKey ? payload.seedKey : '')
   assert(seedKey, 'seedKey is required', 'INVALID_SEED_KEY')
 
-  const { seeds, start, end, creatorId } = buildChallengeSeeds(userId, now())
+  const { seeds, start, creatorId } = buildChallengeSeeds(userId, now(), user.dailyTaskPresets, user.dailyTaskSettings)
   const hit = seeds.find((item) => item.seedKey === seedKey)
   assert(hit, 'Challenge not found', 'NOT_FOUND')
 
@@ -1050,38 +1215,10 @@ async function acceptChallengeTask(payload) {
 
   const createdAt = now()
   const added = await db.collection(TASKS).add({
-    data: {
-      title: hit.template.title,
-      detail: hit.template.detail,
-      icon: hit.template.icon,
-      status: STATUS.IN_PROGRESS,
-      category: 'challenge',
-      creatorId,
-      creatorName: '星旅系统',
-      assigneeId: userId,
-      assigneeName: user.nickname || `旅者-${String(userId).slice(-4)}`,
-      ownerScope: 'personal',
-      dueAt: end,
-      startAt: start,
-      submittedAt: null,
-      completedAt: null,
-      closedAt: null,
-      deleteAt: end,
-      dueSoonNotifiedAt: null,
-      overdueNotifiedAt: null,
-      challengeExpiredNotifiedAt: null,
-      todoReminderSentKeys: [],
-      challengeReminderSentKeys: [],
-      seedKey,
-      subtasks: hit.template.subtasks.map((item) => ({
-        title: item.title,
-        total: item.total,
-        current: 0,
-      })),
-      attributeReward: hit.template.reward,
-      createdAt,
-      updatedAt: createdAt,
-    },
+    data: buildChallengeTaskRecord(hit, userId, user.nickname, start, creatorId, {
+      assigned: true,
+      currentTime: createdAt,
+    }),
   })
   const task = await getTaskById(added._id)
   return success(normalizeTask(task, { [userId]: user.nickname }))
@@ -1435,8 +1572,9 @@ async function getArchivedTasks() {
 
 async function getChallengeTasks() {
   const userId = await getCurrentUserId()
+  const user = await ensureUser(userId)
   await cleanupExpiredChallengeTasks(userId, now())
-  const { seeds, start, end, creatorId } = buildChallengeSeeds(userId, now())
+  const { seeds, start, creatorId } = await ensureDailyTaskSeedTasks(user, now())
   const seedKeys = seeds.map((item) => item.seedKey)
   const existingRes = seedKeys.length
     ? await db.collection(TASKS).where({ creatorId, seedKey: _.in(seedKeys) }).orderBy('createdAt', 'asc').get()
@@ -1461,7 +1599,7 @@ async function getChallengeTasks() {
       status: STATUS.PENDING,
       creatorId,
       assigneeId: '',
-      dueAt: end,
+      dueAt: item.template.dueAt,
       startAt: start,
       seedKey: item.seedKey,
       subtasks: item.template.subtasks.map((subtask) => ({ title: subtask.title, total: subtask.total, current: 0 })),

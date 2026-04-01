@@ -198,6 +198,10 @@
   color: #fff8ef;
 }
 
+.tab.tab-pulse {
+  animation: tabPulse 0.72s ease;
+}
+
 .tab-pane {
   display: grid;
   gap: 14rpx;
@@ -224,6 +228,19 @@
   margin-top: 12rpx;
   display: grid;
   gap: 12rpx;
+}
+
+.daily-task-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.daily-task-edit-button {
+  margin: 0;
+  flex-shrink: 0;
+  align-self: center;
 }
 
 .task-item {
@@ -374,6 +391,234 @@
 .subscribe-mask.modal-closing .modal {
   opacity: 0;
   transform: translateY(-20rpx) scale(0.96);
+}
+
+.daily-task-scroll .task-meta + .task-meta {
+  margin-top: 12rpx;
+}
+
+.daily-task-body {
+  margin-top: 12rpx;
+  overflow: hidden;
+}
+
+.daily-task-editor-list {
+  display: grid;
+  gap: 16rpx;
+}
+
+.daily-task-view-list {
+  margin-top: 0;
+}
+
+.daily-task-add-wrap {
+  overflow: hidden;
+  transition: max-height 0.22s ease, opacity 0.18s ease, margin-top 0.22s ease;
+}
+
+.daily-task-add-wrap-visible {
+  max-height: 120rpx;
+  opacity: 1;
+  margin-top: 16rpx;
+}
+
+.daily-task-add-wrap-hidden {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.daily-task-summary-card {
+  position: relative;
+  overflow: hidden;
+  padding-bottom: 8rpx;
+}
+
+.daily-task-card-main {
+  display: block;
+  position: relative;
+  min-height: 144rpx;
+}
+
+.daily-task-card-copy {
+  min-width: 0;
+  padding-right: 140rpx;
+}
+
+.daily-task-card-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.daily-task-card-detail {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 72rpx;
+  min-height: 72rpx;
+}
+
+.daily-task-card-reward {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.daily-task-card-side {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 118rpx;
+}
+
+.daily-task-card-status {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 0;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.daily-task-side-button {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0 18rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: padding 0.18s ease;
+}
+
+.daily-task-side-button::after {
+  border: 0;
+}
+
+.daily-task-side-button-loading {
+  opacity: 0.82;
+}
+
+@keyframes dailyTaskButtonSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.daily-task-editor-card-main {
+  position: relative;
+  min-height: 144rpx;
+}
+
+.daily-task-editor-card-copy {
+  min-width: 0;
+  padding-right: 140rpx;
+}
+
+.daily-task-editor-card-title {
+  padding-right: 12rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.daily-task-editor-card-detail {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 72rpx;
+  min-height: 72rpx;
+}
+
+.daily-task-editor-card-reward {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.daily-task-editor-card-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 118rpx;
+}
+
+.daily-task-editor-card-actions .ghost-button {
+  position: absolute;
+  right: 0;
+  margin: 0;
+}
+
+.daily-task-editor-card-actions .ghost-button:first-child {
+  top: 0;
+}
+
+.daily-task-editor-card-actions .ghost-button:last-child {
+  bottom: 0;
+}
+
+.daily-task-editor-panel {
+  margin-top: 18rpx;
+  padding-top: 18rpx;
+  padding-bottom: 0;
+  border-top: 1rpx solid rgba(111, 84, 50, 0.12);
+  overflow: hidden;
+  transform-origin: top center;
+  transition: max-height 0.22s ease, opacity 0.18s ease, transform 0.22s ease, margin-top 0.22s ease, padding-top 0.22s ease;
+}
+
+.daily-task-editor-panel-open {
+  max-height: 2200rpx;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.daily-task-editor-panel-opening,
+.daily-task-editor-panel-closing {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  padding-top: 0;
+  transform: translateY(-8rpx);
+}
+
+.daily-task-editor-group {
+  margin-top: 16rpx;
+}
+
+.daily-task-delete-button,
+.daily-task-add-button {
+  margin: 0;
+}
+
+.daily-task-inline-actions {
+  margin-top: 10rpx;
+  margin-bottom: 6rpx;
+  padding-bottom: 0;
+}
+
+.daily-task-editor-panel .create-footer-actions {
+  margin-bottom: 6rpx;
+  padding-bottom: 0;
 }
 
 .subscribe-category {
@@ -873,6 +1118,13 @@
   width: 120rpx;
 }
 
+.daily-task-fixed-total {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-subtle);
+}
+
 .create-footer-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1111,6 +1363,39 @@
   color: var(--ink);
 }
 
+.task-fly-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 45;
+}
+
+.task-fly-card {
+  position: fixed;
+  width: 216rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 22rpx;
+  background: linear-gradient(180deg, rgba(255, 249, 240, 0.98) 0%, rgba(248, 236, 213, 0.96) 100%);
+  box-shadow:
+    0 14rpx 32rpx rgba(72, 43, 18, 0.16),
+    inset 0 0 0 1rpx rgba(137, 96, 47, 0.14);
+  transition:
+    transform 0.5s cubic-bezier(0.2, 0.86, 0.26, 1),
+    opacity 0.5s ease,
+    left 0.5s cubic-bezier(0.2, 0.86, 0.26, 1),
+    top 0.5s cubic-bezier(0.2, 0.86, 0.26, 1);
+}
+
+.task-fly-title {
+  color: var(--ink);
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .legal-link-list {
   margin-top: 18rpx;
   display: flex;
@@ -1148,6 +1433,21 @@
       0 0 24rpx rgba(236, 182, 92, 0.18),
       0 18rpx 42rpx rgba(52, 30, 12, 0.22);
     outline-color: rgba(255, 242, 221, 0.86);
+  }
+}
+
+@keyframes tabPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(214, 144, 63, 0);
+  }
+  45% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 10rpx rgba(214, 144, 63, 0.18);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(214, 144, 63, 0);
   }
 }
 
